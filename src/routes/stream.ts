@@ -13,6 +13,7 @@ import { compareStreams, langOrderFromSubs, passesPreferences } from '../core/pr
 import { toStremioStream, type StremioStream } from '../core/display';
 import { getBaseUrl, configSegment } from '../core/url';
 import { encodeToken } from '../debrid/token';
+import { throughMediaflow } from '../core/mediaflow';
 import type { Candidate, MediaType, Query } from '../sources/types';
 
 /**
@@ -96,7 +97,18 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     const base = getBaseUrl(req) + configSegment(req);
     const streams: StremioStream[] = kept.map((c) => {
       if (c.kind === 'direct' && c.directUrl) {
-        return toStremioStream(c, { playUrl: c.directUrl });
+        // Un flux qui exige un Referer casse chez plusieurs lecteurs : Stremio
+        // n'applique pas toujours proxyHeaders aux segments HLS, seulement a la
+        // requete initiale. On le fait donc passer par MediaFlow, qui reinjecte les
+        // en-tetes sur chaque segment.
+        //
+        // MAIS uniquement dans ce cas : router aussi les flux SANS en-tete ferait
+        // transiter toute la bande passante par le serveur, sans rien resoudre.
+        // Et si MediaFlow n'est pas configure, throughMediaflow rend l'URL telle
+        // quelle — l'addon reste fonctionnel, avec les proxyHeaders pour seul recours.
+        const needsHeaders = c.headers && Object.keys(c.headers).length > 0;
+        const playUrl = needsHeaders ? throughMediaflow(c.directUrl, c.headers) : c.directUrl;
+        return toStremioStream(c, { playUrl });
       }
       // Torrent ou DDL : on differe la resolution au moment du Play.
       const token = encodeToken({
