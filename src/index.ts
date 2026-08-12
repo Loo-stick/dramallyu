@@ -14,6 +14,18 @@ import { handleSubtitles, handleServeSub } from './routes/subtitles';
 import { handleCatalog } from './routes/catalog';
 import { handleMeta } from './routes/meta';
 import { handleResolve } from './routes/resolve';
+import {
+  adminEnabled,
+  requireAdmin,
+  handleLogin,
+  handleLogout,
+  handleAdminState,
+  handleGetConfigFiles,
+  handleSaveConfigFile,
+  handleToggleSource,
+  handleClearCache,
+  handleRediscoverKkey,
+} from './routes/admin';
 import { register, planSources } from './core/registry';
 import { parseConfig } from './core/config';
 import { getSettings } from './core/settings';
@@ -130,6 +142,30 @@ app.get('/api/sources', (req, res) => {
     })),
   });
 });
+
+// --- Administration ----------------------------------------------------------
+// Entierement absente si ADMIN_PASSWORD n'est pas defini : une page d'administration
+// sans mot de passe serait pire que pas de page du tout.
+const jsonBody = express.json({ limit: '256kb' });
+const formBody = express.urlencoded({ extended: false, limit: '16kb' });
+
+app.get('/admin/login', (_req, res) => {
+  if (!adminEnabled()) {
+    res.status(404).type('text/plain').send('administration desactivee (ADMIN_PASSWORD absent)');
+    return;
+  }
+  res.sendFile(path.join(WEB_DIR, 'login.html'));
+});
+app.post('/admin/login', formBody, handleLogin);
+app.post('/admin/logout', handleLogout);
+app.get('/admin', requireAdmin, (_req, res) => res.sendFile(path.join(WEB_DIR, 'admin.html')));
+
+app.get('/api/admin/etat', requireAdmin, handleAdminState);
+app.get('/api/admin/config', requireAdmin, handleGetConfigFiles);
+app.post('/api/admin/config/:name', requireAdmin, jsonBody, handleSaveConfigFile);
+app.post('/api/admin/sources/:id', requireAdmin, jsonBody, handleToggleSource);
+app.post('/api/admin/cache/vider', requireAdmin, jsonBody, handleClearCache);
+app.post('/api/admin/kkey/redecouvrir', requireAdmin, handleRediscoverKkey);
 
 app.listen(PORT, () => {
   console.log(`[Dramallyu] ecoute sur le port ${PORT}`);

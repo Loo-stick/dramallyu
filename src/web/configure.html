@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dramallyu — configuration</title>
+<style>
+  /* Accessibilite : aucune information n'est portee par la couleur seule. Chaque etat
+     est double d'un symbole et d'un texte. */
+  :root {
+    --fond: #12131a;
+    --carte: #1b1d27;
+    --bord: #2e3140;
+    --texte: #e8e9ee;
+    --doux: #9aa0b4;
+    --accent: #c9a227;
+    --accent-texte: #12131a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem 4rem;
+    background: var(--fond); color: var(--texte);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .page { max-width: 780px; margin: 0 auto; }
+  h1 { font-size: 1.9rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
+  .sous-titre { color: var(--doux); margin: 0 0 2rem; }
+  fieldset {
+    border: 1px solid var(--bord); border-radius: 10px;
+    margin: 0 0 1.25rem; padding: 1.25rem;
+    background: var(--carte);
+  }
+  legend { padding: 0 .5rem; font-weight: 600; letter-spacing: .01em; }
+  label { display: block; margin: .9rem 0 .3rem; font-size: .92rem; }
+  .aide { color: var(--doux); font-size: .84rem; margin: .2rem 0 0; }
+  input[type=text], input[type=password], select {
+    width: 100%; padding: .6rem .7rem;
+    background: #0e0f15; color: var(--texte);
+    border: 1px solid var(--bord); border-radius: 6px;
+    font: inherit; font-size: .95rem;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 1rem; }
+  .case { display: flex; align-items: flex-start; gap: .55rem; margin: .5rem 0; }
+  .case input { margin-top: .35rem; }
+  .case span { font-size: .93rem; }
+  .case .marque { color: var(--doux); font-size: .8rem; display: block; }
+  button {
+    background: var(--accent); color: var(--accent-texte);
+    border: 0; border-radius: 7px; padding: .7rem 1.3rem;
+    font: inherit; font-weight: 650; cursor: pointer;
+  }
+  button.secondaire { background: transparent; color: var(--texte); border: 1px solid var(--bord); }
+  .sortie {
+    margin-top: 1.5rem; padding: 1.1rem;
+    border: 1px solid var(--bord); border-radius: 10px; background: var(--carte);
+  }
+  code {
+    display: block; word-break: break-all; background: #0e0f15;
+    padding: .7rem; border-radius: 6px; font-size: .82rem; color: var(--doux);
+    border: 1px solid var(--bord);
+  }
+  .avertissement {
+    border: 1px solid var(--bord); border-left: 4px solid var(--accent);
+    border-radius: 6px; padding: .85rem 1rem; margin: 0 0 1.5rem;
+    background: #191a22; font-size: .9rem;
+  }
+  .avertissement strong { display: block; margin-bottom: .25rem; }
+  .actions { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: 1rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Dramallyu</h1>
+  <p class="sous-titre">
+    Dramas asiatiques et films, sous-titres francais en priorite.
+    Tout fonctionne sans aucune cle : les champs ci-dessous ne font qu'ajouter des sources.
+  </p>
+
+  <div class="avertissement">
+    <strong>&#9888; A savoir avant de coller vos cles</strong>
+    Votre configuration voyage <em>encodee</em> dans le lien d'installation, pas
+    <em>chiffree</em>. Quiconque obtient ce lien obtient vos cles — dont vos cles debrid,
+    qui donnent acces a un compte payant. Ne partagez donc jamais votre lien
+    d'installation. Pour partager l'addon, donnez l'adresse de cette page.
+  </div>
+
+  <form id="formulaire">
+
+    <fieldset>
+      <legend>Debrideurs</legend>
+      <p class="aide">
+        Necessaires pour les sources torrent et DDL uniquement. Sans eux, KissKH et
+        VoirDrama fonctionnent normalement.
+      </p>
+      <label for="ad">Cle API AllDebrid</label>
+      <input type="password" id="ad" autocomplete="off" placeholder="laisser vide si vous n'en avez pas">
+      <label for="tb">Cle API TorBox</label>
+      <input type="password" id="tb" autocomplete="off" placeholder="laisser vide si vous n'en avez pas">
+      <p class="aide">
+        Si les deux sont renseignes, TorBox est essaye en premier : lui seul sait dire
+        a l'avance si un torrent est deja en cache.
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Indexeurs torrent</legend>
+      <p class="aide">
+        Chacun demande un compte personnel sur le tracker concerne. Sans cle, l'indexeur
+        est simplement ignore — il ne ralentit rien.
+      </p>
+      <div class="grille">
+        <div>
+          <label for="c411">Cle C411</label>
+          <input type="password" id="c411" autocomplete="off">
+        </div>
+        <div>
+          <label for="tr4ker">Cle Tr4ker</label>
+          <input type="password" id="tr4ker" autocomplete="off">
+        </div>
+        <div>
+          <label for="ygg">Cle relais YggTorrent</label>
+          <input type="password" id="ygg" autocomplete="off">
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Sous-titres et affichage</legend>
+
+      <label for="subLangs">Langues de sous-titres, par ordre de preference</label>
+      <input type="text" id="subLangs" value="fre, eng" placeholder="fre, eng, kor">
+      <p class="aide">
+        Codes a trois lettres (fre, eng, kor, jpn, tha, chi). Les codes a deux lettres
+        sont convertis automatiquement. La premiere langue determine aussi l'ordre
+        d'affichage des flux : mettre <code style="display:inline;padding:.1rem .3rem">fre</code>
+        en tete remonte les VOSTFR et les VF.
+      </p>
+
+      <label for="sortBy">Ce qui prime dans le classement</label>
+      <select id="sortBy">
+        <option value="language">La langue, puis la qualite</option>
+        <option value="quality">La qualite, puis la langue</option>
+      </select>
+
+      <label>Qualites a masquer</label>
+      <p class="aide">
+        Vide par defaut, et c'est volontaire : filtrer sur la qualite fait disparaitre
+        des flux parfaitement valides. A n'utiliser que si une qualite vous gene vraiment.
+      </p>
+      <div class="grille" id="qualites"></div>
+
+      <label for="maxResults">Nombre maximum de flux affiches</label>
+      <input type="text" id="maxResults" value="40" inputmode="numeric">
+    </fieldset>
+
+    <fieldset>
+      <legend>Sources</legend>
+      <p class="aide">Tout decocher revient a tout activer.</p>
+      <div class="grille" id="sources"></div>
+    </fieldset>
+
+    <div class="actions">
+      <button type="submit">Generer mon lien d'installation</button>
+      <button type="button" class="secondaire" id="reinit">Tout reinitialiser</button>
+    </div>
+  </form>
+
+  <div class="sortie" id="sortie" hidden>
+    <p><strong>Votre lien d'installation</strong></p>
+    <code id="lien"></code>
+    <div class="actions">
+      <button type="button" id="copier">Copier le lien</button>
+      <a id="stremio" class="secondaire" style="text-decoration:none"><button type="button" class="secondaire">Installer dans Stremio</button></a>
+    </div>
+    <p class="aide" style="margin-top:1rem">
+      <strong>Stremio</strong> : le bouton ci-dessus, ou collez le lien dans la barre de recherche des addons.<br>
+      <strong>Nuvio</strong> : ajoutez le lien dans « Addons &rarr; Ajouter une extension ».
+      Si vous aviez deja Dramallyu, desinstallez-le d'abord : Nuvio garde en cache la
+      liste des ressources d'un addon, et ne verrait pas les sous-titres autrement.
+    </p>
+  </div>
+
+</div>
+
+<script>
+const QUALITES = [
+  ['4K', '4K / 2160p'], ['1080p', '1080p'], ['720p', '720p'],
+  ['480p', '480p'], ['360p', '360p'], ['unknown', 'Resolution inconnue'],
+];
+
+function creerCases(conteneur, entrees, prefixe) {
+  conteneur.innerHTML = entrees.map(function (e) {
+    return '<label class="case"><input type="checkbox" id="' + prefixe + e.id + '" value="' + e.id + '">' +
+           '<span>' + e.nom + (e.marque ? '<span class="marque">' + e.marque + '</span>' : '') + '</span></label>';
+  }).join('');
+}
+
+creerCases(
+  document.getElementById('qualites'),
+  QUALITES.map(function (q) { return { id: q[0], nom: q[1] }; }),
+  'q_'
+);
+
+// Les sources sont lues sur le serveur : la page reste juste meme si l'operateur en
+// ajoute ou en desactive une.
+fetch('/api/sources')
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    var entrees = data.sources.map(function (s) {
+      var marque = s.kind === 'direct' ? 'Directe, aucune cle requise'
+        : s.needsDebrid ? 'Necessite un debrideur' + (s.requiredUserKey ? ' et une cle ' + s.requiredUserKey : '')
+        : '';
+      return { id: s.id, nom: s.label, marque: marque };
+    });
+    creerCases(document.getElementById('sources'), entrees, 's_');
+  })
+  .catch(function () {
+    document.getElementById('sources').innerHTML =
+      '<p class="aide">Liste des sources indisponible — toutes seront activees.</p>';
+  });
+
+function cochees(prefixe) {
+  return Array.prototype.slice
+    .call(document.querySelectorAll('input[id^="' + prefixe + '"]:checked'))
+    .map(function (i) { return i.value; });
+}
+
+function texte(id) {
+  return document.getElementById(id).value.trim();
+}
+
+document.getElementById('formulaire').addEventListener('submit', function (e) {
+  e.preventDefault();
+
+  var config = {};
+  ['ad', 'tb', 'c411', 'tr4ker', 'ygg'].forEach(function (k) {
+    if (texte(k)) config[k] = texte(k);
+  });
+
+  var langues = texte('subLangs').split(/[,\s]+/).filter(Boolean);
+  if (langues.length) config.subLangs = langues;
+
+  var exclues = cochees('q_');
+  if (exclues.length) config.excludeQualities = exclues;
+
+  var sources = cochees('s_');
+  if (sources.length) config.sources = sources;
+
+  config.sortBy = document.getElementById('sortBy').value;
+
+  var max = parseInt(texte('maxResults'), 10);
+  if (max > 0) config.maxResults = max;
+
+  // base64url, exactement ce que parseConfig attend cote serveur.
+  var encode = btoa(unescape(encodeURIComponent(JSON.stringify(config))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+  var base = location.origin;
+  var lien = base + '/' + encode + '/manifest.json';
+
+  document.getElementById('lien').textContent = lien;
+  document.getElementById('stremio').href = lien.replace(/^https?:/, 'stremio:');
+  document.getElementById('sortie').hidden = false;
+  document.getElementById('sortie').scrollIntoView({ behavior: 'smooth' });
+});
+
+document.getElementById('copier').addEventListener('click', function () {
+  var lien = document.getElementById('lien').textContent;
+  var bouton = this;
+  navigator.clipboard.writeText(lien).then(function () {
+    bouton.textContent = '✓ Copie';
+    setTimeout(function () { bouton.textContent = 'Copier le lien'; }, 2000);
+  });
+});
+
+document.getElementById('reinit').addEventListener('click', function () {
+  document.getElementById('formulaire').reset();
+  document.getElementById('sortie').hidden = true;
+});
+</script>
+</body>
+</html>

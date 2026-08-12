@@ -1,0 +1,47 @@
+services:
+  dramallyu:
+    build: .
+    container_name: dramallyu
+    restart: unless-stopped
+
+    # GARDE-FOU MEMOIRE, non negociable sur cet hote.
+    #
+    # memswap_limit DOIT valoir mem_limit : sans ca le plafond ne sert a rien, les
+    # pages partent en swap et l'hote se met a pagineer jusqu'a la paralysie sans
+    # jamais declencher d'OOM-kill. Avec les deux egaux, c'est le conteneur qui meurt
+    # proprement — pas la machine.
+    #
+    # 512 Mo est large : le pic mesure en fonctionnement est de l'ordre de 120 Mo.
+    mem_limit: 512m
+    memswap_limit: 512m
+
+    ports:
+      - "${PORT:-7020}:${PORT:-7020}"
+
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT:-7020}
+
+    # Bind-monte : les domaines rotatifs, les reglages et le cache s'editent sans
+    # rebuild, et survivent au redemarrage du conteneur.
+    volumes:
+      - ./config:/app/config
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:'+(process.env.PORT||7020)+'/api/stats',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

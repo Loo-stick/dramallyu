@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dramallyu — administration</title>
+<style>
+  /* Aucune information portee par la couleur seule : chaque etat porte un SYMBOLE
+     et un mot. Les pastilles vertes et rouges seules sont proscrites ici. */
+  :root {
+    --fond:#12131a; --carte:#1b1d27; --bord:#2e3140;
+    --texte:#e8e9ee; --doux:#9aa0b4; --accent:#c9a227;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:2rem 1rem 4rem; background:var(--fond); color:var(--texte);
+         font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .page { max-width:960px; margin:0 auto; }
+  header { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; }
+  h1 { font-size:1.6rem; margin:0; }
+  h2 { font-size:1.05rem; margin:0 0 .8rem; letter-spacing:.01em; }
+  section { border:1px solid var(--bord); border-radius:10px; background:var(--carte);
+            padding:1.2rem; margin-bottom:1.2rem; }
+  table { width:100%; border-collapse:collapse; font-size:.92rem; }
+  th,td { text-align:left; padding:.5rem .4rem; border-bottom:1px solid var(--bord); vertical-align:top; }
+  th { color:var(--doux); font-weight:600; font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; }
+  tr:last-child td { border-bottom:0; }
+  button { background:var(--accent); color:#12131a; border:0; border-radius:6px;
+           padding:.4rem .8rem; font:inherit; font-size:.86rem; font-weight:650; cursor:pointer; }
+  button.sec { background:transparent; color:var(--texte); border:1px solid var(--bord); }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; }
+  .stat .valeur { font-size:1.5rem; font-weight:650; }
+  .stat .nom { color:var(--doux); font-size:.8rem; }
+  textarea { width:100%; min-height:120px; background:#0e0f15; color:var(--texte);
+             border:1px solid var(--bord); border-radius:6px; padding:.6rem;
+             font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  .fichier { margin-bottom:1rem; }
+  .fichier > summary { cursor:pointer; padding:.4rem 0; font-weight:600; font-size:.92rem; }
+  .etat { font-weight:650; white-space:nowrap; }
+  .msg { margin-top:.6rem; font-size:.86rem; color:var(--doux); min-height:1.2em; }
+  .aide { color:var(--doux); font-size:.85rem; margin:.2rem 0 1rem; }
+  a { color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Dramallyu — administration</h1>
+    <form method="post" action="/admin/logout"><button class="sec" type="submit">Se deconnecter</button></form>
+  </header>
+
+  <section>
+    <h2>Etat du service</h2>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section>
+    <h2>Signature KissKH (kkey)</h2>
+    <div id="kkey"></div>
+    <p class="aide">
+      La fonction de signature est retelechargee depuis le site et mise en cache 12 h.
+      Une salve de 403 declenche une re-decouverte automatique ; le bouton la force.
+    </p>
+    <button id="btn-kkey" class="sec" type="button">Forcer la re-decouverte</button>
+    <div class="msg" id="msg-kkey"></div>
+  </section>
+
+  <section>
+    <h2>Sources</h2>
+    <p class="aide">
+      Desactiver une source la retire du fan-out de tous les utilisateurs. Les cles
+      d'acces, elles, restent celles de chaque utilisateur — l'administration n'en detient aucune.
+    </p>
+    <table>
+      <thead><tr><th>Source</th><th>Pilier</th><th>Exigences</th><th>Etat</th><th></th></tr></thead>
+      <tbody id="sources"></tbody>
+    </table>
+    <div class="msg" id="msg-sources"></div>
+  </section>
+
+  <section>
+    <h2>Domaines et configuration a chaud</h2>
+    <p class="aide">
+      Ces fichiers sont relus sans redemarrage. C'est ici qu'on corrige un domaine qui
+      a tourne (KissKH, VoirDrama, Zone-Telechargement, Wawacity, Nyaa) ou l'adresse
+      d'un indexeur Torznab.
+    </p>
+    <div id="fichiers"></div>
+    <div class="msg" id="msg-fichiers"></div>
+  </section>
+
+  <section>
+    <h2>Cache</h2>
+    <p class="aide">Vider force les sources a repondre a nouveau. Utile apres un changement de domaine.</p>
+    <button id="btn-cache" class="sec" type="button">Vider tout le cache</button>
+    <div class="msg" id="msg-cache"></div>
+  </section>
+
+</div>
+
+<script>
+function poser(id, html) { document.getElementById(id).innerHTML = html; }
+function dire(id, texte) { document.getElementById(id).textContent = texte; }
+
+function formaterOctets(n) {
+  if (!n) return '0 o';
+  var u = ['o','Ko','Mo','Go'], i = 0, v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return v.toFixed(i === 0 ? 0 : 1) + ' ' + u[i];
+}
+
+function formaterDuree(s) {
+  if (s < 60) return s + ' s';
+  if (s < 3600) return Math.round(s / 60) + ' min';
+  return (s / 3600).toFixed(1) + ' h';
+}
+
+function charger() {
+  fetch('/api/admin/etat').then(function (r) { return r.json(); }).then(function (d) {
+    poser('stats',
+      stat(formaterDuree(d.uptimeSecondes), 'En service depuis') +
+      stat(d.memoireMo + ' Mo', 'Memoire (plafond 512)') +
+      stat(d.cache.liveEntries, 'Entrees en cache') +
+      stat(Math.round(d.cache.hitRate * 100) + ' %', 'Taux de cache') +
+      stat(formaterOctets(d.cache.fileSizeBytes), 'Taille du cache') +
+      stat(d.settings.fanoutBudgetMs + ' ms', 'Budget de recherche')
+    );
+
+    // Symbole + mot : lisible sans distinguer les couleurs.
+    poser('kkey',
+      '<p class="etat">' + (d.kkey.fnLoaded ? '&#10003; Fonction chargee' : '&#9675; Non chargee (elle le sera au premier flux)') + '</p>' +
+      '<table><tbody>' +
+      ligne('Version applicative', d.kkey.constants.appVer) +
+      ligne('Version de plateforme', d.kkey.constants.platformVer) +
+      ligne('GUID video', d.kkey.constants.viGuid) +
+      ligne('GUID sous-titres', d.kkey.constants.subGuid) +
+      ligne('Base', d.kkey.constants.base) +
+      '</tbody></table>');
+
+    poser('sources', d.sources.map(function (s) {
+      var exigences = [];
+      if (s.needsDebrid) exigences.push('debrideur');
+      if (s.requiredUserKey) exigences.push('cle ' + s.requiredUserKey);
+      return '<tr>' +
+        '<td><strong>' + s.label + '</strong><br><span style="color:#9aa0b4;font-size:.8rem">' + s.id + '</span></td>' +
+        '<td>' + s.kind + '</td>' +
+        '<td>' + (exigences.length ? exigences.join(', ') : 'aucune') + '</td>' +
+        '<td class="etat">' + (s.active ? '&#10003; Active' : '&#10007; Desactivee') + '</td>' +
+        '<td><button class="sec" data-source="' + s.id + '" data-actif="' + (!s.active) + '">' +
+          (s.active ? 'Desactiver' : 'Activer') + '</button></td>' +
+        '</tr>';
+    }).join(''));
+
+    document.querySelectorAll('button[data-source]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        fetch('/api/admin/sources/' + b.dataset.source, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actif: b.dataset.actif === 'true' }),
+        }).then(function (r) { return r.json(); }).then(function () {
+          dire('msg-sources', 'Modifie. Effet immediat, sans redemarrage.');
+          charger();
+        });
+      });
+    });
+  });
+
+  fetch('/api/admin/config').then(function (r) { return r.json(); }).then(function (d) {
+    poser('fichiers', d.fichiers.map(function (f) {
+      return '<details class="fichier"><summary>' + f.name + '</summary>' +
+        '<textarea data-fichier="' + f.name + '">' + f.contenu.replace(/</g, '&lt;') + '</textarea>' +
+        '<button data-enregistrer="' + f.name + '" type="button">Enregistrer</button></details>';
+    }).join('') || '<p class="aide">Aucun fichier dans ' + d.dossier + ' pour l instant. Ils se creent au premier usage de chaque source.</p>');
+
+    document.querySelectorAll('button[data-enregistrer]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var nom = b.dataset.enregistrer;
+        var zone = document.querySelector('textarea[data-fichier="' + nom + '"]');
+        fetch('/api/admin/config/' + nom, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contenu: zone.value }),
+        }).then(function (r) { return r.json(); }).then(function (res) {
+          dire('msg-fichiers', res.ok ? nom + ' enregistre et recharge.' : 'Refus : ' + res.erreur);
+        });
+      });
+    });
+  });
+}
+
+function stat(valeur, nom) {
+  return '<div class="stat"><div class="valeur">' + valeur + '</div><div class="nom">' + nom + '</div></div>';
+}
+function ligne(cle, valeur) {
+  return '<tr><td style="color:#9aa0b4">' + cle + '</td><td style="word-break:break-all">' + valeur + '</td></tr>';
+}
+
+document.getElementById('btn-cache').addEventListener('click', function () {
+  fetch('/api/admin/cache/vider', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) { dire('msg-cache', d.supprimees + ' entrees supprimees.'); charger(); });
+});
+
+document.getElementById('btn-kkey').addEventListener('click', function () {
+  dire('msg-kkey', 'Re-decouverte en cours (elle telecharge les scripts du site)...');
+  fetch('/api/admin/kkey/redecouvrir', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      dire('msg-kkey', d.ok ? 'Constantes re-extraites depuis le site.' : 'Echec : les constantes actuelles sont conservees.');
+      charger();
+    });
+});
+
+charger();
+setInterval(charger, 30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+# Dramallyu
+
+Addon **Stremio et Nuvio** dedie aux **dramas asiatiques** — coreens, chinois,
+thailandais, japonais — et aux films du meme creneau, avec les **sous-titres francais
+en priorite**.
+
+Il agrege trois familles de sources vers un resolveur debrid unique, et il est
+utilisable **sans aucune cle** : les sources directes suffisent a regarder.
+
+## Ce qu'il fait
+
+| Pilier | Sources | Cle requise |
+|---|---|---|
+| Direct | KissKH, VoirDrama | aucune |
+| Torrent | Nyaa, C411, Tr4ker, relais YggTorrent | debrideur (+ cle du tracker) |
+| DDL | Zone-Telechargement, Wawacity | debrideur |
+
+- **Catalogue** de 12 700 fiches, navigable par pays, avec recherche.
+- **Sous-titres** agreges (source + OpenSubtitles), francais en tete, servis en VTT.
+- **Compatible AIOStreams** : manifeste jamais protege, config dans le chemin,
+  reponse `/stream` sous un budget de 8 secondes.
+
+## Installation par un utilisateur
+
+Ouvrir `/configure`, remplir ce qu'on veut (ou rien), generer le lien.
+
+- **Stremio** : bouton d'installation, ou coller le lien dans la recherche d'addons.
+- **Nuvio** : « Addons &rarr; Ajouter une extension », coller le lien.
+  Si une version precedente est deja installee, la **desinstaller d'abord** : Nuvio met
+  en cache la liste des ressources d'un addon et ne verrait pas les sous-titres autrement.
+
+## Deploiement par l'operateur
+
+```bash
+cp .env.example .env
+# Renseigner au minimum TOKEN_SECRET (et ADMIN_PASSWORD pour avoir la page admin) :
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+docker compose up -d --build
+docker compose logs -f dramallyu
+```
+
+L'addon ecoute sur le port **7020**. Derriere un reverse-proxy, `trust proxy` est
+actif : les en-tetes `X-Forwarded-*` suffisent a construire les liens absolus.
+
+### Developpement
+
+```bash
+npm install
+npm run dev      # tsx, sources a chaud
+npm test         # node:test
+npm run build    # tsc --strict, le vrai garde-fou statique
+```
+
+## Principes de conception
+
+**Aucune cle globale.** L'operateur ne fournit et ne prete aucun acces : chaque
+utilisateur met ses propres cles debrid, trackers et TMDB dans sa configuration. La
+page d'administration pilote la *disponibilite* (quelle source tourne, a quelle
+adresse), jamais les *acces*.
+
+**Aucun debridage pendant `/stream`.** Les entrees pointent vers `/resolve/<jeton>`,
+et le debrideur n'est sollicite qu'au moment du Play. C'est ce qui tient le budget de
+8 secondes — au-dela, AIOStreams coupe la source et l'utilisateur voit une liste vide.
+
+**Pas de faux badge « instantane ».** TorBox sait dire si un torrent est en cache, et
+on l'affiche. AllDebrid n'expose plus d'API fiable pour ca : ses entrees sont marquees
+« a debrider » plutot que d'annoncer une disponibilite qu'on ne peut pas verifier.
+
+**La qualite trie, elle ne filtre pas.** Un seuil de qualite parait raisonnable
+jusqu'au jour ou il ampute une VF en 480p — c'est-a-dire exactement ce que cherchait
+l'utilisateur. L'exclusion existe, elle est optionnelle et vide par defaut.
+
+**Accessibilite.** Aucune information n'est portee par la couleur seule dans les
+interfaces : chaque etat porte un symbole et un mot.
+
+## Documentation
+
+- [`docs/kkey.md`](docs/kkey.md) — le reverse de la signature KissKH, et comment le
+  refaire quand ils changeront d'algorithme.
+- [`docs/kisskh-api.md`](docs/kisskh-api.md) — l'API KissKH, endpoints et enumerations.
+- [`docs/superpowers/specs/`](docs/superpowers/specs/) — le design valide.
+- [`docs/superpowers/plans/`](docs/superpowers/plans/) — le plan d'implementation.
+
+## Etat des sources au 2026-08-12
+
+| Source | Etat |
+|---|---|
+| KissKH | verifiee en reel — flux + 7 pistes de sous-titres dont le francais |
+| VoirDrama | verifiee en reel — apporte notamment de la VF |
+| Nyaa | analyseur valide sur le flux RSS reel |
+| C411 / Tr4ker / Ygg | implementes (Torznab) — **non verifiables sans compte** |
+| Zone-Telechargement | structure relevee sur le site, recherche DLE en POST |
+| Wawacity | **desactivee** : `wawacity.pro` est un domaine parque et aucune autre extension ne repond depuis ce serveur. Le code suit son portillon et detecte le parking ; il suffit de renseigner le domaine courant dans `config/wawacity-endpoints.json` puis de l'activer dans l'admin. |
+
+## Limite connue
+
+Certaines pistes de sous-titres KissKH sont **chiffrees** (extensions `.txt` / `.txt1`,
+dechiffrees cote navigateur par des fonctions `b1`/`b2`/`b3`). Elles sont detectees et
+ecartees plutot que servies en charabia. Les pistes `.srt`, majoritaires — dont le
+francais — passent normalement. Le dechiffrement est documente dans `docs/kkey.md` et
+reste a implementer.
