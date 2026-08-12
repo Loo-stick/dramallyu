@@ -13,8 +13,10 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@types/crypto-js": "^4.2.2",
     "axios": "^1.7.9",
     "better-sqlite3": "^12.9.0",
+    "crypto-js": "^4.2.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0"
   },

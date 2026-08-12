@@ -18,6 +18,7 @@ import { resolveWork } from '../core/meta';
 import { subtitlesAll } from '../core/registry';
 import { findSubtitles } from '../subs/opensubtitles';
 import { toVtt } from '../subs/convert';
+import { estChiffre, dechiffrerVtt } from '../sources/direct/kisskh/subdecrypt';
 import { getBaseUrl } from '../core/url';
 import { encodeToken, decodeToken } from '../debrid/token';
 import { httpGet } from '../core/http';
@@ -119,13 +120,25 @@ export async function handleServeSub(req: Request, res: Response): Promise<void>
     : Buffer.from(response.data as ArrayBuffer);
   const vtt = toVtt(buf);
   if (!vtt) {
-    // Piste chiffree (KissKH .txt/.txt1) ou format inconnu : servir du charabia
-    // afficherait des caracteres aleatoires par-dessus la video.
     res.status(415).type('text/plain').send('format de sous-titre non pris en charge');
     return;
   }
 
+  // Pistes KissKH chiffrees : le FICHIER est structurellement valide, seules les
+  // repliques sont brouillees. On tente le dechiffrement, et on refuse de servir si
+  // le resultat n'est pas credible — du charabia par-dessus la video serait pire que
+  // pas de sous-titres du tout.
+  let corps = vtt;
+  if (estChiffre(payload.v)) {
+    const clair = await dechiffrerVtt(vtt, payload.v);
+    if (!clair) {
+      res.status(415).type('text/plain').send('piste chiffree non dechiffrable');
+      return;
+    }
+    corps = clair;
+  }
+
   res.set('Content-Type', 'text/vtt; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=3600');
-  res.send(vtt);
+  res.send(corps);
 }
