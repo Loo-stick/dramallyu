@@ -1,0 +1,30 @@
+{
+  "name": "stremio-addon-dramallyu",
+  "version": "0.1.0",
+  "description": "Dramallyu — addon Stremio/Nuvio dedie aux dramas asiatiques (KissKH, VoirDrama, torrents, DDL) avec resolveur debrid unifie",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && node scripts/copy-web.js",
+    "start": "node dist/index.js",
+    "dev": "node --import tsx src/index.ts",
+    "test": "node --import tsx --test --test-force-exit \"src/**/*.test.ts\""
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "better-sqlite3": "^12.9.0",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.22.3",
+    "typescript": "^5.7.0"
+  },
+  "license": "MIT",
+  "private": true
+}

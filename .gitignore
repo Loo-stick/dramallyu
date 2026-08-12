@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+config/*.db
+config/*.db-shm
+config/*.db-wal
+scratchpad/
+*.log
+CLAUDE.md
