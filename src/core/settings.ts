@@ -1,0 +1,82 @@
+// Reglages OPERATEUR (page admin), a chaud dans config/runtime-settings.json.
+//
+// Ce fichier ne contient AUCUNE cle d'acces : l'operateur pilote la disponibilite
+// (quelle source est active, a quelle adresse la joindre), jamais les acces, qui
+// appartiennent a chaque utilisateur.
+//
+// PIEGE EVITE : LooStream met ses reglages en cache dans le processus, si bien
+// qu'editer le fichier reste sans effet jusqu'au redemarrage. Ici on lit toujours
+// a travers endpoint-config, qui surveille le fichier — editer = applique.
+
+import { makeEndpointConfig } from './endpoint-config';
+
+export interface TorznabIndexerSettings {
+  enabled: boolean;
+  /** URL de base de l'API Torznab. La CLE reste dans la config de l'utilisateur. */
+  url: string;
+  /** Categories Torznab a interroger (5000 = TV, 2000 = films). */
+  categories: number[];
+}
+
+export interface Settings {
+  /** Activation par source. Une source absente est consideree active. */
+  sources: Record<string, boolean>;
+  /** Budget dur du fan-out. Au-dela, les sources en retard sont abandonnees. */
+  fanoutBudgetMs: number;
+  /** Nombre maximum de flux renvoyes, toutes sources confondues. */
+  maxStreams: number;
+  torznab: Record<string, TorznabIndexerSettings>;
+}
+
+const DEFAULTS: Settings = {
+  sources: {
+    kisskh: true,
+    voirdrama: true,
+    nyaa: true,
+    c411: true,
+    tr4ker: true,
+    ygg: true,
+    zonetelechargement: true,
+    // Desactive par defaut : aucun domaine wawacity vivant au 2026-08-12 (parque ou
+    // bloque DNS). L operateur l active une fois le domaine courant renseigne dans
+    // config/wawacity-endpoints.json — cf. le commentaire en tete de wawacity.ts.
+    wawacity: false,
+  },
+  // 8 s : au-dela, AIOStreams coupe la source et l'utilisateur voit un ecran vide.
+  fanoutBudgetMs: 8000,
+  maxStreams: 60,
+  torznab: {
+    c411: { enabled: true, url: 'https://c411.org/api', categories: [2000, 5000] },
+    tr4ker: { enabled: true, url: 'https://tr4ker.net/torznab', categories: [2000, 5000] },
+    ygg: { enabled: true, url: 'https://u2p.anhkagi.net/torznab', categories: [2000, 5000] },
+  },
+};
+
+const store = makeEndpointConfig<Record<string, unknown>>(
+  'runtime-settings.json',
+  'RUNTIME_SETTINGS_CONFIG',
+  DEFAULTS as unknown as Record<string, unknown>,
+);
+
+export const reloadSettings = store.reload;
+export const settingsPath = store.path;
+
+export function getSettings(): Settings {
+  const raw = store.get() as Partial<Settings>;
+  return {
+    sources: { ...DEFAULTS.sources, ...(raw.sources || {}) },
+    fanoutBudgetMs: clamp(Number(raw.fanoutBudgetMs) || DEFAULTS.fanoutBudgetMs, 2000, 20000),
+    maxStreams: clamp(Number(raw.maxStreams) || DEFAULTS.maxStreams, 5, 300),
+    torznab: { ...DEFAULTS.torznab, ...(raw.torznab || {}) },
+  };
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
+}
+
+/** Une source est-elle autorisee par l'operateur ? Absente du fichier = autorisee. */
+export function sourceEnabledByOperator(sourceId: string): boolean {
+  const s = getSettings().sources;
+  return s[sourceId] !== false;
+}

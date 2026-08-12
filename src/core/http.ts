@@ -24,7 +24,7 @@ export interface HttpOptions {
   signal?: AbortSignal;
   retries?: number;
   params?: Record<string, string | number | undefined>;
-  responseType?: 'json' | 'text';
+  responseType?: 'json' | 'text' | 'buffer';
   maxRedirects?: number;
   /** Taille maximale acceptee. Garde-fou RAM : un gros corps inattendu est refuse. */
   maxBytes?: number;
@@ -70,6 +70,12 @@ export async function httpGet<T = unknown>(
     // transformResponse neutralise : axios essaie sinon de parser du JSON dans du
     // HTML et renvoie un objet inattendu.
     cfg.transformResponse = [(v) => v];
+  } else if (opts.responseType === 'buffer') {
+    // Indispensable pour les fichiers BINAIRES servis tels quels — un .srt.gz
+    // d'OpenSubtitles decode en texte est irrecuperable (les octets non-UTF8 sont
+    // remplaces avant meme qu'on puisse decompresser).
+    cfg.responseType = 'arraybuffer';
+    cfg.transformResponse = [(v) => v];
   }
 
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -106,6 +112,42 @@ export async function getText(url: string, opts: HttpOptions = {}): Promise<stri
   const res = await httpGet<string>(url, { ...opts, responseType: 'text' });
   if (!res || res.status < 200 || res.status >= 400) return null;
   return typeof res.data === 'string' ? res.data : null;
+}
+
+/**
+ * POST de formulaire, reponse en texte.
+ *
+ * Indispensable pour les sites DataLife Engine (Zone-Telechargement et consorts) :
+ * leur recherche N'EXISTE PAS en GET — le formulaire en GET renvoie la page d'accueil
+ * sans le moindre resultat, ce qui donne l'illusion d'un site sans correspondance.
+ */
+export async function postForm(
+  url: string,
+  fields: Record<string, string>,
+  opts: HttpOptions = {},
+): Promise<string | null> {
+  try {
+    const res = await axios.post<string>(url, new URLSearchParams(fields).toString(), {
+      headers: {
+        ...BROWSER_HEADERS,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        ...opts.headers,
+      },
+      timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      validateStatus: () => true,
+      maxRedirects: opts.maxRedirects ?? 4,
+      maxContentLength: opts.maxBytes ?? DEFAULT_MAX_BYTES,
+      responseType: 'text',
+      transformResponse: [(v) => v],
+      decompress: true,
+      signal: opts.signal,
+    });
+    if (res.status < 200 || res.status >= 400) return null;
+    return typeof res.data === 'string' ? res.data : null;
+  } catch (e) {
+    console.log(`[HTTP POST] ${shortUrl(url)} — ${(e as Error).message.slice(0, 100)}`);
+    return null;
+  }
 }
 
 export async function postJson<T = unknown>(
