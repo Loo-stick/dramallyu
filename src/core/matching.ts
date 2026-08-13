@@ -11,6 +11,26 @@
 
 const STOP_WORDS = new Set(['the', 'a', 'an', 'le', 'la', 'les', 'un', 'une', 'de', 'des', 'du']);
 
+/**
+ * Ecritures CONSERVEES par la tokenisation, en plus du latin.
+ *
+ * Les effacer serait absurde dans un addon de dramas asiatiques : c'est justement la
+ * forme sous laquelle les titres originaux circulent. Un jeu de caracteres non retenu
+ * ici ne disparait pas seulement, il DEGENERE — « 성판17: 남자들의 17가지 성적 판타지 »
+ * se reduisait a « 1717 », un residu de chiffres qui matche n'importe quel titre
+ * contenant « 17 ». C'est ce qui faisait choisir « 17 Again » a la place de
+ * « Sex Plate 17 », et la clé TMDB de l'utilisateur — censee aider — declenchait le
+ * defaut en fournissant le titre coreen.
+ */
+const ECRITURES =
+  'a-z0-9' +
+  '\\uac00-\\ud7af\\u1100-\\u11ff\\u3130-\\u318f' + // hangul (coreen)
+  '\\u4e00-\\u9fff\\u3400-\\u4dbf' + //               han (chinois, kanji)
+  '\\u3040-\\u309f\\u30a0-\\u30ff' + //               kana (japonais)
+  '\\u0e00-\\u0e7f'; //                               thai
+
+const NON_RETENU = new RegExp(`[^${ECRITURES}]+`, 'g');
+
 /** "Squid Game: Season 2 (2024)" -> ["squid","game"] */
 export function tokenize(title: string): string[] {
   return title
@@ -20,10 +40,34 @@ export function tokenize(title: string): string[] {
     .replace(/\b(19|20)\d{2}\b/g, ' ')
     .replace(/\b(season|saison|s)\s*\d+\b/g, ' ')
     .replace(/\b(vf|vostfr|vost|vo|multi|french|truefrench)\b/g, ' ')
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(NON_RETENU, ' ')
     .trim()
     .split(/\s+/)
     .filter((t) => t.length > 0 && !STOP_WORDS.has(t));
+}
+
+/**
+ * Cette forme de titre discrimine-t-elle quelque chose ?
+ *
+ * Un titre dont il ne reste que des chiffres ne designe plus une oeuvre : il matche
+ * tout ce qui porte le meme nombre. C'est le filet pour les ecritures qu'on ne retient
+ * pas ci-dessus (cyrillique, arabe, hebreu...) — elles degenerent de la meme façon, et
+ * une forme sans pouvoir de discrimination doit sortir du jeu plutot que d'y voter.
+ */
+export function titreDiscriminant(title: string): boolean {
+  return tokenize(title).some((t) => !/^\d+$/.test(t));
+}
+
+/**
+ * Ecarte les formes degenerees, SAUF s'il ne reste plus rien.
+ *
+ * Le repli n'est pas une concession : sans lui, une oeuvre dont tous les titres connus
+ * sont degeneres deviendrait introuvable, alors qu'un match faible reste preferable a
+ * l'absence de recherche quand on n'a rien de mieux.
+ */
+export function formesUtiles(titles: string[]): string[] {
+  const utiles = titles.filter(titreDiscriminant);
+  return utiles.length > 0 ? utiles : titles;
 }
 
 /** Forme compacte, sans espaces : utile pour les comparaisons strictes. */
@@ -81,8 +125,10 @@ const DEFAULT_THRESHOLD = 0.75;
  * `titles` contient le titre original, le titre FR, et les alternatifs : il suffit
  * qu'UNE forme corresponde. C'est ce qui rattrape les romanisations.
  */
-export function matchesTitle(candidate: string, titles: string[], opts: MatchOptions = {}): boolean {
+export function matchesTitle(candidate: string, titres: string[], opts: MatchOptions = {}): boolean {
   const threshold = opts.threshold ?? DEFAULT_THRESHOLD;
+  // Une forme degeneree ne doit pas peser dans le vote : elle dirait « oui » a tout.
+  const titles = formesUtiles(titres);
 
   if (opts.season !== undefined) {
     const s = seasonInTitle(candidate);
@@ -103,9 +149,11 @@ export function matchesTitle(candidate: string, titles: string[], opts: MatchOpt
 export function bestMatch<T>(
   items: T[],
   titleOf: (item: T) => string,
-  titles: string[],
+  titres: string[],
   opts: MatchOptions = {},
 ): T | null {
+  // Meme raison que dans matchesTitle : on note sur les formes qui discriminent.
+  const titles = formesUtiles(titres);
   let best: T | null = null;
   let bestScore = opts.threshold ?? DEFAULT_THRESHOLD;
 
