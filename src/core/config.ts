@@ -53,6 +53,12 @@ export interface UserConfig {
   cachedOnly: boolean;
   /** Pilier remonte en tete de liste. */
   priorite: 'aucune' | 'direct' | 'torrent';
+  /**
+   * Debrideur prefere quand les deux sont configures ET qu'aucun n'a le fichier en
+   * cache. Ce qui EST en cache passe toujours en premier, quel que soit ce reglage :
+   * une preference ne vaut pas de renoncer a une lecture immediate.
+   */
+  debrid: 'auto' | 'alldebrid' | 'torbox';
   /** Bornes de resolution. Chaine vide = pas de borne. */
   minResolution: string;
   maxResolution: string;
@@ -95,6 +101,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   // doit voir l'offre entiere ; c'est a lui de la restreindre s'il le souhaite.
   cachedOnly: false,
   priorite: 'aucune',
+  debrid: 'auto',
   minResolution: '',
   maxResolution: '',
   minSource: '',
@@ -201,6 +208,7 @@ export function parseConfig(raw?: string | null): UserConfig {
   cfg.bonusHdr = o.bonusHdr === true;
 
   if (o.priorite === 'direct' || o.priorite === 'torrent') cfg.priorite = o.priorite;
+  if (o.debrid === 'alldebrid' || o.debrid === 'torbox') cfg.debrid = o.debrid;
 
   for (const champ of ['minResolution', 'maxResolution', 'minSource'] as const) {
     const v = asTrimmedString(o[champ]);

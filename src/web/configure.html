@@ -362,6 +362,18 @@
           disponibilite ne se verifie donc pas — ils disparaissent aussi.
         </p>
 
+        <label for="debrid">Debrideur prefere</label>
+        <select id="debrid">
+          <option value="auto">Automatique</option>
+          <option value="alldebrid">AllDebrid d abord</option>
+          <option value="torbox">TorBox d abord</option>
+        </select>
+        <p class="indice">
+          Ne joue que lorsque AUCUN des deux n'a le fichier en cache. Ce qui est deja
+          pret passe toujours en premier, quel que soit ce reglage : une preference ne
+          vaut pas de renoncer a une lecture immediate.
+        </p>
+
         <label for="priorite">Pilier a remonter en tete</label>
         <select id="priorite">
           <option value="aucune">Aucune preference</option>
@@ -655,6 +667,7 @@ function configActuelle(){
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
   if (!$('subsSurFlux').checked) cfg.subsSurFlux = false;
   if ($('priorite').value !== 'aucune') cfg.priorite = $('priorite').value;
+  if ($('debrid').value !== 'auto') cfg.debrid = $('debrid').value;
   if (valeur('minResolution')) cfg.minResolution = valeur('minResolution');
   if (valeur('maxResolution')) cfg.maxResolution = valeur('maxResolution');
   if (valeur('minSource')) cfg.minSource = valeur('minSource');
@@ -823,7 +836,7 @@ $('copier').addEventListener('click', function(){
 });
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
-['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','frOnly','sortBy','maxResults','cachedOnly','priorite',
+['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','frOnly','debrid','sortBy','maxResults','cachedOnly','priorite',
  'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);

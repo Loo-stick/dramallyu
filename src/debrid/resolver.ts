@@ -24,6 +24,14 @@ export function servicesFor(config: UserConfig): DebridService[] {
   const out: DebridService[] = [];
   if (config.tb) out.push(torbox(config.tb));
   if (config.ad) out.push(allDebrid(config.ad));
+  // Preference de l'utilisateur. Elle ne joue qu'a defaut de cache : `ordonnerPourTorrent`
+  // repasse devant pour placer en tete ce qui est deja pret, et une preference ne vaut
+  // pas de renoncer a une lecture immediate.
+  if (config.debrid === 'alldebrid') {
+    out.sort((a, b) => (a.name === 'alldebrid' ? -1 : b.name === 'alldebrid' ? 1 : 0));
+  } else if (config.debrid === 'torbox') {
+    out.sort((a, b) => (a.name === 'torbox' ? -1 : b.name === 'torbox' ? 1 : 0));
+  }
   return out;
 }
 
@@ -33,6 +41,8 @@ export interface ResolveRequest {
   fileHint?: string;
   ad?: string;
   tb?: string;
+  /** Preference de l'utilisateur, transportee dans le jeton de lecture. */
+  pref?: 'auto' | 'alldebrid' | 'torbox';
 }
 
 /**
@@ -83,7 +93,7 @@ async function ordonnerPourTorrent(
  * direct.
  */
 export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promise<string | null> {
-  let services = servicesFor({ ad: req.ad, tb: req.tb } as UserConfig);
+  let services = servicesFor({ ad: req.ad, tb: req.tb, debrid: req.pref ?? 'auto' } as UserConfig);
   if (services.length === 0) return null;
 
   if (req.kind === 'torrent') {

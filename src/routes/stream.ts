@@ -195,8 +195,18 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       // Un lien DDL derriere un redirecteur ne peut etre traverse que par AllDebrid :
       // annoncer TorBox serait faux, meme s'il est configure.
       const redirige = c.kind === 'ddl' && c.ddlUrl ? isRedirector(c.ddlUrl) : false;
+      // Hors cache, c'est la PREFERENCE de l'utilisateur qui decide — l'addon n'a
+      // aucune raison de trancher a sa place entre deux comptes qui lui appartiennent.
+      // Un redirecteur reste l'exception : seul AllDebrid sait le traverser, annoncer
+      // TorBox serait faux meme s'il est prefere.
+      const prefere: NomDebrid | undefined =
+        config.debrid === 'alldebrid' ? (config.ad ? 'alldebrid' : undefined)
+        : config.debrid === 'torbox' ? (config.tb ? 'torbox' : undefined)
+        : undefined;
       const defaut: NomDebrid | undefined =
-        redirige && config.ad ? 'alldebrid' : config.tb ? 'torbox' : config.ad ? 'alldebrid' : undefined;
+        redirige && config.ad
+          ? 'alldebrid'
+          : (prefere ?? (config.tb ? 'torbox' : config.ad ? 'alldebrid' : undefined));
       // Sans hash (DDL), la disponibilite ne se verifie pas : on n'affirme rien.
       return { service: defaut, pret: c.infoHash ? false : undefined };
     };
@@ -282,7 +292,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
           const c = e.candidate;
           const mesure = await languesDuFichier(c.infoHash as string, () =>
             resolve(
-              { kind: 'torrent', value: c.infoHash as string, fileHint: c.fileHint, ad: config.ad, tb: config.tb },
+              { kind: 'torrent', value: c.infoHash as string, fileHint: c.fileHint, ad: config.ad, tb: config.tb, pref: config.debrid },
               AbortSignal.timeout(8000),
             ),
           );
@@ -366,6 +376,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         f: c.fileHint,
         ad: config.ad,
         tb: config.tb,
+        pref: config.debrid,
       });
       const { service, pret } = servirPar(c);
       return toStremioStream(c, {

@@ -27,7 +27,7 @@ export async function handleResolve(req: Request, res: Response): Promise<void> 
 
   try {
     const link = await resolve(
-      { kind: payload.k, value: payload.v, fileHint: payload.f, ad: payload.ad, tb: payload.tb },
+      { kind: payload.k, value: payload.v, fileHint: payload.f, ad: payload.ad, tb: payload.tb, pref: payload.pref },
       controller.signal,
     );
     if (!link) {

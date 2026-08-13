@@ -199,3 +199,10 @@ test('la liste des champs de cle couvre bien tout ce que UserConfig porte', () =
     assert.equal(cfg[champ], `secret-${champ}`, `la cle « ${champ} » ne survit pas a l aller-retour`);
   }
 });
+
+test('la preference de debrideur survit a l aller-retour', () => {
+  assert.equal(parseConfig(encodeConfig({ debrid: 'alldebrid' })).debrid, 'alldebrid');
+  assert.equal(parseConfig(encodeConfig({})).debrid, 'auto', 'automatique par defaut');
+  // Une valeur inventee ne doit pas s installer dans la config.
+  assert.equal(parseConfig(encodeConfig({ debrid: 'nimporte' } as never)).debrid, 'auto');
+});

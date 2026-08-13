@@ -24,6 +24,8 @@ export interface ResolvePayload {
   ad?: string;
   /** Cle TorBox de l'utilisateur. */
   tb?: string;
+  /** Preference de debrideur, pour que le Play respecte le reglage. */
+  pref?: 'auto' | 'alldebrid' | 'torbox';
   /** Expiration (epoch ms). */
   exp: number;
 }
