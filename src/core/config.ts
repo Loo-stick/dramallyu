@@ -64,6 +64,15 @@ export interface UserConfig {
   excludeFormats: string[];
   /** Retirer les captations en salle. */
   excludeCam: boolean;
+  /**
+   * Ne garder que ce qui annonce du francais.
+   *
+   * Fonde sur ce que la RELEASE declare (VOSTFR, VF, MULTi...), pas sur le contenu du
+   * fichier : les pistes integrees ne sont lisibles qu'apres resolution chez le
+   * debrideur, donc trop tard pour filtrer. Une source directe dont on connait les
+   * sous-titres passe des qu'elle porte le francais.
+   */
+  frOnly: boolean;
   /** Remonter les flux HDR a qualite comparable. */
   bonusHdr: boolean;
   /**
@@ -92,6 +101,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   maxSizeGb: 0,
   excludeFormats: [],
   excludeCam: false,
+  frOnly: false,
   bonusHdr: false,
   subsSurFlux: true,
 };
@@ -187,6 +197,7 @@ export function parseConfig(raw?: string | null): UserConfig {
   // Actif par defaut : on ne le desactive que si le champ dit explicitement false.
   cfg.subsSurFlux = o.subsSurFlux !== false;
   cfg.excludeCam = o.excludeCam === true;
+  cfg.frOnly = o.frOnly === true;
   cfg.bonusHdr = o.bonusHdr === true;
 
   if (o.priorite === 'direct' || o.priorite === 'torrent') cfg.priorite = o.priorite;

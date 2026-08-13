@@ -442,6 +442,18 @@
           <span class="signe">+</span><span>Exclure les captations en salle (CAM, TS)</span>
         </label>
 
+        <label class="pastille" data-bascule="frOnly" style="margin:10px 0 0">
+          <input type="checkbox" id="frOnly">
+          <span class="signe">+</span><span>Uniquement les releases annoncant du francais</span>
+        </label>
+        <p class="indice">
+          Fonde sur ce que la release DECLARE (VOSTFR, VF, MULTi) et sur les pistes des
+          sources directes, que l'on connait reellement. Les sous-titres integres a un
+          .mkv ne sont lisibles qu'apres ouverture du fichier chez le debrideur, donc
+          trop tard pour filtrer : une release muette sur sa langue sera ecartee meme si
+          elle porte du francais.
+        </p>
+
         <label for="maxResults">Nombre maximum de flux affiches</label>
         <input type="text" id="maxResults" value="40" inputmode="numeric" style="max-width:120px">
         <p class="indice">0 = pas de limite de votre cote.</p>
@@ -639,6 +651,7 @@ function configActuelle(){
   if (formatsExclus.length) cfg.excludeFormats = formatsExclus;
   if ($('cachedOnly').checked) cfg.cachedOnly = true;
   if ($('excludeCam').checked) cfg.excludeCam = true;
+  if ($('frOnly').checked) cfg.frOnly = true;
   if ($('bonusHdr').checked) cfg.bonusHdr = true;
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
   if (!$('subsSurFlux').checked) cfg.subsSurFlux = false;
@@ -811,8 +824,8 @@ $('copier').addEventListener('click', function(){
 });
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
-['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','sortBy','maxResults','cachedOnly','priorite',
- 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','bonusHdr','subsSurFlux'].forEach(function(id){
+['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','frOnly','sortBy','maxResults','cachedOnly','priorite',
+ 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);
 });

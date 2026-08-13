@@ -34,7 +34,23 @@ export function qualityOf(name: string): string {
  */
 export function languageOf(name: string): string {
   const n = name.toLowerCase();
-  if (/\bmulti\b/.test(n)) return 'MULTI';
+
+  // « MULTI » NE VEUT PAS DIRE LA MEME CHOSE PARTOUT.
+  //
+  // Dans la scene francaise, le jeton « MULTi » seul signifie « plusieurs pistes dont
+  // le francais » — c'est une convention etablie. Mais « Multi Subs » et
+  // « Multi Audio » sont de simples descriptions anglaises, employees par les groupes
+  // de raws asiatiques pour dire « chinois + anglais ».
+  //
+  // Constate en production : « Pursuit of Jade S01 ... x264-Tsundere-Raws (Multi Subs,
+  // Multi Audio) » etait annonce MULTI. L'utilisateur choisit ce flux pour son
+  // francais, lance la lecture, et decouvre 13 pistes integrees en chinois et anglais.
+  // Promettre une langue absente est la pire erreur que ce fichier puisse commettre.
+  //
+  // On retire donc ces tournures AVANT de chercher le jeton « multi » : ce qui reste
+  // est la convention de scene, pas une description.
+  const sansDescription = n.replace(/\bmulti[\s._-]?(subs?|audios?|sub|lang(uages?)?)\b/g, ' ');
+  if (/\bmulti\b/.test(sansDescription)) return 'MULTI';
   if (/\bvostfr\b|\bvost\b/.test(n)) return 'VOSTFR';
   // AVANT le test VF, et c'est capital : « french sub » contient « french ». Teste
   // dans l'autre ordre, une release sous-titree serait annoncee comme doublee — et

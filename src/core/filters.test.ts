@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { passeFiltres, comparer, estCam, contientFormat, rangResolution, rangSource, tailleJugee } from './filters';
+import { passeFiltres, comparer, estCam, contientFormat, rangResolution, rangSource, tailleJugee, porteDuFrancais } from './filters';
 import type { Filtres, EtatFlux, OptionsTri } from './filters';
+import { languageOf } from '../sources/torrent/release';
 import type { Candidate } from '../sources/types';
 
 const NEUTRE: Filtres = {
@@ -197,4 +198,36 @@ test('un compte d episodes absurde ne divise pas', () => {
   const pack = flux({ title: 'Drama.S01.COMPLETE.1080p', sizeBytes: 40 * 1024 ** 3 });
   assert.equal(tailleJugee(pack.candidate, 1), 40 * 1024 ** 3);
   assert.equal(tailleJugee(pack.candidate, undefined), 40 * 1024 ** 3);
+});
+
+test('« Multi Subs » n est PAS une promesse de francais', () => {
+  // Vecu : « Pursuit of Jade S01 ... x264-Tsundere-Raws (Multi Subs, Multi Audio) »
+  // etait etiquete MULTI, donc presente comme porteur de francais. Le fichier livre
+  // contient 13 pistes integrees — en chinois et en anglais. Promettre une langue
+  // absente est la pire erreur possible ici.
+  const nom = 'Pursuit of Jade S01 1080p NF WEB-DL x264-Tsundere-Raws (Multi Subs, Multi Audio)';
+  // On passe par `languageOf`, comme le fait la source : c'est lui qu'on corrige.
+  assert.equal(languageOf(nom), 'VO');
+  assert.equal(porteDuFrancais(flux({ title: nom, language: languageOf(nom) }).candidate), false);
+
+  // Le jeton « MULTi » seul reste la convention de scene francaise.
+  const scene = flux({ title: 'Squid.Game.S01.MULTi.1080p.WEBRiP.x265-R3MiX.FRENCH', language: 'MULTI' });
+  assert.equal(porteDuFrancais(scene.candidate), true);
+});
+
+test('« uniquement le francais » garde ce qui l annonce', () => {
+  const f = { ...NEUTRE, frOnly: true };
+  assert.equal(passeFiltres(flux({ language: 'VOSTFR' }), f), true);
+  assert.equal(passeFiltres(flux({ language: 'VF' }), f), true);
+  assert.equal(passeFiltres(flux({ language: 'VO', title: 'Drama.S01E01.1080p.WEB-DL' }), f), false);
+});
+
+test('une source directe qui PORTE une piste FR passe, meme titre muet', () => {
+  // La difference de certitude est le point : sur une source directe on a enumere les
+  // pistes, on ne suppose pas.
+  const direct = flux({
+    kind: 'direct', sourceId: 'kisskh', title: 'Pursuit of Jade - Chasing Jade',
+    language: 'VO', subs: [{ lang: 'fre', url: 'http://x/1.vtt' }, { lang: 'eng', url: 'http://x/2.vtt' }],
+  } as never);
+  assert.equal(passeFiltres(direct, { ...NEUTRE, frOnly: true }), true);
 });

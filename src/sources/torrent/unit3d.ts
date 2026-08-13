@@ -14,6 +14,7 @@ import { getJson } from '../../core/http';
 import { parseRelease, matchesEpisode } from './release';
 import { episodeHint } from '../../debrid/types';
 import { completerHashes } from './torrentfile';
+import { languesSousTitres } from './mediainfo';
 import type { Candidate, Query, SearchContext, Source } from '../types';
 
 const TTL_MS = 30 * 60 * 1000;
@@ -38,6 +39,8 @@ interface ItemUnit3d {
     info_hash?: string;
     infoHash?: string;
     download_link?: string;
+    /** Dump MediaInfo complet. C'est lui qui dit les vraies langues du fichier. */
+    media_info?: string;
   };
   info_hash?: string;
   infoHash?: string;
@@ -178,6 +181,11 @@ export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 
           seeders: nombre(item.attributes?.seeders) ?? 0,
           infoHash,
           fileHint: parsed.isPack ? hint : undefined,
+          // Gratuit : le MediaInfo accompagne la reponse de recherche. Pas de fichier a
+          // lire, pas de resolution chez le debrideur, aucune requete de plus.
+          languesIntegrees: item.attributes?.media_info
+            ? languesSousTitres(item.attributes.media_info)
+            : undefined,
         });
       }
       return out;

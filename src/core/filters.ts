@@ -111,6 +111,8 @@ export interface Filtres {
   excludeFormats: string[];
   /** Retirer les captations en salle. */
   excludeCam: boolean;
+  /** Ne garder que ce qui annonce du francais. */
+  frOnly?: boolean;
 }
 
 export interface EtatFlux {
@@ -153,6 +155,14 @@ export function passeFiltres(etat: EtatFlux, f: Filtres): boolean {
 
   if (f.excludeCam && estCam(nom)) return false;
 
+  // « Uniquement le francais » : on juge sur ce que la release DECLARE.
+  //
+  // On ne peut pas faire mieux : les pistes integrees d'un .mkv ne se lisent qu'apres
+  // resolution chez le debrideur, soit bien apres le moment ou il faudrait filtrer.
+  // Une source directe qui porte une piste FR passe meme si son titre ne dit rien —
+  // la, on SAIT, on ne suppose pas.
+  if (f.frOnly && !porteDuFrancais(c)) return false;
+
   if (f.minSource) {
     const plancher = RANG_SOURCE[f.minSource];
     const source = rangSource(nom);
@@ -185,6 +195,28 @@ export function tailleJugee(c: Candidate, episodesSaison?: number): number {
   if (!parseRelease(c.title).isPack) return brut;
   if (!episodesSaison || episodesSaison < 2) return brut;
   return brut / episodesSaison;
+}
+
+/**
+ * Cette entree annonce-t-elle du francais ?
+ *
+ * Deux niveaux de certitude, et ils ne se valent pas. Une source directe dont on a
+ * enumere les pistes : on SAIT. Une release torrent : on lit son etiquette, qui reste
+ * une declaration — d'ou l'importance de ne pas sur-interpreter « Multi Subs », cf.
+ * `languageOf`.
+ */
+export function porteDuFrancais(c: Candidate): boolean {
+  // 1. Les pistes enumerees par la source : on SAIT.
+  if (c.subs?.some((t) => t.lang === 'fre')) return true;
+
+  // 2. Le MediaInfo publie par le tracker : on SAIT AUSSI, et cette certitude prime
+  //    sur l'etiquette du titre — dans les deux sens. Une release muette sur sa langue
+  //    qui porte du francais passe ; un « Multi Subs » qui n'en a pas est ecarte,
+  //    quoi qu'annonce son nom.
+  if (c.languesIntegrees) return c.languesIntegrees.includes('fre');
+
+  // 3. Faute de mieux, l'etiquette. C'est une declaration, pas une preuve.
+  return ['VOSTFR', 'VF', 'MULTI'].includes(normalizeLanguage(c.language));
 }
 
 export type TriPar = 'language' | 'quality' | 'size';

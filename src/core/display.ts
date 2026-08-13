@@ -293,6 +293,16 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
   if (candidate.subs && candidate.subs.length > 0) {
     const avecFr = candidate.subs.some((s) => s.lang === 'fre');
     lignes.push(`💬 ${candidate.subs.length} sous-titres${avecFr ? ' dont FR' : ''}`);
+  } else if (candidate.languesIntegrees && candidate.languesIntegrees.length > 0) {
+    // Pistes INTEGREES au fichier, lues dans le MediaInfo publie par le tracker. On
+    // les distingue des sous-titres qu'on fournit nous-memes : celles-ci sont calees
+    // au frame pres sur cette video, les notres viennent d'un autre encodage.
+    //
+    // Le francais est nomme en clair quand il est la : c'est la seule question que se
+    // pose l'utilisateur devant une liste de flux.
+    const fr = candidate.languesIntegrees.includes('fre');
+    const n = candidate.languesIntegrees.length;
+    lignes.push(`💬 ${n} piste${n > 1 ? 's' : ''} intégrée${n > 1 ? 's' : ''}${fr ? ' — FR INCLUS' : ' (pas de FR)'}`);
   }
 
   const stream: StremioStream = {

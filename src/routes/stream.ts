@@ -218,6 +218,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       episodesSaison: episodesSaison,
       excludeFormats: config.excludeFormats,
       excludeCam: config.excludeCam,
+      frOnly: config.frOnly,
     };
 
     // 0 = « pas de limite de mon cote » : le plafond de l'operateur s'applique quand meme.

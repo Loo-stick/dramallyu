@@ -73,6 +73,15 @@ export interface Candidate {
 
   /** Sous-titres portes par la source elle-meme (KissKH en fournit). */
   subs?: SubTrack[];
+
+  /**
+   * Langues des sous-titres INTEGRES au fichier, quand le tracker les publie.
+   *
+   * Certitude d'un tout autre ordre que l'etiquette du titre : c'est le MediaInfo du
+   * fichier, pas une convention de nommage. Absent signifie « on ne sait pas », jamais
+   * « il n'y en a pas » — la distinction commande le filtrage.
+   */
+  languesIntegrees?: string[];
 }
 
 export interface SearchContext {
