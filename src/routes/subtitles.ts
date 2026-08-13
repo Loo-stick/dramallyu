@@ -143,6 +143,10 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
         // de l'addon dans la liste qui commande), et il coutait ça.
       }));
 
+    // Preparation en tache de fond, AVANT de repondre : le lecteur passera quelques
+    // dizaines de millisecondes a lire notre JSON, autant s'en servir.
+    prechauffer(retenues.map((t) => t.url));
+
     res.json({ subtitles });
   } catch (e) {
     console.error(`[Subtitles] echec ${req.params.id}: ${(e as Error).message}`);
@@ -151,6 +155,69 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
 }
 
 const MAX_SUB_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Recupere une piste, la convertit en VTT, la dechiffre au besoin, et la memorise.
+ *
+ * Extrait du gestionnaire HTTP pour pouvoir etre appele AILLEURS : c'est ce qui permet
+ * de preparer une piste avant que le lecteur ne la demande.
+ */
+async function preparerVtt(url: string): Promise<string | null> {
+  const cleVtt = `vtt:${url}`;
+  const memorise = get<string>(cleVtt);
+  if (memorise) return memorise;
+
+  // En binaire : OpenSubtitles sert des .srt.gz, qu'un decodage texte detruirait
+  // avant meme qu'on puisse les decompresser.
+  const response = await httpGet<ArrayBuffer>(url, {
+    timeoutMs: 15000,
+    responseType: 'buffer',
+    maxBytes: MAX_SUB_BYTES,
+    retries: 1,
+  });
+  if (!response || response.status < 200 || response.status >= 300) return null;
+
+  const buf = Buffer.isBuffer(response.data)
+    ? (response.data as Buffer)
+    : Buffer.from(response.data as ArrayBuffer);
+  const vtt = toVtt(buf);
+  if (!vtt) return null;
+
+  // Pistes KissKH chiffrees : le FICHIER est structurellement valide, seules les
+  // repliques sont brouillees. On tente le dechiffrement, et on refuse de servir si
+  // le resultat n'est pas credible — du charabia par-dessus la video serait pire que
+  // pas de sous-titres du tout.
+  let corps = vtt;
+  if (estChiffre(url)) {
+    const clair = await dechiffrerVtt(vtt, url);
+    if (!clair) return null;
+    corps = clair;
+  }
+
+  // Une piste ne change jamais : douze heures de memorisation, et la selection
+  // suivante est instantanee. On borne la taille memorisee — un fichier aberrant n'a
+  // pas a occuper le cache partage par tout le reste.
+  if (corps.length < 512 * 1024) set(cleVtt, corps, 12 * 60 * 60 * 1000, 'vtt');
+  return corps;
+}
+
+/**
+ * Prepare les pistes retenues SANS faire attendre personne.
+ *
+ * Le lecteur demande d'abord la liste, puis le fichier : deux allers-retours en
+ * serie. Mesure en local, a froid : 635 ms pour la liste, 647 ms pour le fichier —
+ * plus le reseau, environ 1,7 s avant que le texte n'apparaisse a l'ecran, alors que
+ * la video, elle, a demarre tout de suite.
+ *
+ * Or on connait deja l'URL au moment de repondre la liste. On lance donc la
+ * preparation pendant que le lecteur lit notre reponse : quand il reclame le fichier,
+ * il est pret. Le cout est nul pour lui, et le travail aurait ete fait de toute façon.
+ */
+export function prechauffer(urls: string[]): void {
+  for (const url of urls.slice(0, 2)) {
+    void preparerVtt(url).catch(() => null);
+  }
+}
 
 /** Sert une piste convertie en VTT. Le jeton signe evite le proxy ouvert. */
 export async function handleServeSub(req: Request, res: Response): Promise<void> {
@@ -161,59 +228,11 @@ export async function handleServeSub(req: Request, res: Response): Promise<void>
     return;
   }
 
-  // Piste DEJA convertie ? On la ressert telle quelle.
-  //
-  // Le lecteur redemande le fichier a chaque selection, et a chaque relecture de
-  // l'episode. Sans cache, chacune coutait un aller-retour vers l'hebergeur plus la
-  // conversion : mesure a 646-930 ms par piste, ressentie comme une latence a
-  // l'affichage des sous-titres. Le contenu d'une piste ne change jamais.
-  const cleVtt = `vtt:${payload.v}`;
-  const memorise = get<string>(cleVtt);
-  if (memorise) {
-    servirVtt(res, memorise);
+  const corps = await preparerVtt(payload.v);
+  if (!corps) {
+    res.status(502).type('text/plain').send('sous-titre injoignable ou illisible');
     return;
   }
-
-  // En binaire : OpenSubtitles sert des .srt.gz, qu'un decodage texte detruirait
-  // avant meme qu'on puisse les decompresser.
-  const response = await httpGet<ArrayBuffer>(payload.v, {
-    timeoutMs: 15000,
-    responseType: 'buffer',
-    maxBytes: MAX_SUB_BYTES,
-    retries: 1,
-  });
-  if (!response || response.status < 200 || response.status >= 300) {
-    res.status(502).type('text/plain').send('sous-titre injoignable');
-    return;
-  }
-
-  const buf = Buffer.isBuffer(response.data)
-    ? (response.data as Buffer)
-    : Buffer.from(response.data as ArrayBuffer);
-  const vtt = toVtt(buf);
-  if (!vtt) {
-    res.status(415).type('text/plain').send('format de sous-titre non pris en charge');
-    return;
-  }
-
-  // Pistes KissKH chiffrees : le FICHIER est structurellement valide, seules les
-  // repliques sont brouillees. On tente le dechiffrement, et on refuse de servir si
-  // le resultat n'est pas credible — du charabia par-dessus la video serait pire que
-  // pas de sous-titres du tout.
-  let corps = vtt;
-  if (estChiffre(payload.v)) {
-    const clair = await dechiffrerVtt(vtt, payload.v);
-    if (!clair) {
-      res.status(415).type('text/plain').send('piste chiffree non dechiffrable');
-      return;
-    }
-    corps = clair;
-  }
-
-  // Une piste ne change jamais : douze heures de memorisation, et la selection
-  // suivante est instantanee. On borne la taille memorisee — un fichier aberrant n'a
-  // pas a occuper le cache partage par tout le reste.
-  if (corps.length < 512 * 1024) set(cleVtt, corps, 12 * 60 * 60 * 1000, 'vtt');
 
   servirVtt(res, corps);
 }

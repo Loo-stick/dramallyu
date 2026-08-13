@@ -17,6 +17,7 @@ import { encodeToken } from '../debrid/token';
 import { cacheParService, resolve, type NomDebrid } from '../debrid/resolver';
 import { languesDuFichier, languesDejaConnues } from '../core/pistes-fichier';
 import { noterRequete } from '../core/metrics';
+import { prechauffer } from './subtitles';
 import { marquerMort } from '../debrid/deadlinks';
 import { cached } from '../core/cache';
 import { isRedirector, infosLiens, type InfoLien } from '../debrid/alldebrid';
@@ -470,6 +471,23 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     if (streams.length === 0) {
       console.log(`[Stream] ...titres cherches : ${query.titles.join(' | ') || '(aucun)'}`);
     }
+
+    // PREPARATION DES SOUS-TITRES, des maintenant.
+    //
+    // L'utilisateur ouvre la fiche (cette requete), puis lance la lecture, puis
+    // seulement demande une piste : plusieurs secondes s'ecoulent. On connait deja
+    // l'URL de la piste dans SA langue — autant l'avoir prete quand il la reclamera,
+    // plutot que de lui faire attendre le telechargement, le dechiffrement et la
+    // conversion pendant que la video, elle, tourne deja.
+    //
+    // Une seule piste, celle de sa langue prioritaire, et seulement sur nos sources
+    // directes : ce sont les seules dont on connait les pistes a cet instant.
+    const aPreparer = kept
+      .flatMap((e) => e.candidate.subs ?? [])
+      .filter((t) => t.lang === config.subLangs[0])
+      .slice(0, 1)
+      .map((t) => t.url);
+    if (aPreparer.length > 0) prechauffer(aPreparer);
 
     noterRequete({
       quand: Date.now(),
