@@ -391,20 +391,40 @@ async function uploadLot(
  * bord AllDebrid et n'avancent jamais, meme avec seize sources. Elles etaient
  * supprimees a la recherche suivante.
  */
-async function magnetsExistants(apiKey: string, signal?: AbortSignal): Promise<Set<string>> {
-  const data = await call<{ magnets?: { hash?: string }[] }>(
+async function magnetsExistants(
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<Map<string, boolean>> {
+  // On memorise un OBJET NU, pas une Map : le cache serialise en JSON, et une Map y
+  // reviendrait vide. Le defaut a deja ete vecu sur la verification des liens DDL.
+  const memo = cacheGet<Record<string, boolean>>('ad:compte');
+  if (memo && typeof memo === 'object') return new Map(Object.entries(memo));
+
+  const data = await call<{ magnets?: { hash?: string; status?: string }[] }>(
     '/magnet/status',
     apiKey,
     {},
     signal,
     BASE_STATUS,
   );
-  const out = new Set<string>();
+  const brut: Record<string, boolean> = {};
   for (const m of data?.magnets ?? []) {
-    if (m.hash) out.add(m.hash.toLowerCase());
+    if (m.hash) brut[m.hash.toLowerCase()] = /ready/i.test(m.status ?? '');
   }
-  return out;
+  if (Object.keys(brut).length > 0) cacheSet('ad:compte', brut, ETAT_COMPTE_TTL_MS, 'alldebrid');
+  return new Map(Object.entries(brut));
 }
+
+/**
+ * Duree pendant laquelle l'etat du compte fait foi.
+ *
+ * Courte, et c'est le point : ce qu'on a dans SON PROPRE compte prime sur toute
+ * memorisation. Un fichier telecharge a la demande de l'utilisateur devenait pret en
+ * quelques minutes, mais restait affiche « a debrider » pendant vingt — la duree du
+ * cache de disponibilite. Il voyait son telechargement termine chez AllDebrid et
+ * l'addon continuait de lui promettre une attente.
+ */
+const ETAT_COMPTE_TTL_MS = 60 * 1000;
 
 /**
  * Retire les magnets deposes pour le seul besoin de la verification.
@@ -441,16 +461,28 @@ export function allDebrid(apiKey: string): DebridService {
       // leur limite de magnets actifs, et le resultat ne change pas d'une minute a
       // l'autre. Un « pret » se garde plus longtemps qu'un « pas pret », qui peut
       // devenir vrai des que quelqu'un aura telecharge le fichier.
+      // L'etat du COMPTE fait foi, avant toute memorisation : ce qu'on y trouve pret
+      // l'est vraiment, maintenant. Sans cette priorite, un fichier telechargé a la
+      // demande de l'utilisateur restait annonce « a debrider » pendant vingt minutes
+      // — la duree du cache — alors qu'il le voyait termine chez AllDebrid.
+      const compte = await magnetsExistants(apiKey, signal);
+
       for (const brut of new Set(hashes.map((h) => h.toLowerCase()))) {
         if (!/^[a-f0-9]{40}$/.test(brut)) continue;
+        const dansCompte = compte.get(brut);
+        if (dansCompte === true) {
+          out.set(brut, true);
+          cacheSet(`ad:dispo:${brut}`, true, DISPO_TTL_MS, 'alldebrid');
+          continue;
+        }
         const memorise = cacheGet<boolean>(`ad:dispo:${brut}`);
         if (memorise === null) aInterroger.push(brut);
         else out.set(brut, memorise);
       }
 
-      // Photographie du compte AVANT tout depot : elle dit ce qui ne nous appartient
-      // pas. Un seul appel, et il evite de detruire le travail de l'utilisateur.
-      const dejaLa = aInterroger.length > 0 ? await magnetsExistants(apiKey, signal) : new Set<string>();
+      // La photographie du compte dit aussi ce qui ne nous appartient PAS : on ne
+      // retirera que nos propres depots.
+      const dejaLa = compte;
 
       for (let i = 0; i < aInterroger.length; i += LOT_DISPO) {
         if (signal?.aborted) break;
