@@ -6,7 +6,7 @@
 import type { Request, Response } from 'express';
 import { parseConfig } from '../core/config';
 import { parseStremioId } from '../core/ids';
-import { resolveWork } from '../core/meta';
+import { resolveWork, estAsiatique } from '../core/meta';
 import { searchAll } from '../core/registry';
 import { getSettings } from '../core/settings';
 import { langOrderFromSubs } from '../core/prefs';
@@ -83,6 +83,14 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
   try {
     const work = await resolveWork(parsed, type, config);
     if (!work) {
+      res.json({ streams: [] });
+      return;
+    }
+
+    // Hors creneau : on s'arrete AVANT d'interroger la moindre source. Repondre une
+    // liste vide apres avoir scrape et depose des magnets ne servirait personne.
+    if (!estAsiatique(work)) {
+      console.log(`[Perimetre] ${req.params.id} hors creneau (${work.country ?? work.originalLanguage ?? '?'})`);
       res.json({ streams: [] });
       return;
     }

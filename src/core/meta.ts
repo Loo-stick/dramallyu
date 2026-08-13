@@ -22,6 +22,8 @@ const MAP_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface WorkInfo {
   type: MediaType;
+  /** Pays de production annonce par Cinemeta (« South Korea », « Japan »...). */
+  country?: string;
   /** Titres connus, du plus fiable au moins fiable. Jamais vide si non nul. */
   titles: string[];
   year?: number;
@@ -72,6 +74,7 @@ async function fromCinemeta(
         type,
         titles: [meta.name],
         year: yearOf(meta.year || meta.releaseInfo),
+        country: meta.country,
         imdbId,
         tmdbId: meta.moviedb_id ? String(meta.moviedb_id) : undefined,
         poster: meta.poster,
@@ -211,6 +214,7 @@ async function fromKisskh(kkhId: string, signal?: AbortSignal): Promise<WorkInfo
     year: yearOf(d.releaseDate),
     originalLanguage: countryToLanguage(d.country),
     kkhId,
+    country: d.country,
     poster: d.thumbnail,
     description: d.description,
   };
@@ -263,4 +267,45 @@ export async function resolveWork(
     }
   }
   return info.titles.length > 0 ? info : null;
+}
+
+
+/**
+ * Pays et langues du creneau couvert par cet addon.
+ *
+ * Volontairement l'Asie de l'Est et du Sud-Est : c'est ce que couvrent KissKH et
+ * VoirDrama, et ce que le nom de l'addon annonce.
+ */
+const PAYS_ASIATIQUES = [
+  'south korea', 'korea', 'china', 'japan', 'thailand', 'taiwan', 'hong kong',
+  'indonesia', 'philippines', 'vietnam', 'malaysia', 'singapore',
+];
+const LANGUES_ASIATIQUES = new Set(['ko', 'zh', 'cn', 'ja', 'th', 'tl', 'id', 'vi', 'ms', 'yue']);
+
+/**
+ * Cette oeuvre releve-t-elle du creneau ?
+ *
+ * SANS CE GARDE-FOU, l'addon repondait sur TOUT : le manifeste declare `movie` et le
+ * prefixe `tt`, donc Stremio l'interroge pour chaque titre, et les trackers FR
+ * generalistes renvoyaient volontiers du Marvel — mesure : 10 flux sur Spider-Man,
+ * 8 sur Barbie. Chacun de ces appels lançait un fan-out complet, scraping DDL compris,
+ * et DEPOSAIT des magnets sur le compte AllDebrid de l'utilisateur pour verifier leur
+ * disponibilite. Beaucoup de travail, et un compte pollue, pour du hors-sujet.
+ *
+ * Un id `kkh:` vient de notre propre catalogue : il est asiatique par construction.
+ *
+ * En cas de DOUTE — ni pays ni langue connus, ce qui arrive quand Cinemeta ne repond
+ * pas — on repond OUI. Perdre un drama parce qu'une metadonnee manquait serait pire
+ * que de faire une recherche inutile.
+ */
+export function estAsiatique(work: WorkInfo): boolean {
+  if (work.kkhId) return true;
+
+  const langue = (work.originalLanguage || '').toLowerCase();
+  if (langue) return LANGUES_ASIATIQUES.has(langue);
+
+  const pays = (work.country || '').toLowerCase();
+  if (pays) return PAYS_ASIATIQUES.some((p) => pays.includes(p));
+
+  return true;
 }
