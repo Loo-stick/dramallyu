@@ -14,6 +14,7 @@ import {
   estSentinelle,
   DEFAULT_CONFIG,
   nomLangue,
+  CHAMPS_CLES,
 } from './config';
 
 test('aller-retour encode/parse', () => {
@@ -182,4 +183,19 @@ test('les cles des nouveaux trackers survivent a l aller-retour', () => {
   const cfg = parseConfig(encodeConfig({ g3mini: 'cle-g3', dcore: 'cle-dc' }));
   assert.equal(cfg.g3mini, 'cle-g3');
   assert.equal(cfg.dcore, 'cle-dc');
+});
+
+test('la liste des champs de cle couvre bien tout ce que UserConfig porte', () => {
+  // Le garde-fou qui manquait. Les champs de cle etaient recopies a trois endroits ;
+  // ajouter un tracker sans penser aux trois donnait une cle acceptee par le
+  // formulaire, testee avec succes, puis ABSENTE du lien genere — sans le moindre
+  // message. C'est arrive a G3mini et DigitalCore.
+  //
+  // Ce test echoue des qu'une cle est ajoutee a UserConfig sans etre declaree ici.
+  const cfg = parseConfig(
+    encodeConfig(Object.fromEntries(CHAMPS_CLES.map((k) => [k, `secret-${k}`]))),
+  );
+  for (const champ of CHAMPS_CLES) {
+    assert.equal(cfg[champ], `secret-${champ}`, `la cle « ${champ} » ne survit pas a l aller-retour`);
+  }
 });

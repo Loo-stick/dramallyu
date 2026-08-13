@@ -28,7 +28,7 @@ import {
   handleRediscoverKkey,
 } from './routes/admin';
 import { register, planSources } from './core/registry';
-import { parseConfig, encodeConfig, chiffrementDisponible, estSentinelle } from './core/config';
+import { parseConfig, encodeConfig, chiffrementDisponible, estSentinelle, CHAMPS_CLES } from './core/config';
 import { getSettings } from './core/settings';
 import { getCacheStats } from './core/cache';
 import { kkeyStatus } from './sources/direct/kisskh/kkey';
@@ -138,7 +138,7 @@ app.get('/api/stats', (_req, res) => {
 });
 
 /** Champs qui donnent acces a un service tiers. Ils ne ressortent JAMAIS du serveur. */
-const CHAMPS_SECRETS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const;
+const CHAMPS_SECRETS = CHAMPS_CLES;
 
 /**
  * Relit une configuration pour reafficher le formulaire.
@@ -229,7 +229,7 @@ app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
     JSON.stringify(propre[k]) !== JSON.stringify(cfg[k]);
 
   const compact: Record<string, unknown> = {};
-  for (const champ of ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const) {
+  for (const champ of CHAMPS_CLES) {
     if (propre[champ]) compact[champ] = propre[champ];
   }
   // Liste EXHAUSTIVE des reglages transportables. Tout champ oublie ici est

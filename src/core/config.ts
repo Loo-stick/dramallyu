@@ -92,7 +92,19 @@ export const DEFAULT_CONFIG: UserConfig = {
   subsSurFlux: true,
 };
 
-const KEY_FIELDS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore'] as const;
+/**
+ * TOUS les champs qui portent un secret. Liste unique, exportee.
+ *
+ * Elle etait recopiee a trois endroits — le decodage ici, la reconduction des cles et
+ * la liste blanche de l'encodeur dans index.ts. Ajouter un tracker demandait donc de
+ * penser aux trois, et l'oubli ne se voit pas : la cle est acceptee par le formulaire,
+ * testee avec succes, puis silencieusement absente du lien genere. C'est exactement ce
+ * qui est arrive a G3mini et DigitalCore.
+ */
+export const CHAMPS_CLES = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore'] as const;
+export type ChampCle = (typeof CHAMPS_CLES)[number];
+
+const KEY_FIELDS = CHAMPS_CLES;
 
 function asStringArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
