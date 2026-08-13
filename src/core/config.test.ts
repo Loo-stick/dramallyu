@@ -1,3 +1,8 @@
+// Ce fichier couvre le format EN CLAIR : compatibilite ascendante et instances sans
+// secret. On retire explicitement TOKEN_SECRET pour ne pas dependre de
+// l'environnement — le format chiffre a ses propres tests dans crypto.test.ts.
+delete process.env.TOKEN_SECRET;
+
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {

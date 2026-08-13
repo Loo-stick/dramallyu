@@ -1,11 +1,21 @@
-// Configuration PAR UTILISATEUR, transportee en base64 dans le chemin d'installation.
+// Configuration PAR UTILISATEUR, transportee dans le chemin d'installation.
 //
 // Regle du projet : l'operateur ne fournit AUCUNE cle. Tout ce qui donne acces a un
 // service tiers (debrid, trackers, TMDB) vit ici, dans la config de chaque personne.
 //
-// AVERTISSEMENT ASSUME : ce blob est ENCODE, pas CHIFFRE. Quiconque voit l'URL
-// d'installation voit les cles. C'est le modele de LooStream et d'AIOStreams v1 ;
-// il est acceptable en HTTPS mais doit etre ecrit noir sur blanc sur /configure.
+// Le blob est CHIFFRE (AES-256-GCM, cf. core/crypto.ts) des lors que TOKEN_SECRET est
+// defini. Ce que ca change, exactement :
+//
+//   - le lien reste un jeton AU PORTEUR : qui l'a peut lire des flux a travers le
+//     compte debrid de son proprietaire, puisque c'est le serveur qui dechiffre ;
+//   - mais les cles ne sont plus EXTRACTIBLES du lien. Un lien colle dans un salon
+//     Discord n'est plus une cle AllDebrid reutilisable ailleurs, decodable en trois
+//     secondes avec un outil base64.
+//
+// La lecture du format en clair reste supportee : liens generes avant ce changement,
+// et instances deployees sans TOKEN_SECRET.
+
+import { chiffrer, dechiffrer, estChiffre, chiffrementDisponible } from './crypto';
 
 export type SortBy = 'language' | 'quality';
 
@@ -71,15 +81,23 @@ export function parseConfig(raw?: string | null): UserConfig {
   if (!raw) return cfg;
 
   let parsed: unknown;
-  try {
-    // On accepte base64url (ce qu'on ecrit) ET base64 standard (liens colles a la
-    // main, anciens liens) : "-" et "_" sont retablis, le padding est recalcule.
-    const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-    const json = Buffer.from(padded, 'base64').toString('utf-8');
-    parsed = JSON.parse(json);
-  } catch {
-    return cfg;
+
+  // Forme CHIFFREE (celle que /configure produit desormais) : les cles ne sont plus
+  // extractibles du lien, meme si le lien reste un jeton au porteur.
+  if (estChiffre(raw)) {
+    parsed = dechiffrer(raw);
+    if (!parsed) return cfg;
+  } else {
+    try {
+      // Forme CLAIRE, conservee en lecture : liens generes avant l'ajout du
+      // chiffrement, et instances sans TOKEN_SECRET. On accepte base64url (ce qu'on
+      // ecrivait) ET base64 standard (liens recopies a la main).
+      const normalized = raw.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+      parsed = JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'));
+    } catch {
+      return cfg;
+    }
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return cfg;
   const o = parsed as Record<string, unknown>;
@@ -107,8 +125,28 @@ export function parseConfig(raw?: string | null): UserConfig {
   return cfg;
 }
 
-/** Encode une config en base64url sans padding (sur pour un segment d'URL). */
+/**
+ * Encode une config pour le chemin d'URL.
+ *
+ * CHIFFRE quand TOKEN_SECRET est disponible, en clair sinon — une instance mal
+ * configuree doit rester utilisable, quitte a perdre cette protection. Le format
+ * chiffre se reconnait a son prefixe `e1.`, ce qui permettra d'en changer.
+ */
 export function encodeConfig(cfg: Partial<UserConfig>): string {
+  const compact = compacter(cfg);
+  const chiffree = chiffrer(compact);
+  if (chiffree) return chiffree;
+  return Buffer.from(JSON.stringify(compact), 'utf-8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+export { chiffrementDisponible };
+
+/** Retire les champs vides : le lien ne transporte que ce qui a ete renseigne. */
+function compacter(cfg: Partial<UserConfig>): Record<string, unknown> {
   const compact: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(cfg)) {
     if (v === undefined || v === null) continue;
@@ -116,11 +154,7 @@ export function encodeConfig(cfg: Partial<UserConfig>): string {
     if (typeof v === 'string' && v.trim() === '') continue;
     compact[k] = v;
   }
-  return Buffer.from(JSON.stringify(compact), 'utf-8')
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '');
+  return compact;
 }
 
 /**

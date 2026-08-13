@@ -27,7 +27,7 @@ import {
   handleRediscoverKkey,
 } from './routes/admin';
 import { register, planSources } from './core/registry';
-import { parseConfig } from './core/config';
+import { parseConfig, encodeConfig, chiffrementDisponible } from './core/config';
 import { getSettings } from './core/settings';
 import { getCacheStats } from './core/cache';
 import { kkeyStatus } from './sources/direct/kisskh/kkey';
@@ -126,6 +126,37 @@ app.get('/api/stats', (_req, res) => {
     cache: getCacheStats(),
     kkey: kkeyStatus(),
   });
+});
+
+/**
+ * Encode la configuration d'un utilisateur.
+ *
+ * La page /configure ne peut pas chiffrer elle-meme : la cle est cote serveur, et
+ * elle doit y rester. Elle poste donc sa configuration ici et recoit le segment
+ * chiffre. Rien n'est stocke : le serveur voit ces cles a chaque requete de flux de
+ * toute façon, il ne les conserve nulle part.
+ */
+app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
+  const cfg = parseConfig(null);
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  // On repasse par parseConfig pour VALIDER : le formulaire ne doit pas pouvoir
+  // injecter des champs arbitraires dans le blob.
+  const propre = parseConfig(
+    Buffer.from(JSON.stringify(body), 'utf-8').toString('base64url'),
+  );
+  const aChange = (k: keyof typeof propre): boolean =>
+    JSON.stringify(propre[k]) !== JSON.stringify(cfg[k]);
+
+  const compact: Record<string, unknown> = {};
+  for (const champ of ['ad', 'tb', 'c411', 'tr4ker', 'ygg', 'tmdb'] as const) {
+    if (propre[champ]) compact[champ] = propre[champ];
+  }
+  for (const champ of ['subLangs', 'excludeQualities', 'sources', 'sortBy', 'maxResults'] as const) {
+    if (aChange(champ)) compact[champ] = propre[champ];
+  }
+
+  res.json({ config: encodeConfig(compact), chiffre: chiffrementDisponible() });
 });
 
 app.get('/api/sources', (req, res) => {

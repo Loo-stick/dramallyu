@@ -143,10 +143,29 @@ export function extensionDe(url: string): string {
   return point === -1 ? '' : sansQuery.slice(point + 1).toLowerCase();
 }
 
-/** Une piste avec cette extension demande-t-elle un dechiffrement ? */
+/**
+ * Une piste demande-t-elle un dechiffrement ?
+ *
+ * Deux conditions, et les deux comptent :
+ *
+ *   1. L'extension est explicitement l'une des DEUX formes chiffrees connues.
+ *      Raisonner par exclusion (« tout ce qui n'est pas .srt ») etait une erreur :
+ *      OpenSubtitles sert des `.gz`, du SRT simplement compresse que `toVtt` sait
+ *      deja decompresser — on refusait donc de servir des sous-titres parfaitement
+ *      valides.
+ *   2. L'URL vient bien de KissKH. Cet addon agrege plusieurs sources ; le
+ *      chiffrement, lui, est une particularite de KissKH seul.
+ */
+const EXTENSIONS_CHIFFREES = new Set(['txt', 'txt1']);
+
 export function estChiffre(url: string): boolean {
-  const ext = extensionDe(url);
-  return ext !== '' && ext !== 'srt' && ext !== 'vtt' && ext !== 'ass' && ext !== 'ssa';
+  if (!EXTENSIONS_CHIFFREES.has(extensionDe(url))) return false;
+  try {
+    const hote = new URL(url).hostname.toLowerCase();
+    return hote.includes('kisskh') || hote.includes('cdnvideo');
+  } catch {
+    return false;
+  }
 }
 
 /**

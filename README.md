@@ -59,6 +59,14 @@ utilisateur met ses propres cles debrid, trackers et TMDB dans sa configuration.
 page d'administration pilote la *disponibilite* (quelle source tourne, a quelle
 adresse), jamais les *acces*.
 
+**La configuration est chiffree dans le lien** (AES-256-GCM, cle derivee de
+`TOKEN_SECRET`). Ce que ca change, exactement : le lien reste un **laissez-passer** —
+qui le detient peut lire des flux via le compte debrid de son proprietaire, puisque
+c'est le serveur qui dechiffre — mais les cles n'en sont plus **extractibles**. Un lien
+colle dans un salon Discord pour demander de l'aide n'est plus une cle AllDebrid
+reutilisable ailleurs, decodable en trois secondes. Consequence a connaitre : changer
+`TOKEN_SECRET` invalide tous les liens d'installation existants.
+
 **Aucun debridage pendant `/stream`.** Les entrees pointent vers `/resolve/<jeton>`,
 et le debrideur n'est sollicite qu'au moment du Play. C'est ce qui tient le budget de
 8 secondes — au-dela, AIOStreams coupe la source et l'utilisateur voit une liste vide.

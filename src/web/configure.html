@@ -80,11 +80,11 @@
   </p>
 
   <div class="avertissement">
-    <strong>&#9888; A savoir avant de coller vos cles</strong>
-    Votre configuration voyage <em>encodee</em> dans le lien d'installation, pas
-    <em>chiffree</em>. Quiconque obtient ce lien obtient vos cles — dont vos cles debrid,
-    qui donnent acces a un compte payant. Ne partagez donc jamais votre lien
-    d'installation. Pour partager l'addon, donnez l'adresse de cette page.
+    <strong>&#9888; Ne partagez jamais votre lien d'installation</strong>
+    Vos cles sont <em>chiffrees</em> dans le lien : personne ne peut les en extraire pour
+    s'en servir ailleurs. Mais le lien reste un <em>laissez-passer</em> — qui le detient
+    peut lire des flux a travers votre compte debrid, car c'est le serveur qui dechiffre.
+    Pour faire connaitre l'addon, donnez l'adresse de <em>cette page</em>, pas votre lien.
   </div>
 
   <form id="formulaire">
@@ -171,6 +171,7 @@
   <div class="sortie" id="sortie" hidden>
     <p><strong>Votre lien d'installation</strong></p>
     <code id="lien"></code>
+    <p class="aide" id="etat-chiffrement" style="margin-top:.6rem"></p>
     <div class="actions">
       <button type="button" id="copier">Copier le lien</button>
       <a id="stremio" class="secondaire" style="text-decoration:none"><button type="button" class="secondaire">Installer dans Stremio</button></a>
@@ -254,17 +255,36 @@ document.getElementById('formulaire').addEventListener('submit', function (e) {
   var max = parseInt(texte('maxResults'), 10);
   if (max > 0) config.maxResults = max;
 
-  // base64url, exactement ce que parseConfig attend cote serveur.
-  var encode = btoa(unescape(encodeURIComponent(JSON.stringify(config))))
-    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  // Le chiffrement se fait cote SERVEUR : la cle y est, et elle doit y rester. La
+  // page envoie donc la configuration et recoit le segment chiffre en retour.
+  var bouton = e.target.querySelector('button[type=submit]');
+  var libelle = bouton.textContent;
+  bouton.textContent = 'Generation...';
+  bouton.disabled = true;
 
-  var base = location.origin;
-  var lien = base + '/' + encode + '/manifest.json';
-
-  document.getElementById('lien').textContent = lien;
-  document.getElementById('stremio').href = lien.replace(/^https?:/, 'stremio:');
-  document.getElementById('sortie').hidden = false;
-  document.getElementById('sortie').scrollIntoView({ behavior: 'smooth' });
+  fetch('/api/config/encoder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var lien = location.origin + '/' + data.config + '/manifest.json';
+      document.getElementById('lien').textContent = lien;
+      document.getElementById('stremio').href = lien.replace(/^https?:/, 'stremio:');
+      document.getElementById('etat-chiffrement').textContent = data.chiffre
+        ? 'Vos cles sont chiffrees dans ce lien.'
+        : "Attention : cette instance n'a pas de secret configure, vos cles sont seulement encodees.";
+      document.getElementById('sortie').hidden = false;
+      document.getElementById('sortie').scrollIntoView({ behavior: 'smooth' });
+    })
+    .catch(function () {
+      alert("La generation a echoue. Verifiez votre connexion et reessayez.");
+    })
+    .finally(function () {
+      bouton.textContent = libelle;
+      bouton.disabled = false;
+    });
 });
 
 document.getElementById('copier').addEventListener('click', function () {

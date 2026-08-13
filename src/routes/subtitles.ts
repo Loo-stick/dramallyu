@@ -72,12 +72,22 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
 
     const base = getBaseUrl(req);
     const seen = new Set<string>();
+    const rang = (lang: string): number => {
+      const i = config.subLangs.indexOf(lang);
+      return i === -1 ? 100 : i;
+    };
+
     const subtitles = [...fromSources, ...external]
       .filter((t) => {
         if (seen.has(t.url)) return false;
         seen.add(t.url);
         return true;
       })
+      // TRI FINAL, et il est indispensable : concatener « sources puis OpenSubtitles »
+      // renvoie le francais en DERNIER des que la source n'en a pas — alors que c'est
+      // justement la langue que l'utilisateur a demandee en premier. Les lecteurs
+      // presentent les pistes dans l'ordre reçu.
+      .sort((a, b) => rang(a.lang) - rang(b.lang))
       .map((t, i) => ({
         id: `dramallyu-${i}`,
         url: subUrl(base, t),
