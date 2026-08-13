@@ -13,6 +13,7 @@ import { compareStreams, langOrderFromSubs, passesPreferences } from '../core/pr
 import { toStremioStream, type StremioStream } from '../core/display';
 import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
+import { cacheStatus } from '../debrid/resolver';
 import { throughMediaflow } from '../core/mediaflow';
 import type { Candidate, MediaType, Query } from '../sources/types';
 
@@ -89,9 +90,31 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
 
     const settings = getSettings();
     const langOrder = langOrderFromSubs(config.subLangs);
-    const kept = dedupe(candidates)
-      .filter((c) => passesPreferences(c, config.excludeQualities))
-      .sort((a, b) => compareStreams(a, b, { langOrder, sortBy: config.sortBy }))
+    const retenus = dedupe(candidates).filter((c) =>
+      passesPreferences(c, config.excludeQualities),
+    );
+
+    // ETAT DU CACHE, avant le tri.
+    //
+    // Mesure qui a impose ce code : sur un episode, 0 des 15 torrents affiches
+    // etaient en cache TorBox, et seulement la moitie disponibles chez AllDebrid.
+    // Autrement dit, un flux sur deux echouait au Play apres ~10 s d'attente.
+    //
+    // TorBox repond par LOT, en une requete : c'est assez rapide pour tenir dans le
+    // budget. AllDebrid n'expose plus rien d'equivalent — ses entrees restent donc
+    // marquees « a debrider », sans jamais affirmer une disponibilite inconnue.
+    const hashes = retenus.map((c) => c.infoHash).filter((h): h is string => Boolean(h));
+    const enCache = hashes.length > 0 ? await cacheStatus(hashes, config) : new Map<string, boolean>();
+    const estEnCache = (c: Candidate): boolean | undefined =>
+      c.infoHash ? enCache.get(c.infoHash.toLowerCase()) : undefined;
+
+    const kept = retenus
+      .sort((a, b) => {
+        // Ce qui est pret passe DEVANT tout le reste : un flux injouable en tete de
+        // liste, si bien classe soit-il par langue, ne sert a personne.
+        const rang = (c: Candidate): number => (estEnCache(c) === true ? 0 : 1);
+        return rang(a) - rang(b) || compareStreams(a, b, { langOrder, sortBy: config.sortBy });
+      })
       .slice(0, Math.min(config.maxResults, settings.maxStreams));
 
     // SANS le segment de config, volontairement : le jeton /resolve porte deja les
@@ -129,6 +152,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         playUrl: `${base}/resolve/${token}`,
         viaDebrid: true,
         debridName: config.tb ? 'TorBox' : 'AllDebrid',
+        cached: estEnCache(c),
       });
     });
 

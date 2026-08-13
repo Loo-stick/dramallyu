@@ -73,6 +73,23 @@ export interface FormatOptions {
   viaDebrid?: boolean;
   /** Nom du debrideur qui servira ce flux. */
   debridName?: string;
+  /**
+   * Etat du cache : vrai = pret a lire, faux = a telecharger,
+   * `undefined` = ON NE SAIT PAS.
+   *
+   * Les trois cas sont distincts et le troisieme est frequent : AllDebrid n'expose
+   * plus d'API de disponibilite. Confondre « inconnu » et « non cache » decouragerait
+   * a tort des flux parfaitement jouables ; l'inverse promettrait une lecture
+   * immediate qui echouerait.
+   */
+  cached?: boolean;
+}
+
+/** Marqueur de disponibilite : symbole ET mot, jamais une couleur seule. */
+function marqueurCache(cached: boolean | undefined): string | null {
+  if (cached === true) return '⚡ pret';
+  if (cached === false) return '⏳ a debrider';
+  return null;
 }
 
 /** Coupe un nom de fichier trop long sans le rendre illisible. */
@@ -124,9 +141,16 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
       : candidate.kind === 'torrent'
         ? opts.debridName
         : source;
-  lignes.push(ligne('⚡ ', [quality, details.source, details.hdr, destination]) ?? `⚡ ${quality}`);
+  lignes.push(
+    ligne('⚡ ', [quality, details.source, details.hdr, destination]) ?? `⚡ ${quality}`,
+  );
 
-  // Ligne 2 — langue, poids, provenance. La source n'est repetee que si elle differe
+  // Ligne 2 — la disponibilite quand elle est CONNUE. C'est l'information qui decide
+  // si le flux se lance tout de suite ou pas du tout : elle merite sa propre ligne.
+  const dispo = marqueurCache(opts.cached);
+  if (dispo) lignes.push(dispo);
+
+  // Ligne 3 — langue, poids, provenance. La source n'est repetee que si elle differe
   // de la destination : sur un flux direct les deux sont identiques, et « VoirDrama •
   // VoirDrama » n'apprend rien a personne.
   const l2 = ligne('', [
@@ -137,12 +161,12 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
   ]);
   if (l2) lignes.push(l2);
 
-  // Ligne 3 — codecs et team. Absente sur les sources directes, qui n'en disent rien :
+  // Ligne 4 — codecs et team. Absente sur les sources directes, qui n'en disent rien :
   // mieux vaut une ligne en moins qu'une ligne vide.
   const l3 = ligne('🎧 ', [details.video, details.audio, details.team]);
   if (l3) lignes.push(l3);
 
-  // Ligne 4 — le nom de fichier, seul juge de paix quand deux entrees se ressemblent.
+  // Ligne 5 — le nom de fichier, seul juge de paix quand deux entrees se ressemblent.
   // Omise quand le titre n'est qu'un libelle fabrique par la source (« VoirDrama -
   // voe ») : repeter le nom de la source sous une icone de fichier ne renseigne pas,
   // ca occupe juste une ligne.

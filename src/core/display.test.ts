@@ -126,3 +126,17 @@ test('une source directe ne se repete pas sur deux lignes', () => {
   assert.equal(occurrences, 1, 'le nom de la source ne doit apparaitre qu une fois');
   assert.ok(!s.description.includes('🗂️'), 'pas de ligne fichier pour un libelle fabrique');
 });
+
+test('la disponibilite distingue pret, a debrider, et inconnu', () => {
+  // Les trois cas sont distincts : AllDebrid ne sait pas repondre, et confondre
+  // « inconnu » avec « non cache » decouragerait des flux jouables.
+  const pret = toStremioStream(torrent(), { cached: true, debridName: 'TorBox' });
+  assert.ok(pret.description.includes('⚡ pret'));
+
+  const aFaire = toStremioStream(torrent(), { cached: false, debridName: 'TorBox' });
+  assert.ok(aFaire.description.includes('⏳ a debrider'));
+
+  const inconnu = toStremioStream(torrent(), { debridName: 'AllDebrid' });
+  assert.ok(!inconnu.description.includes('pret'));
+  assert.ok(!inconnu.description.includes('debrider'));
+});

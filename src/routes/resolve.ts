@@ -31,10 +31,18 @@ export async function handleResolve(req: Request, res: Response): Promise<void> 
       controller.signal,
     );
     if (!link) {
+      // Cas de loin le plus frequent : le fichier n'etait pas en cache, le debrideur
+      // vient de LANCER son telechargement. Dire « echec » serait faux — le flux
+      // deviendra jouable, il faut juste attendre. Un message vague enverrait
+      // l'utilisateur verifier ses cles, qui n'y sont pour rien.
       res
         .status(502)
-        .type('text/plain')
-        .send('le debrideur n a pas pu produire de lien pour ce fichier');
+        .type('text/plain; charset=utf-8')
+        .send(
+          "Ce fichier n'etait pas pret chez votre debrideur : son telechargement vient " +
+            "d'etre lance. Reessayez dans quelques minutes, ou choisissez un flux marque " +
+            '« pret ».',
+        );
       return;
     }
     res.redirect(302, link);
