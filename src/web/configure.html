@@ -188,6 +188,13 @@
   <div class="colonnes">
 
     <main>
+      <div class="note" id="banniere-restauration" hidden>
+        <strong>Configuration existante rechargee.</strong>
+        Vos reglages sont revenus. Vos cles restent au serveur : elles ne sont pas
+        reaffichees ici — les renvoyer permettrait a quiconque detient ce lien de les
+        recopier. Elles seront reconduites telles quelles.
+      </div>
+
       <div class="note">
         <strong>Vous pouvez installer sans rien remplir.</strong>
         KissKH et VoirDrama fonctionnent sans aucune cle. Tout ce qui suit ajoute des
@@ -449,6 +456,10 @@ var formatsExclus = [];
 
 var choisies = ['fre','eng'];
 var sourcesExclues = [];
+/* Segment de config present dans l'URL : /<config>/configure */
+var segmentExistant = (location.pathname.match(/^\/([^/]+)\/configure/) || [])[1] || '';
+var clesEnregistrees = {};   /* champ -> true si une cle est deja stockee */
+var clesAVider = [];         /* champs que l'utilisateur a explicitement retires */
 
 function $(id){ return document.getElementById(id); }
 function valeur(id){ return $(id).value.trim(); }
@@ -556,6 +567,9 @@ function configActuelle(){
     cfg.sources = TOUTES_SOURCES.filter(function(id){ return sourcesExclues.indexOf(id) === -1; });
   }
   cfg.sortBy = $('sortBy').value;
+  // Le serveur reconduit les cles qu'on ne lui renvoie pas, sauf celles retirees ici.
+  if (segmentExistant) cfg._precedent = segmentExistant;
+  if (clesAVider.length) cfg._vider = clesAVider;
   var max = parseInt(valeur('maxResults'), 10);
   if (!isNaN(max) && max >= 0) cfg.maxResults = max;
   return cfg;
@@ -575,16 +589,34 @@ var minuteur = null;
 function rafraichirApercu(){
   clearTimeout(minuteur);
   minuteur = setTimeout(function(){
+    // L'apercu doit tenir compte des cles DEJA enregistrees, sinon il annoncerait des
+    // sources inactives alors qu'elles tourneront.
+    var cfg = configActuelle();
+    Object.keys(clesEnregistrees).forEach(function(champ){
+      if (clesEnregistrees[champ] && !cfg[champ] && clesAVider.indexOf(champ) === -1) {
+        cfg[champ] = 'enregistree';
+      }
+    });
     fetch('/api/sources', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(configActuelle())
+      body: JSON.stringify(cfg)
     })
     .then(function(r){ return r.json(); })
     .then(function(data){
       if (!TOUTES_SOURCES.length) {
         TOUTES_SOURCES = data.sources.map(function(s){ return s.id; });
         rendreChoixSources(data.sources);
+        if (sourcesRestaurees) {
+          sourcesExclues = TOUTES_SOURCES.filter(function(id){ return sourcesRestaurees.indexOf(id) === -1; });
+          $('sources-choix').querySelectorAll('input').forEach(function(i){
+            i.checked = sourcesExclues.indexOf(i.value) === -1;
+            var p = i.closest('.pastille');
+            p.classList.toggle('exclue', !i.checked);
+            p.querySelector('.signe').textContent = i.checked ? '✓' : '✕';
+          });
+          sourcesRestaurees = null;
+        }
       }
       var actives = 0;
       $('apercu').innerHTML = data.sources.map(function(s){
@@ -700,11 +732,84 @@ $('copier').addEventListener('click', function(){
   $(id).addEventListener('change', rafraichirApercu);
 });
 
+/* ---------- Restauration d'une configuration existante ----------
+   Les REGLAGES reviennent en clair ; les CLES, non. Le serveur ne renvoie qu'un
+   booleen de presence et les reconduit lui-meme a la generation. Les renvoyer
+   annulerait le chiffrement : qui detient le lien pourrait les recopier et s'en
+   servir hors de l'addon.                                                        */
+function restaurer(){
+  if (!segmentExistant) return;
+  fetch('/api/config/decoder', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ config: segmentExistant })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    if (!data.trouve) return;
+    var r = data.reglages || {};
+    clesEnregistrees = data.cles || {};
+
+    if (Array.isArray(r.subLangs) && r.subLangs.length) { choisies = r.subLangs; rendreLangues(); }
+    if (Array.isArray(r.excludeFormats)) { formatsExclus = r.excludeFormats; rendreFormats(); }
+    if (Array.isArray(r.sources) && r.sources.length) sourcesRestaurees = r.sources;
+
+    if (r.sortBy) $('sortBy').value = r.sortBy;
+    if (r.priorite) $('priorite').value = r.priorite;
+    if (r.minResolution) $('minResolution').value = r.minResolution;
+    if (r.maxResolution) $('maxResolution').value = r.maxResolution;
+    if (r.minSource) $('minSource').value = r.minSource;
+    if (typeof r.maxSizeGb === 'number') $('maxSizeGb').value = String(r.maxSizeGb);
+    if (typeof r.maxResults === 'number') $('maxResults').value = String(r.maxResults);
+    $('cachedOnly').checked = !!r.cachedOnly;
+    $('excludeCam').checked = !!r.excludeCam;
+    $('bonusHdr').checked = !!r.bonusHdr;
+    [['cachedOnly',r.cachedOnly],['excludeCam',r.excludeCam],['bonusHdr',r.bonusHdr]].forEach(function(p){
+      var pastille = $(p[0]).closest('.pastille');
+      if (pastille) pastille.querySelector('.signe').textContent = p[1] ? '✕' : '+';
+    });
+
+    marquerClesEnregistrees();
+    document.getElementById('banniere-restauration').hidden = false;
+    rafraichirApercu();
+  })
+  .catch(function(){});
+}
+
+/* Un champ dont la cle est deja stockee l'annonce, et propose de la retirer. */
+function marquerClesEnregistrees(){
+  Object.keys(clesEnregistrees).forEach(function(champ){
+    var input = $(champ);
+    if (!input || !clesEnregistrees[champ]) return;
+    input.placeholder = 'cle enregistree — laissez vide pour la conserver';
+    var zone = $('v-' + champ);
+    if (zone && clesAVider.indexOf(champ) === -1) {
+      zone.className = 'verdict visible attente';
+      zone.innerHTML = '<span class="marque" aria-hidden="true">✓</span>' +
+        '<span>Cle enregistree. Tapez-en une nouvelle pour la remplacer, ' +
+        'ou <a href="#" data-vider="' + champ + '">retirez-la</a>.</span>';
+    }
+  });
+
+  document.querySelectorAll('a[data-vider]').forEach(function(a){
+    a.addEventListener('click', function(e){
+      e.preventDefault();
+      var champ = a.dataset.vider;
+      if (clesAVider.indexOf(champ) === -1) clesAVider.push(champ);
+      $(champ).placeholder = "laissez vide si vous n'en avez pas";
+      afficherVerdict($('v-' + champ), 'attente', '—', 'Cle retiree. Elle ne sera plus dans le lien.');
+      rafraichirApercu();
+    });
+  });
+}
+
+var sourcesRestaurees = null;
+
 rendreLangues();
 remplirSelect('minResolution', RESOLUTIONS, '');
 remplirSelect('maxResolution', RESOLUTIONS, '');
 remplirSelect('minSource', SOURCES_QUALITE, '');
 rendreFormats();
+restaurer();
 rafraichirApercu();
 </script>
 </body>

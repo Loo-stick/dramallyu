@@ -141,9 +141,49 @@ app.get('/api/stats', (_req, res) => {
  * chiffre. Rien n'est stocke : le serveur voit ces cles a chaque requete de flux de
  * toute façon, il ne les conserve nulle part.
  */
+/** Champs qui donnent acces a un service tiers. Ils ne ressortent JAMAIS du serveur. */
+const CHAMPS_SECRETS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const;
+
+/**
+ * Relit une configuration pour reafficher le formulaire.
+ *
+ * Renvoie les REGLAGES en clair, et pour chaque cle un simple booleen de presence.
+ * Renvoyer les cles elles-memes annulerait le chiffrement : quiconque detient le lien
+ * pourrait ouvrir /configure et les recopier pour s'en servir ailleurs. Le formulaire
+ * affiche donc « cle enregistree » et le serveur la reconduit tout seul.
+ */
+app.post('/api/config/decoder', express.json({ limit: '8kb' }), (req, res) => {
+  const segment = String((req.body as Record<string, unknown>)?.config || '');
+  if (!segment) {
+    res.json({ trouve: false });
+    return;
+  }
+  const cfg = parseConfig(segment);
+  const cles: Record<string, boolean> = {};
+  for (const champ of CHAMPS_SECRETS) cles[champ] = Boolean(cfg[champ]);
+
+  const { ad, tb, c411, tr4ker, tmdb, ...reglages } = cfg;
+  void ad;
+  void tb;
+  void c411;
+  void tr4ker;
+  void tmdb;
+
+  res.json({ trouve: true, reglages, cles });
+});
+
 app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
   const cfg = parseConfig(null);
   const body = (req.body ?? {}) as Record<string, unknown>;
+
+  // Reconduction des cles que le formulaire n'a pas pu reafficher. Sans ca, modifier
+  // un simple reglage effacerait toutes les cles de l'utilisateur.
+  const precedent = parseConfig(String(body._precedent || '') || null);
+  const aVider = Array.isArray(body._vider) ? (body._vider as string[]) : [];
+  for (const champ of CHAMPS_SECRETS) {
+    if (aVider.includes(champ)) continue;
+    if (!body[champ] && precedent[champ]) body[champ] = precedent[champ];
+  }
 
   // On repasse par parseConfig pour VALIDER : le formulaire ne doit pas pouvoir
   // injecter des champs arbitraires dans le blob.
