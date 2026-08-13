@@ -166,39 +166,33 @@ async function testTorznab(indexeur: string, cle: string): Promise<Verdict> {
   return { ok: true, message: 'Indexeur joignable et cle acceptee.' };
 }
 
-export async function handleKeyTest(req: Request, res: Response): Promise<void> {
-  const service = String(req.query.service || '').toLowerCase();
-  const cle = String(req.query.key || '').trim();
-
-  if (!cle) {
-    res.json({ ok: false, message: 'Renseignez une cle avant de tester.' });
-    return;
-  }
-
+/** Verdict pour un service et une cle. Reutilise par l'endpoint et par la relecture. */
+export async function tester(service: string, cle: string): Promise<Verdict> {
+  if (!cle) return { ok: false, message: 'Renseignez une cle avant de tester.' };
   try {
-    let verdict: Verdict;
     switch (service) {
       case 'alldebrid':
-        verdict = await testAllDebrid(cle);
-        break;
+        return await testAllDebrid(cle);
       case 'torbox':
-        verdict = await testTorbox(cle);
-        break;
+        return await testTorbox(cle);
       case 'tmdb':
-        verdict = await testTmdb(cle);
-        break;
+        return await testTmdb(cle);
       case 'c411':
       case 'tr4ker':
-        verdict = await testTorznab(service, cle);
-        break;
+        return await testTorznab(service, cle);
       default:
-        verdict = { ok: false, message: `Service « ${service} » inconnu.` };
+        return { ok: false, message: `Service « ${service} » inconnu.` };
     }
-    res.json(verdict);
   } catch (e) {
     // On ne renvoie jamais le message d'exception brut : il peut contenir l'URL
     // complete, donc la cle.
     console.log(`[TestCle] ${service} : echec (${(e as Error).name})`);
-    res.json({ ok: false, message: 'Le test a echoue. Reessayez dans un instant.' });
+    return { ok: false, message: 'Le test a echoue. Reessayez dans un instant.' };
   }
+}
+
+export async function handleKeyTest(req: Request, res: Response): Promise<void> {
+  const service = String(req.query.service || '').toLowerCase();
+  const cle = String(req.query.key || '').trim();
+  res.json(await tester(service, cle));
 }

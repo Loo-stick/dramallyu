@@ -11,6 +11,7 @@ import {
   normalizeLangCode,
   sourceEnabledForUser,
   hasDebrid,
+  estSentinelle,
   DEFAULT_CONFIG,
 } from './config';
 
@@ -146,4 +147,19 @@ test('TOUS les champs de UserConfig survivent a l aller-retour', () => {
       `le champ « ${cle} » ne survit pas a l aller-retour`,
     );
   }
+});
+
+test('une valeur d affichage n est jamais prise pour une cle', () => {
+  // Regression vecue : le formulaire remplit les champs de cle avec des puces pour
+  // montrer qu'ils sont deja renseignes. Le serveur acceptait ces puces comme une
+  // vraie cle et ECRASAIT celle de l'utilisateur — qui perdait son acces sans avoir
+  // rien tape. La protection ne peut pas vivre uniquement dans le navigateur.
+  assert.equal(estSentinelle('••••••••••••••••'), true);
+  assert.equal(estSentinelle('****'), true);
+  assert.equal(estSentinelle('........'), true);
+  assert.equal(estSentinelle('   '), true);
+  // Une vraie cle n'est jamais confondue.
+  assert.equal(estSentinelle('aBc123XyZ456'), false);
+  assert.equal(estSentinelle(''), false);
+  assert.equal(estSentinelle(undefined), false);
 });

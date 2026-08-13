@@ -14,7 +14,7 @@ import { handleSubtitles, handleServeSub } from './routes/subtitles';
 import { handleCatalog } from './routes/catalog';
 import { handleMeta } from './routes/meta';
 import { handleResolve } from './routes/resolve';
-import { handleKeyTest } from './routes/keytest';
+import { handleKeyTest, tester } from './routes/keytest';
 import {
   adminEnabled,
   requireAdmin,
@@ -28,7 +28,7 @@ import {
   handleRediscoverKkey,
 } from './routes/admin';
 import { register, planSources } from './core/registry';
-import { parseConfig, encodeConfig, chiffrementDisponible } from './core/config';
+import { parseConfig, encodeConfig, chiffrementDisponible, estSentinelle } from './core/config';
 import { getSettings } from './core/settings';
 import { getCacheStats } from './core/cache';
 import { kkeyStatus } from './sources/direct/kisskh/kkey';
@@ -133,14 +133,6 @@ app.get('/api/stats', (_req, res) => {
   });
 });
 
-/**
- * Encode la configuration d'un utilisateur.
- *
- * La page /configure ne peut pas chiffrer elle-meme : la cle est cote serveur, et
- * elle doit y rester. Elle poste donc sa configuration ici et recoit le segment
- * chiffre. Rien n'est stocke : le serveur voit ces cles a chaque requete de flux de
- * toute façon, il ne les conserve nulle part.
- */
 /** Champs qui donnent acces a un service tiers. Ils ne ressortent JAMAIS du serveur. */
 const CHAMPS_SECRETS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const;
 
@@ -172,6 +164,38 @@ app.post('/api/config/decoder', express.json({ limit: '8kb' }), (req, res) => {
   res.json({ trouve: true, reglages, cles });
 });
 
+/**
+ * Encode la configuration d'un utilisateur.
+ *
+ * La page /configure ne peut pas chiffrer elle-meme : la cle est cote serveur, et
+ * elle doit y rester. Elle poste donc sa configuration ici et recoit le segment
+ * chiffre. Rien n'est stocke : le serveur voit ces cles a chaque requete de flux de
+ * toute façon, il ne les conserve nulle part.
+ */
+/**
+ * Etat des comptes relies a une configuration.
+ *
+ * La page affiche « compte relie » plutot qu'un champ de saisie ; cet endpoint lui
+ * dit A QUEL compte, et si l'abonnement tient toujours. La cle sert le temps de
+ * l'appel et ne ressort jamais.
+ */
+app.post('/api/config/comptes', express.json({ limit: '8kb' }), async (req, res) => {
+  const cfg = parseConfig(String((req.body as Record<string, unknown>)?.config || '') || null);
+  const services: Record<string, string> = {
+    ad: 'alldebrid', tb: 'torbox', c411: 'c411', tr4ker: 'tr4ker', tmdb: 'tmdb',
+  };
+
+  const etats: Record<string, unknown> = {};
+  await Promise.all(
+    Object.entries(services).map(async ([champ, service]) => {
+      const cle = cfg[champ as 'ad'];
+      if (!cle) return;
+      etats[champ] = await tester(service, cle);
+    }),
+  );
+  res.json({ comptes: etats });
+});
+
 app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
   const cfg = parseConfig(null);
   const body = (req.body ?? {}) as Record<string, unknown>;
@@ -181,6 +205,13 @@ app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
   const precedent = parseConfig(String(body._precedent || '') || null);
   const aVider = Array.isArray(body._vider) ? (body._vider as string[]) : [];
   for (const champ of CHAMPS_SECRETS) {
+    // Le formulaire affiche une SENTINELLE (des puces) a la place d'une cle
+    // enregistree, et il est cense ne jamais la renvoyer. On le verifie quand meme
+    // ICI : sinon une page en cache, une version ancienne ou une erreur de script
+    // suffirait a remplacer la vraie cle par des puces — l'utilisateur perdrait son
+    // acces sans rien avoir tape. La protection ne peut pas vivre que dans le
+    // navigateur.
+    if (estSentinelle(body[champ])) delete body[champ];
     if (aVider.includes(champ)) continue;
     if (!body[champ] && precedent[champ]) body[champ] = precedent[champ];
   }

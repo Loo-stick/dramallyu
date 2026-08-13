@@ -89,6 +89,24 @@
   }
   .btn.large{width:100%;padding:13px;font-size:15px}
 
+  /* Compte relie : un ETAT, pas un champ. Un champ pre-rempli invite a l'editer et
+     laisse croire qu'il faut tout ressaisir ; une carte dit que c'est deja fait. */
+  .relie{
+    display:flex;align-items:flex-start;gap:11px;padding:12px 14px;
+    border:1px solid var(--trait);border-left:3px solid var(--jade);
+    border-radius:10px;background:var(--relief);
+  }
+  .relie .coche{color:var(--jade);font-weight:800;flex:none;font-size:14px;line-height:1.4}
+  .relie .corps{flex:1;min-width:0}
+  .relie .titre{font-weight:650;font-size:13.5px}
+  .relie .sous{color:var(--doux);font-size:12.3px;margin-top:2px}
+  .relie button{
+    background:none;border:1px solid var(--trait);color:var(--doux);
+    border-radius:8px;padding:5px 11px;font:inherit;font-size:12px;font-weight:600;
+    cursor:pointer;flex:none;
+  }
+  .relie button:hover{border-color:var(--brique);color:var(--texte)}
+
   /* Verdict d'un test : symbole + mot, jamais la couleur seule. */
   .verdict{display:none;gap:8px;margin-top:9px;font-size:12.5px;align-items:flex-start}
   .verdict.visible{display:flex}
@@ -190,9 +208,9 @@
     <main>
       <div class="note" id="banniere-restauration" hidden>
         <strong>Configuration existante rechargee.</strong>
-        Vos reglages sont revenus. Vos cles restent au serveur : elles ne sont pas
-        reaffichees ici — les renvoyer permettrait a quiconque detient ce lien de les
-        recopier. Elles seront reconduites telles quelles.
+        Vos reglages sont revenus et vos comptes restent relies :
+        <strong>rien a ressaisir</strong>. Modifiez ce que vous voulez, puis
+        regenerez votre lien.
       </div>
 
       <div class="note">
@@ -551,6 +569,8 @@ $('ajouter-format').addEventListener('click', function(){
 /* ---------- Config courante ---------- */
 function configActuelle(){
   var cfg = {};
+  // Un champ vide veut dire « garde ce que tu as » : le serveur reconduit la cle via
+  // _precedent. Aucune valeur d'affichage ne circule.
   ['ad','tb','c411','tr4ker','tmdb'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
   if (choisies.length) cfg.subLangs = choisies;
   if (formatsExclus.length) cfg.excludeFormats = formatsExclus;
@@ -775,29 +795,76 @@ function restaurer(){
   .catch(function(){});
 }
 
-/* Un champ dont la cle est deja stockee l'annonce, et propose de la retirer. */
+/* Un champ dont la cle est deja stockee devient une CARTE d'etat.
+   Un champ de saisie pre-rempli — meme masque — invite a l'editer et donne
+   l'impression qu'il faut tout ressaisir. Une carte « compte relie » dit
+   exactement le contraire, et supprime au passage toute possibilite d'envoyer
+   par erreur une valeur d'affichage a la place de la cle. */
+var LIBELLES = { ad:'AllDebrid', tb:'TorBox', c411:'C411', tr4ker:'Tr4ker', tmdb:'TMDB' };
+
 function marquerClesEnregistrees(){
   Object.keys(clesEnregistrees).forEach(function(champ){
+    if (!clesEnregistrees[champ] || clesAVider.indexOf(champ) !== -1) return;
     var input = $(champ);
-    if (!input || !clesEnregistrees[champ]) return;
-    input.placeholder = 'cle enregistree — laissez vide pour la conserver';
+    if (!input) return;
+    var rangee = input.closest('.avec-test');
+    if (!rangee) return;
+
+    rangee.style.display = 'none';
     var zone = $('v-' + champ);
-    if (zone && clesAVider.indexOf(champ) === -1) {
-      zone.className = 'verdict visible attente';
-      zone.innerHTML = '<span class="marque" aria-hidden="true">✓</span>' +
-        '<span>Cle enregistree. Tapez-en une nouvelle pour la remplacer, ' +
-        'ou <a href="#" data-vider="' + champ + '">retirez-la</a>.</span>';
-    }
+    zone.className = 'verdict visible';
+    zone.innerHTML =
+      '<div class="relie" style="width:100%">' +
+        '<span class="coche" aria-hidden="true">✓</span>' +
+        '<div class="corps">' +
+          '<div class="titre">' + LIBELLES[champ] + ' — compte relie</div>' +
+          '<div class="sous" id="detail-' + champ + '">Verification en cours...</div>' +
+        '</div>' +
+        '<button type="button" data-vider="' + champ + '">Deconnecter</button>' +
+      '</div>';
   });
 
-  document.querySelectorAll('a[data-vider]').forEach(function(a){
-    a.addEventListener('click', function(e){
-      e.preventDefault();
-      var champ = a.dataset.vider;
+  document.querySelectorAll('button[data-vider]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var champ = b.dataset.vider;
       if (clesAVider.indexOf(champ) === -1) clesAVider.push(champ);
-      $(champ).placeholder = "laissez vide si vous n'en avez pas";
-      afficherVerdict($('v-' + champ), 'attente', '—', 'Cle retiree. Elle ne sera plus dans le lien.');
+      clesEnregistrees[champ] = false;
+      var input = $(champ);
+      input.value = '';
+      input.closest('.avec-test').style.display = '';
+      afficherVerdict($('v-' + champ), 'attente', '—',
+        'Compte deconnecte. Il ne figurera plus dans le lien genere.');
+      input.focus();
       rafraichirApercu();
+    });
+  });
+
+  chargerComptes();
+}
+
+/* Quel compte est relie, et l'abonnement tient-il toujours ? La cle ne quitte pas
+   le serveur : c'est lui qui interroge le service et ne renvoie qu'un verdict. */
+function chargerComptes(){
+  if (!segmentExistant) return;
+  fetch('/api/config/comptes', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ config: segmentExistant })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    Object.keys(data.comptes || {}).forEach(function(champ){
+      var cible = $('detail-' + champ);
+      if (!cible) return;
+      var v = data.comptes[champ];
+      cible.textContent = v.ok
+        ? v.message + (v.detail ? ' ' + v.detail : '')
+        : '⚠ ' + v.message;
+    });
+  })
+  .catch(function(){
+    Object.keys(clesEnregistrees).forEach(function(champ){
+      var cible = $('detail-' + champ);
+      if (cible) cible.textContent = 'Enregistre. Verification indisponible pour le moment.';
     });
   });
 }

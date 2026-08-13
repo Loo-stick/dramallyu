@@ -224,6 +224,20 @@ export function normalizeLangCode(code: string): string {
   return c;
 }
 
+/**
+ * Valeur d'AFFICHAGE, jamais une vraie cle.
+ *
+ * Le formulaire remplit les champs de cle avec des puces pour montrer qu'ils sont
+ * deja renseignes, et il est cense ne jamais les renvoyer. On le verifie cote serveur
+ * quand meme : une page en cache, une version ancienne ou une erreur de script
+ * suffirait sinon a remplacer la vraie cle par des puces, et l'utilisateur perdrait
+ * son acces sans avoir rien tape. Aucun service n'emet de cle faite uniquement de
+ * puces, d'etoiles ou de points.
+ */
+export function estSentinelle(valeur: unknown): boolean {
+  return typeof valeur === 'string' && valeur.length > 0 && /^[•*·.\s]+$/.test(valeur);
+}
+
 /** Une source a-t-elle le droit de tourner pour cet utilisateur ? */
 export function sourceEnabledForUser(cfg: UserConfig, sourceId: string): boolean {
   return cfg.sources.length === 0 || cfg.sources.includes(sourceId);
