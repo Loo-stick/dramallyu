@@ -29,8 +29,13 @@ const BASE = 'https://api.alldebrid.com/v4';
 // v4 fonctionne toujours ; seul cet appel bascule en v4.1.
 const BASE_STATUS = 'https://api.alldebrid.com/v4.1';
 const AGENT = 'dramallyu';
-const POLL_ATTEMPTS = 6;
-const POLL_DELAY_MS = 1500;
+// Attente courte, et c'est deliberé. Un fichier deja present chez AllDebrid devient
+// jouable en deux a quatre secondes ; au-dela, c'est qu'un vrai telechargement a
+// demarre, et aucune attente raisonnable ne le verra finir. Patienter davantage ne
+// changeait rien au resultat — sinon que l'utilisateur n'obtenait plus le message
+// expliquant quoi faire, tout proxy raisonnable ayant coupe la connexion avant.
+const POLL_ATTEMPTS = 3;
+const POLL_DELAY_MS = 1200;
 
 interface AdResponse<T> {
   status?: string;
@@ -158,6 +163,55 @@ interface UploadedMagnet {
   error?: { code?: string };
 }
 
+/**
+ * Depose un fichier .torrent, plutot qu'un hash nu.
+ *
+ * C'EST LA SEULE FORME QUI MARCHE POUR UN TRACKER PRIVE. Un hash ne porte ni
+ * annonceur ni metadonnees : le debrideur doit alors chercher des pairs dans le DHT,
+ * ou les torrents prives ne figurent pas — par construction. Les depots restaient donc
+ * inertes, visibles dans le tableau de bord et jamais demarres, meme avec seize sources
+ * annoncees par le tracker.
+ *
+ * Le fichier est telecharge par NOS soins : le lien est signe par la cle de
+ * l'utilisateur, AllDebrid ne peut pas le recuperer lui-meme.
+ */
+async function uploadFichierTorrent(
+  torrentUrl: string,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<number | null> {
+  try {
+    const res = await axios.get<ArrayBuffer>(torrentUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      maxContentLength: 4 * 1024 * 1024,
+      validateStatus: () => true,
+      signal,
+    });
+    if (res.status < 200 || res.status >= 300) return null;
+    const contenu = Buffer.from(res.data);
+    if (contenu.length === 0 || contenu[0] !== 0x64) return null; // doit commencer par 'd'
+
+    const form = new FormData();
+    form.append('files[]', new Blob([contenu]), 'release.torrent');
+
+    const envoi = await axios.post<AdResponse<{ files?: UploadedMagnet[] }>>(
+      `${BASE}/magnet/upload/file?agent=${AGENT}`,
+      form,
+      { headers: { Authorization: `Bearer ${apiKey}` }, timeout: 30000, validateStatus: () => true, signal },
+    );
+    const premier = envoi.data?.data?.files?.[0];
+    if (!premier || premier.error) {
+      console.log(`[AllDebrid] depot du .torrent refuse: ${premier?.error?.code ?? envoi.status}`);
+      return null;
+    }
+    return typeof premier.id === 'number' ? premier.id : null;
+  } catch (e) {
+    console.log(`[AllDebrid] depot du .torrent: ${(e as Error).message.slice(0, 80)}`);
+    return null;
+  }
+}
+
 async function uploadMagnet(
   magnetOrHash: string,
   apiKey: string,
@@ -247,13 +301,8 @@ async function waitReady(
   return null;
 }
 
-async function filesOf(
-  magnetOrHash: string,
-  apiKey: string,
-  signal?: AbortSignal,
-): Promise<DebridFile[]> {
-  const id = await uploadMagnet(magnetOrHash, apiKey, signal);
-  if (id === null) return [];
+/** Fichiers d'un magnet deja depose, designe par son identifiant. */
+async function filesOfId(id: number, apiKey: string, signal?: AbortSignal): Promise<DebridFile[]> {
   const status = await waitReady(id, apiKey, signal);
   if (!status?.files) return [];
 
@@ -262,6 +311,16 @@ async function filesOf(
   return flattenEntries(status.files)
     .filter((e) => e.l && e.n)
     .map((e) => ({ name: e.n as string, sizeBytes: e.s, link: e.l }));
+}
+
+async function filesOf(
+  magnetOrHash: string,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<DebridFile[]> {
+  const id = await uploadMagnet(magnetOrHash, apiKey, signal);
+  if (id === null) return [];
+  return filesOfId(id, apiKey, signal);
 }
 
 const LOT_DISPO = 20;
@@ -321,7 +380,34 @@ async function uploadLot(
 }
 
 /**
- * Retire TOUS les magnets deposes pour le seul besoin de la verification.
+ * Magnets DEJA presents dans le compte, avant que la verification n'y touche.
+ *
+ * Un seul appel rend toute la liste. Il est indispensable : la verification depose des
+ * dizaines de hashes puis les retire, et sans cette photographie prealable elle
+ * supprimait aussi ce qui etait la AVANT — le telechargement que l'utilisateur venait
+ * de lancer en cliquant Play, ou un magnet qu'il avait ajoute lui-meme.
+ *
+ * Symptome cote utilisateur, constate : des entrees apparaissent dans le tableau de
+ * bord AllDebrid et n'avancent jamais, meme avec seize sources. Elles etaient
+ * supprimees a la recherche suivante.
+ */
+async function magnetsExistants(apiKey: string, signal?: AbortSignal): Promise<Set<string>> {
+  const data = await call<{ magnets?: { hash?: string }[] }>(
+    '/magnet/status',
+    apiKey,
+    {},
+    signal,
+    BASE_STATUS,
+  );
+  const out = new Set<string>();
+  for (const m of data?.magnets ?? []) {
+    if (m.hash) out.add(m.hash.toLowerCase());
+  }
+  return out;
+}
+
+/**
+ * Retire les magnets deposes pour le seul besoin de la verification.
  *
  * J'avais d'abord garde ceux qui etaient prets, en pensant menager une eventuelle
  * bibliotheque de l'utilisateur. C'etait une erreur, mesuree : chaque requete /stream
@@ -362,6 +448,10 @@ export function allDebrid(apiKey: string): DebridService {
         else out.set(brut, memorise);
       }
 
+      // Photographie du compte AVANT tout depot : elle dit ce qui ne nous appartient
+      // pas. Un seul appel, et il evite de detruire le travail de l'utilisateur.
+      const dejaLa = aInterroger.length > 0 ? await magnetsExistants(apiKey, signal) : new Set<string>();
+
       for (let i = 0; i < aInterroger.length; i += LOT_DISPO) {
         if (signal?.aborted) break;
         const lot = aInterroger.slice(i, i + LOT_DISPO);
@@ -375,15 +465,25 @@ export function allDebrid(apiKey: string): DebridService {
           const pret = Boolean(m.ready);
           out.set(hash, pret);
           cacheSet(`ad:dispo:${hash}`, pret, pret ? DISPO_TTL_MS : DISPO_ABSENT_TTL_MS, 'alldebrid');
-          if (typeof m.id === 'number') aRetirer.push(m.id);
+          // On ne retire QUE ce qu'on vient d'ajouter. Ce qui etait deja la appartient
+          // a l'utilisateur — telechargement lance depuis l'addon, ou magnet ajoute a
+          // la main — et n'a pas a disparaitre parce qu'on a regarde s'il etait pret.
+          if (typeof m.id === 'number' && !dejaLa.has(hash)) aRetirer.push(m.id);
         }
         nettoyerEnFond(aRetirer, apiKey);
       }
       return out;
     },
 
-    async resolveTorrent(magnetOrHash, fileHint, signal) {
-      const files = await filesOf(magnetOrHash, apiKey, signal);
+    async resolveTorrent(magnetOrHash, fileHint, signal, torrentUrl) {
+      let files = await filesOf(magnetOrHash, apiKey, signal);
+
+      // Rien du cote du hash : sur un tracker prive, c'est normal — le depot d'un hash
+      // nu n'aboutit jamais, faute d'annonceur. On depose alors le VRAI fichier.
+      if (files.length === 0 && torrentUrl) {
+        const id = await uploadFichierTorrent(torrentUrl, apiKey, signal);
+        if (id !== null) files = await filesOfId(id, apiKey, signal);
+      }
       const picked = pickFile(files, fileHint);
       if (!picked?.link) return null;
       // Les liens de /magnet/status sont des liens AllDebrid, pas encore des liens

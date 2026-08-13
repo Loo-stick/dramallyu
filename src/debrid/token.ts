@@ -24,6 +24,13 @@ export interface ResolvePayload {
   ad?: string;
   /** Cle TorBox de l'utilisateur. */
   tb?: string;
+  /**
+   * Lien vers le .torrent. Il ne sert QU'AU PLAY, et seulement si le hash n'a rien
+   * donne : la verification de disponibilite, elle, continue d'envoyer des hashes nus
+   * par lots — deposer des fichiers pour simplement regarder ce qui est pret serait
+   * hors de proportion.
+   */
+  t?: string;
   /** Preference de debrideur, pour que le Play respecte le reglage. */
   pref?: 'auto' | 'alldebrid' | 'torbox';
   /** Expiration (epoch ms). */

@@ -39,6 +39,8 @@ export interface ResolveRequest {
   kind: 'torrent' | 'ddl';
   value: string;
   fileHint?: string;
+  /** Lien .torrent, employe au Play quand le hash seul n'aboutit pas. */
+  torrentUrl?: string;
   ad?: string;
   tb?: string;
   /** Preference de l'utilisateur, transportee dans le jeton de lecture. */
@@ -92,7 +94,19 @@ async function ordonnerPourTorrent(
  * MediaFlow (compte partage, protection multi-IP), ce qui vient de TorBox part en
  * direct.
  */
+/**
+ * Temps maximal accorde a une resolution, tous services confondus.
+ *
+ * Un clic sur Play doit aboutir ou echouer VITE. Sans cette borne, essayer deux
+ * debrideurs a la suite sur un fichier absent prenait 22 s : le lecteur avait
+ * abandonne, et le proxy renvoyait une page d'erreur a la place du message qui
+ * explique quoi faire. Mieux vaut dire « pas pret, reessayez » en huit secondes que
+ * ne rien dire du tout en vingt-deux.
+ */
+const BUDGET_MS = 9000;
+
 export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promise<string | null> {
+  const debut = Date.now();
   let services = servicesFor({ ad: req.ad, tb: req.tb, debrid: req.pref ?? 'auto' } as UserConfig);
   if (services.length === 0) return null;
 
@@ -108,10 +122,16 @@ export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promis
   }
 
   for (const service of services) {
+    // On n'engage pas un service qu'on n'aura pas le temps d'ecouter : le suivant
+    // repondrait apres l'abandon du lecteur, et son travail serait perdu.
+    if (Date.now() - debut > BUDGET_MS) {
+      console.log(`[Resolveur] budget epuise avant ${service.name}`);
+      break;
+    }
     try {
       const link =
         req.kind === 'torrent'
-          ? await service.resolveTorrent(req.value, req.fileHint, signal)
+          ? await service.resolveTorrent(req.value, req.fileHint, signal, req.torrentUrl)
           : await service.resolveDdl(req.value, signal);
       if (!link) continue;
       return service.name === 'alldebrid' ? throughMediaflow(link) : link;

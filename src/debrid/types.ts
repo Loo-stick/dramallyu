@@ -25,7 +25,17 @@ export interface DebridService {
   /** hash minuscule -> present en cache. Carte vide = « on ne sait pas ». */
   checkCached(hashes: string[], signal?: AbortSignal): Promise<Map<string, boolean>>;
   /** Magnet ou hash -> lien HTTP jouable. */
-  resolveTorrent(magnetOrHash: string, fileHint?: string, signal?: AbortSignal): Promise<string | null>;
+  /**
+   * `torrentUrl` est le lien vers le .torrent, quand la source en fournit un. Il est
+   * indispensable sur les trackers PRIVES : un hash nu n'y donne acces a rien, faute
+   * d'annonceur et de metadonnees.
+   */
+  resolveTorrent(
+    magnetOrHash: string,
+    fileHint?: string,
+    signal?: AbortSignal,
+    torrentUrl?: string,
+  ): Promise<string | null>;
   /** Lien d'hebergeur (1fichier, uptobox...) -> lien HTTP jouable. */
   resolveDdl(link: string, signal?: AbortSignal): Promise<string | null>;
   /** Fichiers d'un torrent resolu — sert a recuperer les .srt livres avec la release. */

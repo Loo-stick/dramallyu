@@ -180,6 +180,9 @@ export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 
           sizeBytes: nombre(item.attributes?.size),
           seeders: nombre(item.attributes?.seeders) ?? 0,
           infoHash,
+          // Les trackers UNIT3D sont prives : le .torrent est la seule forme qui porte
+          // l'annonceur, et donc la seule que le debrideur puisse reellement demarrer.
+          torrentUrl: item.attributes?.download_link,
           fileHint: parsed.isPack ? hint : undefined,
           // Gratuit : le MediaInfo accompagne la reponse de recherche. Pas de fichier a
           // lire, pas de resolution chez le debrideur, aucune requete de plus.

@@ -23,6 +23,8 @@ const MAX_ITEMS = 60;
 const MAX_XML_BYTES = 4 * 1024 * 1024;
 
 export interface TorznabItem {
+  /** Lien vers le .torrent, quand l'enclosure n'est pas un magnet. */
+  torrentUrl?: string;
   title: string;
   infoHash?: string;
   magnet?: string;
@@ -42,6 +44,10 @@ export function parseTorznab(xml: string): TorznabItem[] {
     const enclosure = attrOf(block, 'enclosure', 'url') || undefined;
     const link = tagText(block, 'link') || undefined;
     const magnet = [enclosure, link].find((u) => u && u.startsWith('magnet:'));
+    // Les trackers PRIVES ne publient pas de magnet : leur enclosure est un lien vers
+    // le .torrent, seule forme qui porte l'annonceur. On le garde — sans lui, le
+    // debrideur ne recevrait qu'un hash nu, inutilisable hors DHT.
+    const torrentUrl = [enclosure, link].find((u) => u && /^https?:/i.test(u));
 
     let infoHash = attrs.infohash?.toLowerCase();
     if (!infoHash && magnet) {
@@ -60,6 +66,7 @@ export function parseTorznab(xml: string): TorznabItem[] {
       title,
       infoHash,
       magnet,
+      torrentUrl,
       sizeBytes: Number.isFinite(size) && size > 0 ? size : undefined,
       seeders: attrs.seeders !== undefined ? Number(attrs.seeders) || 0 : undefined,
     });
@@ -178,6 +185,7 @@ function makeSource(id: string, label: string, userKey: 'c411' | 'tr4ker' | 'ygg
             seeders: item.seeders,
             infoHash: item.infoHash,
             magnet: item.magnet,
+            torrentUrl: item.torrentUrl,
             // Sur un pack de saison, c'est cet indice qui permet au debrideur de
             // choisir le bon fichier dans le dossier.
             fileHint: parsed.isPack ? hint : undefined,

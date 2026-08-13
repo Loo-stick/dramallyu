@@ -162,6 +162,8 @@ export const digitalcoreSource: Source = {
         sizeBytes: nombre(item.size),
         seeders: nombre(item.seeders) ?? 0,
         infoHash,
+        // Tracker prive : sans le .torrent, le debrideur n'a qu'un hash sans annonceur.
+        torrentUrl: `${base}/api/v1/torrents/download/${item.id}?apikey=${apiKey}`,
         fileHint: parsed.isPack ? hint : undefined,
       });
     }

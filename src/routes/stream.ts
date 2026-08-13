@@ -374,6 +374,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         k: c.kind === 'torrent' ? 'torrent' : 'ddl',
         v: c.kind === 'torrent' ? (c.infoHash || c.magnet || '') : (c.ddlUrl || ''),
         f: c.fileHint,
+        t: c.torrentUrl,
         ad: config.ad,
         tb: config.tb,
         pref: config.debrid,

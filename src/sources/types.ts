@@ -68,6 +68,16 @@ export interface Candidate {
   ddlUrl?: string;
   ddlHost?: string;
 
+  /**
+   * Lien vers le fichier .torrent, quand la source en fournit un.
+   *
+   * INDISPENSABLE POUR LES TRACKERS PRIVES. Un hash nu ne porte ni annonceur ni
+   * metadonnees : le debrideur doit alors trouver des pairs par le DHT, ou les
+   * torrents prives ne figurent pas. C'est ce qui rendait les magnets inertes chez
+   * AllDebrid — deposes, jamais demarres, meme avec seize sources sur le tracker.
+   */
+  torrentUrl?: string;
+
   /** Fichier vise dans un torrent multi-fichiers ou un dossier debride. */
   fileHint?: string;
 
