@@ -150,6 +150,9 @@
   .pastille input{position:absolute;opacity:0;pointer-events:none}
   .pastille .signe{font-weight:800;font-size:12px;width:11px;text-align:center}
   .pastille.exclue{border-color:var(--brique);background:var(--brique-voile);color:var(--texte);text-decoration:line-through}
+  /* Une bascule ACTIVE n'est pas une exclusion : pas de texte barre, l'option est
+     retenue, pas ecartee. */
+  .pastille.active{border-color:var(--or);background:var(--or-voile);color:var(--texte)}
 
   /* --- Panneau lateral : la piece maitresse de cette page --- */
   .rail{position:sticky;top:24px}
@@ -321,7 +324,7 @@
           <h2>Ce que vous voulez voir</h2>
         </header>
 
-        <label class="pastille" style="margin:0 0 10px" for="cachedOnly">
+        <label class="pastille" data-bascule="cachedOnly" style="margin:0 0 10px">
           <input type="checkbox" id="cachedOnly">
           <span class="signe">+</span><span>Uniquement ce qui est deja pret</span>
         </label>
@@ -345,7 +348,7 @@
           <option value="size">Leger (le plus petit fichier d'abord)</option>
         </select>
 
-        <label class="pastille" style="margin:14px 0 0" for="bonusHdr">
+        <label class="pastille" data-bascule="bonusHdr" style="margin:14px 0 0">
           <input type="checkbox" id="bonusHdr">
           <span class="signe">+</span><span>Remonter le HDR a qualite egale</span>
         </label>
@@ -395,7 +398,7 @@
           <button type="button" class="btn" id="ajouter-format">Ajouter</button>
         </div>
 
-        <label class="pastille" style="margin:16px 0 0" for="excludeCam">
+        <label class="pastille" data-bascule="excludeCam" style="margin:16px 0 0">
           <input type="checkbox" id="excludeCam">
           <span class="signe">+</span><span>Exclure les captations en salle (CAM, TS)</span>
         </label>
@@ -565,6 +568,27 @@ $('ajouter-format').addEventListener('click', function(){
   var v = valeur('formatLibre');
   if (v && formatsExclus.indexOf(v) === -1) { formatsExclus.push(v); $('formatLibre').value = ''; rendreFormats(); }
 });
+
+/* ---------- Bascules simples ----------
+   La CSS masque la case pour dessiner une pastille : sans cet ecouteur, cliquer
+   changeait bien l'etat interne mais RIEN ne bougeait a l'ecran. L'utilisateur ne
+   pouvait pas savoir si son clic avait pris. */
+function peindreBascule(input){
+  var pastille = input.closest('.pastille');
+  if (!pastille) return;
+  pastille.classList.toggle('active', input.checked);
+  var signe = pastille.querySelector('.signe');
+  if (signe) signe.textContent = input.checked ? '✓' : '+';
+}
+
+function brancherBascules(){
+  document.querySelectorAll('.pastille[data-bascule]').forEach(function(pastille){
+    var input = $(pastille.dataset.bascule);
+    if (!input) return;
+    input.addEventListener('change', function(){ peindreBascule(input); });
+    peindreBascule(input);
+  });
+}
 
 /* ---------- Config courante ---------- */
 function configActuelle(){
@@ -783,10 +807,7 @@ function restaurer(){
     $('cachedOnly').checked = !!r.cachedOnly;
     $('excludeCam').checked = !!r.excludeCam;
     $('bonusHdr').checked = !!r.bonusHdr;
-    [['cachedOnly',r.cachedOnly],['excludeCam',r.excludeCam],['bonusHdr',r.bonusHdr]].forEach(function(p){
-      var pastille = $(p[0]).closest('.pastille');
-      if (pastille) pastille.querySelector('.signe').textContent = p[1] ? '✕' : '+';
-    });
+    ['cachedOnly','excludeCam','bonusHdr'].forEach(function(id){ peindreBascule($(id)); });
 
     marquerClesEnregistrees();
     document.getElementById('banniere-restauration').hidden = false;
@@ -876,6 +897,7 @@ remplirSelect('minResolution', RESOLUTIONS, '');
 remplirSelect('maxResolution', RESOLUTIONS, '');
 remplirSelect('minSource', SOURCES_QUALITE, '');
 rendreFormats();
+brancherBascules();
 restaurer();
 rafraichirApercu();
 </script>
