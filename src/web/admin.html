@@ -123,6 +123,7 @@
     <button data-vue="bord" aria-current="page">Tableau de bord</button>
     <button data-vue="sources">Sources</button>
     <button data-vue="requetes">Requetes</button>
+    <button data-vue="sante">Sante</button>
     <button data-vue="journal">Journal</button>
     <button data-vue="reglages">Reglages</button>
     <button data-vue="cache">Cache</button>
@@ -203,6 +204,45 @@
         </label>
       </div>
       <div id="requetes"></div>
+    </div>
+  </section>
+
+  <!-- ================================= SANTE ================================= -->
+  <section class="vue" id="vue-sante">
+    <div class="bloc">
+      <h2>Services externes</h2>
+      <p class="aide">
+        Joignabilite reelle, mesuree a la demande. <strong>Un refus d'authentification
+        (401, 403) compte comme joignable</strong> : le service repond, il exige seulement une cle —
+        le compter comme une panne enverrait chercher au mauvais endroit. Aucune cle d'utilisateur
+        n'est employee ici : on teste l'adresse, pas les acces.
+      </p>
+      <div class="actions" style="margin-top:0"><button class="act" id="btn-sante">Verifier maintenant</button></div>
+      <div class="defile" style="margin-top:.9rem"><table id="tab-sante"></table></div>
+      <div class="msg" id="msg-sante"></div>
+    </div>
+
+    <div class="bloc">
+      <h2>Domaines rotatifs</h2>
+      <p class="aide">
+        Les sites changent d'adresse ; la synchronisation les retrouve seule. Elle tourne
+        automatiquement, ce bouton force un passage immediat.
+      </p>
+      <div id="domaines"></div>
+      <div class="actions"><button class="sec" id="btn-domaines2">Synchroniser maintenant</button></div>
+      <div class="msg" id="msg-domaines"></div>
+    </div>
+
+    <div class="bloc">
+      <h2>Liens morts</h2>
+      <p class="aide">
+        Liens dont un debrideur a affirme que le fichier n'existe plus. Ils sont ecartes des
+        resultats pendant un mois. Les oublier force un nouvel essai — utile quand un hebergeur
+        remet un fichier en ligne.
+      </p>
+      <div class="defile"><table id="tab-morts"></table></div>
+      <div class="actions"><button class="sec" id="btn-morts">Tout oublier</button></div>
+      <div class="msg" id="msg-morts"></div>
     </div>
   </section>
 
@@ -496,6 +536,67 @@ function chargerRequetes() {
 $('btn-req-rafraichir').addEventListener('click', chargerRequetes);
 $('req-vides').addEventListener('change', chargerRequetes);
 
+/* ---------------------------------- Sante --------------------------------- */
+function chargerSante(verifier) {
+  jsonGet('/api/admin/liensmorts').then(function (d) {
+    $('tab-morts').innerHTML = d.liens.length === 0
+      ? '<tr><td style="color:var(--doux)">Aucun lien mort retenu.</td></tr>'
+      : '<tr><th>Lien</th><th>Oubli le</th></tr>' + d.liens.slice(0, 60).map(function (l) {
+          return '<tr><td style="word-break:break-all;font:12px var(--mono)">' + ech(l.url) + '</td>' +
+                 '<td>' + new Date(l.expire).toLocaleDateString('fr-FR') + '</td></tr>';
+        }).join('') + (d.liens.length > 60
+          ? '<tr><td colspan="2" style="color:var(--doux)">... et ' + (d.liens.length - 60) + ' autres</td></tr>'
+          : '');
+  });
+
+  jsonGet('/api/admin/domaines').then(function (d) {
+    var e = d.dernier;
+    $('domaines').innerHTML = !e
+      ? '<p class="aide">Aucune synchronisation depuis le demarrage.</p>'
+      : '<table><tr><th>Site</th><th>Adresse retenue</th><th>Etat</th></tr>' +
+        (e.sites || []).map(function (s) {
+          return '<tr><td>' + ech(s.site || s.id) + '</td><td style="font:12px var(--mono)">' +
+                 ech(s.domaine || s.url || '—') + '</td><td>' +
+                 pastille(s.ok !== false, 'a jour', 'echec') + '</td></tr>';
+        }).join('') + '</table>' +
+        '<p class="aide" style="margin-top:.6rem">Derniere passe : ' + heure(e.quand) + '</p>';
+  });
+
+  if (!verifier) {
+    $('tab-sante').innerHTML = '<tr><td style="color:var(--doux)">Cliquez sur « Verifier maintenant ».</td></tr>';
+    return;
+  }
+  ecrire('msg-sante', 'Verification en cours...');
+  jsonGet('/api/admin/sante').then(function (d) {
+    $('tab-sante').innerHTML = '<tr><th>Service</th><th>Etat</th><th class="num">Code</th>' +
+      '<th class="num">Delai</th><th>Note</th></tr>' +
+      d.services.map(function (s) {
+        return '<tr><td>' + ech(s.id) + '</td>' +
+               '<td>' + pastille(s.joignable, 'joignable', 'injoignable') + '</td>' +
+               '<td class="num">' + (s.statut || '—') + '</td>' +
+               '<td class="num">' + ms(s.ms) + '</td>' +
+               '<td style="color:var(--doux);font-size:.82rem">' + ech(s.note || '') + '</td></tr>';
+      }).join('');
+    var ko = d.services.filter(function (s) { return !s.joignable; }).length;
+    ecrire('msg-sante', ko === 0 ? 'Tous les services repondent.' : ko + ' service(s) injoignable(s).',
+      ko === 0 ? 'ok' : 'ko');
+  });
+}
+$('btn-sante').addEventListener('click', function () { chargerSante(true); });
+$('btn-morts').addEventListener('click', function () {
+  jsonPost('/api/admin/liensmorts/oublier').then(function (d) {
+    ecrire('msg-morts', d.supprimees + ' lien(s) oublie(s).', 'ok');
+    chargerSante(false);
+  });
+});
+$('btn-domaines2').addEventListener('click', function () {
+  ecrire('msg-domaines', 'Synchronisation...');
+  jsonPost('/api/admin/domaines/synchroniser').then(function (d) {
+    ecrire('msg-domaines', d.erreur ? d.erreur : 'Domaines synchronises.', d.erreur ? 'ko' : 'ok');
+    chargerSante(false);
+  });
+});
+
 /* --------------------------------- Journal -------------------------------- */
 function chargerJournal() {
   var q = '?limite=300';
@@ -682,6 +783,7 @@ $('btn-remesurer').addEventListener('click', function () {
 function charger(vue) {
   if (vue === 'bord' || vue === 'sources') chargerBord();
   else if (vue === 'requetes') chargerRequetes();
+  else if (vue === 'sante') chargerSante(false);
   else if (vue === 'journal') chargerJournal();
   else if (vue === 'reglages') chargerReglages();
   else if (vue === 'cache') chargerCache();

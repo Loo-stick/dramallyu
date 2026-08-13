@@ -19,6 +19,11 @@ function api(): string {
   return `${constants().base}/api`;
 }
 
+/** Adresse courante du site, pour la verification de sante de l'administration. */
+export function kisskhBase(): string {
+  return constants().base;
+}
+
 function headers(): Record<string, string> {
   return { Referer: `${constants().base}/`, Accept: 'application/json' };
 }

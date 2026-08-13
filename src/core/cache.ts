@@ -115,6 +115,24 @@ export async function cached<T>(
   return value;
 }
 
+/**
+ * Cles vivantes d'un perimetre, pour l'administration.
+ *
+ * Bornee par construction : une page qui afficherait dix mille entrees serait
+ * illisible, et les charger toutes couterait plus que ce qu'elles apprennent.
+ */
+const clesStmt = db.prepare(
+  'SELECT key, expires_at FROM cache WHERE scope = ? AND expires_at >= ? ORDER BY created_at DESC LIMIT ?',
+);
+
+export function clesDuPerimetre(scope: string, limite = 200): { cle: string; expire: number }[] {
+  const lignes = clesStmt.all(scope, Date.now(), Math.min(Math.max(limite, 1), 1000)) as {
+    key: string;
+    expires_at: number;
+  }[];
+  return lignes.map((l) => ({ cle: l.key, expire: l.expires_at }));
+}
+
 export function purgeExpired(): number {
   return purgeStmt.run(Date.now()).changes as number;
 }

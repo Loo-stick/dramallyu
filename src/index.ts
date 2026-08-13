@@ -35,6 +35,9 @@ import {
   handleTesterSource,
   handleExporterSauvegarde,
   handleImporterSauvegarde,
+  handleLiensMorts,
+  handleOublierLiensMorts,
+  handleSante,
 } from './routes/admin';
 import { register, planSources } from './core/registry';
 import { brancherJournal } from './core/journal';
@@ -333,6 +336,9 @@ app.post('/api/admin/journal/vider', requireAdmin, handleViderJournal);
 app.post('/api/admin/mesures/reinitialiser', requireAdmin, handleReinitialiserMesures);
 app.post('/api/admin/reglages', requireAdmin, jsonBody, handleEnregistrerReglages);
 app.post('/api/admin/sources/:id/tester', requireAdmin, jsonBody, handleTesterSource);
+app.get('/api/admin/liensmorts', requireAdmin, handleLiensMorts);
+app.post('/api/admin/liensmorts/oublier', requireAdmin, handleOublierLiensMorts);
+app.get('/api/admin/sante', requireAdmin, handleSante);
 app.get('/api/admin/sauvegarde', requireAdmin, handleExporterSauvegarde);
 app.post('/api/admin/sauvegarde', requireAdmin, jsonBody, handleImporterSauvegarde);
 app.get('/api/admin/config', requireAdmin, handleGetConfigFiles);

@@ -12,7 +12,7 @@ import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getSettings, reloadSettings, settingsPath } from '../core/settings';
-import { clearAll, clearScope, getCacheStats } from '../core/cache';
+import { clearAll, clearScope, getCacheStats, clesDuPerimetre } from '../core/cache';
 import { allSources } from '../core/registry';
 import { kkeyStatus, rediscoverConstants, reloadKkeyConfig } from '../sources/direct/kisskh/kkey';
 import {
@@ -25,6 +25,7 @@ import {
 import { lire, sourcesConnues, vider as viderJournal } from '../core/journal';
 import { parseConfig, chiffrementDisponible } from '../core/config';
 import { Deadline } from '../core/http';
+import { kisskhBase } from '../sources/direct/kisskh/client';
 
 const COOKIE = 'dramallyu_admin';
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -462,4 +463,86 @@ export function handleImporterSauvegarde(req: Request, res: Response): void {
   } catch (e) {
     res.status(400).json({ erreur: `import interrompu : ${(e as Error).message}`, ecrits });
   }
+}
+
+/**
+ * Liens constates morts, avec la possibilite de les oublier.
+ *
+ * Utile quand un hebergeur remet un fichier en ligne : sans cela il resterait ecarte
+ * un mois, et l'operateur n'aurait aucun moyen de le savoir ni de forcer le reessai.
+ */
+export function handleLiensMorts(_req: Request, res: Response): void {
+  const entrees = clesDuPerimetre('liensmorts', 300);
+  res.json({
+    total: entrees.length,
+    liens: entrees.map((e) => ({
+      url: e.cle.replace(/^mort:/, ''),
+      expire: e.expire,
+    })),
+  });
+}
+
+export function handleOublierLiensMorts(_req: Request, res: Response): void {
+  res.json({ ok: true, supprimees: clearScope('liensmorts') });
+}
+
+/**
+ * Sante des services EXTERNES, verifiee pour de vrai.
+ *
+ * On interroge chaque adresse et on rapporte ce qu'elle repond. Deux precisions qui
+ * changent la lecture du resultat :
+ *
+ *   - un 401 ou 403 est un SUCCES du point de vue de la disponibilite : le service
+ *     repond, il refuse seulement une requete sans cle. Le compter comme une panne
+ *     enverrait l'operateur chercher au mauvais endroit ;
+ *   - aucune cle d'utilisateur n'est employee. On teste la joignabilite, pas les
+ *     acces — ces cles ne nous appartiennent pas.
+ */
+export async function handleSante(_req: Request, res: Response): Promise<void> {
+  const settings = getSettings();
+  const cibles: { id: string; url: string }[] = [
+    { id: 'cinemeta', url: 'https://v3-cinemeta.strem.io/meta/series/tt10919420.json' },
+    { id: 'kisskh', url: `${kisskhBase()}/api/DramaList/Search?q=test&type=0` },
+  ];
+
+  for (const [id, conf] of Object.entries(settings.torznab)) {
+    if (conf?.url) cibles.push({ id, url: `${conf.url.replace(/\/+$/, '')}?t=caps` });
+  }
+  for (const [id, conf] of Object.entries(settings.unit3d ?? {})) {
+    if (conf?.url) cibles.push({ id, url: `${conf.url.replace(/\/+$/, '')}/api/torrents/filter?perPage=1` });
+  }
+  if (settings.digitalcore?.url) {
+    cibles.push({ id: 'digitalcore', url: `${settings.digitalcore.url.replace(/\/+$/, '')}/api/v1/torrents?searchText=test` });
+  }
+
+  const resultats = await Promise.all(
+    cibles.map(async (c) => {
+      const debut = Date.now();
+      try {
+        const r = await fetch(c.url, {
+          signal: AbortSignal.timeout(8000),
+          headers: { 'User-Agent': 'Dramallyu/1.0 (verification de sante)' },
+        });
+        return {
+          id: c.id,
+          statut: r.status,
+          ms: Date.now() - debut,
+          // Le service repond : c'est tout ce qu'on mesure ici. Un refus
+          // d'authentification prouve justement qu'il est vivant.
+          joignable: r.status > 0 && r.status < 500,
+          note: r.status === 401 || r.status === 403 ? 'repond, exige une cle' : undefined,
+        };
+      } catch (e) {
+        return {
+          id: c.id,
+          statut: 0,
+          ms: Date.now() - debut,
+          joignable: false,
+          note: (e as Error).name === 'TimeoutError' ? 'delai depasse' : (e as Error).message.slice(0, 80),
+        };
+      }
+    }),
+  );
+
+  res.json({ services: resultats.sort((a, b) => Number(a.joignable) - Number(b.joignable)) });
 }
