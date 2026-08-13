@@ -127,6 +127,20 @@ export type ChampCle = (typeof CHAMPS_CLES)[number];
 
 const KEY_FIELDS = CHAMPS_CLES;
 
+/**
+ * TOUS les reglages transportables dans le lien, DERIVES des valeurs par defaut.
+ *
+ * Cette liste etait recopiee a la main dans l'encodeur. Trois reglages y ont ete
+ * oublies a trois moments differents — les filtres avances, puis « ecarter ce qui n'a
+ * pas de francais », puis le choix du debrideur. A chaque fois le meme scenario :
+ * l'utilisateur coche, le formulaire accepte, le lien ne le porte pas, et rien ne le
+ * signale.
+ *
+ * Il n'y a plus de liste a tenir. Tout champ ajoute a DEFAULT_CONFIG devient
+ * transportable du meme geste — c'est-a-dire qu'il est IMPOSSIBLE de l'oublier.
+ */
+export const CHAMPS_REGLAGES = Object.keys(DEFAULT_CONFIG) as (keyof UserConfig)[];
+
 function asStringArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;
   const out = v.filter((x): x is string => typeof x === 'string' && x.length > 0);

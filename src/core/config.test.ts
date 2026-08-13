@@ -15,6 +15,7 @@ import {
   DEFAULT_CONFIG,
   nomLangue,
   CHAMPS_CLES,
+  CHAMPS_REGLAGES,
 } from './config';
 
 test('aller-retour encode/parse', () => {
@@ -205,4 +206,25 @@ test('la preference de debrideur survit a l aller-retour', () => {
   assert.equal(parseConfig(encodeConfig({})).debrid, 'auto', 'automatique par defaut');
   // Une valeur inventee ne doit pas s installer dans la config.
   assert.equal(parseConfig(encodeConfig({ debrid: 'nimporte' } as never)).debrid, 'auto');
+});
+
+test('AUCUN reglage ne peut etre oublie a la generation du lien', () => {
+  // Le garde-fou qui manquait vraiment. Trois reglages ont ete perdus a trois moments
+  // differents — filtres avances, « ecarter ce qui n'a pas de francais », choix du
+  // debrideur — chacun accepte par le formulaire puis absent du lien, sans le moindre
+  // signal. La liste etant desormais DERIVEE des valeurs par defaut, ce test verifie
+  // qu'elle couvre bien tout ce que UserConfig transporte.
+  const attendus = Object.keys(DEFAULT_CONFIG);
+  assert.deepEqual([...CHAMPS_REGLAGES].sort(), attendus.sort());
+
+  // Et que le tour complet preserve reellement chaque valeur, y compris les dernieres
+  // arrivees.
+  const complet = parseConfig(
+    encodeConfig({ frOnly: true, debrid: 'alldebrid', cachedOnly: true, priorite: 'direct', maxSizeGb: 7 }),
+  );
+  assert.equal(complet.frOnly, true);
+  assert.equal(complet.debrid, 'alldebrid');
+  assert.equal(complet.cachedOnly, true);
+  assert.equal(complet.priorite, 'direct');
+  assert.equal(complet.maxSizeGb, 7);
 });

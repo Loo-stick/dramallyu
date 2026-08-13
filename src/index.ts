@@ -28,7 +28,14 @@ import {
   handleRediscoverKkey,
 } from './routes/admin';
 import { register, planSources } from './core/registry';
-import { parseConfig, encodeConfig, chiffrementDisponible, estSentinelle, CHAMPS_CLES } from './core/config';
+import {
+  parseConfig,
+  encodeConfig,
+  chiffrementDisponible,
+  estSentinelle,
+  CHAMPS_CLES,
+  CHAMPS_REGLAGES,
+} from './core/config';
 import { getSettings } from './core/settings';
 import { getCacheStats } from './core/cache';
 import { kkeyStatus } from './sources/direct/kisskh/kkey';
@@ -233,27 +240,10 @@ app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
   for (const champ of CHAMPS_CLES) {
     if (propre[champ]) compact[champ] = propre[champ];
   }
-  // Liste EXHAUSTIVE des reglages transportables. Tout champ oublie ici est
-  // silencieusement perdu a la generation du lien : le reglage semble accepte dans le
-  // formulaire, puis reste sans effet. C'est arrive avec les filtres avances — d'ou
-  // ce commentaire, et la verification qui l'accompagne dans les tests.
-  for (const champ of [
-    'subLangs',
-    'excludeQualities',
-    'sources',
-    'sortBy',
-    'maxResults',
-    'cachedOnly',
-    'priorite',
-    'minResolution',
-    'maxResolution',
-    'minSource',
-    'maxSizeGb',
-    'excludeFormats',
-    'excludeCam',
-    'bonusHdr',
-    'subsSurFlux',
-  ] as const) {
+  // Plus de liste a tenir ici : elle est DERIVEE des valeurs par defaut (cf.
+  // CHAMPS_REGLAGES). Trois reglages avaient ete oublies a trois moments differents,
+  // chacun accepte par le formulaire puis absent du lien, sans le moindre signal.
+  for (const champ of CHAMPS_REGLAGES) {
     if (aChange(champ)) compact[champ] = propre[champ];
   }
 
