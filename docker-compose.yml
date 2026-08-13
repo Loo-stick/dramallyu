@@ -15,8 +15,11 @@ services:
     mem_limit: 512m
     memswap_limit: 512m
 
+    # Bind LOOPBACK uniquement : le public passe par Cloudflare -> tunnel -> Apache,
+    # jamais directement par ce port. L'exposer sur 0.0.0.0 contournerait Cloudflare
+    # (donc la protection de l'IP maison) et ouvrirait l'addon sur le reseau local.
     ports:
-      - "${PORT:-7020}:${PORT:-7020}"
+      - "127.0.0.1:${PORT:-7020}:${PORT:-7020}"
 
     env_file:
       - .env
