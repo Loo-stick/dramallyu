@@ -128,6 +128,52 @@ async function testTmdb(cle: string): Promise<Verdict> {
   };
 }
 
+/**
+ * Tracker UNIT3D. On interroge l'endpoint de RECHERCHE, pas une page d'accueil : lui
+ * seul authentifie, et c'est celui que la source utilisera vraiment.
+ */
+async function testUnit3d(id: string, cle: string): Promise<Verdict> {
+  const conf = getSettings().unit3d?.[id];
+  if (!conf) return { ok: false, message: `Tracker « ${id} » inconnu.` };
+  if (!conf.enabled) return { ok: false, message: `Tracker « ${id} » desactive par l operateur.` };
+
+  const url = `${conf.url.replace(/\/+$/, '')}/api/torrents/filter?perPage=1`;
+  const res = await httpGet<unknown>(url, {
+    timeoutMs: TIMEOUT,
+    retries: 0,
+    headers: { Authorization: `Bearer ${cle}`, Accept: 'application/json' },
+  });
+
+  if (!res) return { ok: false, message: 'Tracker injoignable. Il est peut-etre hors ligne.' };
+  if (res.status === 401 || res.status === 403) return { ok: false, message: 'Cle refusee par le tracker.' };
+  if (res.status === 429) return { ok: false, message: 'Trop de requetes. Reessayez dans une minute.' };
+  if (res.status < 200 || res.status >= 300) return { ok: false, message: `Le tracker a repondu ${res.status}.` };
+  return { ok: true, message: 'Cle acceptee.' };
+}
+
+/**
+ * DigitalCore. Son API rend un TABLEAU JSON sur une recherche authentifiee ; une cle
+ * refusee ne rend pas un tableau. On verifie donc la forme, pas seulement le code —
+ * un 200 accompagne d'une page de connexion ne doit pas passer pour un succes.
+ */
+async function testDigitalCore(cle: string): Promise<Verdict> {
+  const conf = getSettings().digitalcore;
+  if (!conf?.enabled) return { ok: false, message: 'DigitalCore desactive par l operateur.' };
+
+  const url = `${conf.url.replace(/\/+$/, '')}/api/v1/torrents?searchText=test&apikey=${encodeURIComponent(cle)}`;
+  const res = await httpGet<unknown>(url, {
+    timeoutMs: TIMEOUT,
+    retries: 0,
+    headers: { Accept: 'application/json' },
+  });
+
+  if (!res) return { ok: false, message: 'Tracker injoignable. Il est peut-etre hors ligne.' };
+  if (res.status === 401 || res.status === 403) return { ok: false, message: 'Cle refusee par le tracker.' };
+  if (res.status < 200 || res.status >= 300) return { ok: false, message: `Le tracker a repondu ${res.status}.` };
+  if (!Array.isArray(res.data)) return { ok: false, message: 'Reponse inattendue : la cle est probablement invalide.' };
+  return { ok: true, message: 'Cle acceptee.' };
+}
+
 async function testTorznab(indexeur: string, cle: string): Promise<Verdict> {
   const conf = getSettings().torznab[indexeur];
   if (!conf) return { ok: false, message: `Indexeur « ${indexeur} » inconnu.` };
@@ -180,6 +226,10 @@ export async function tester(service: string, cle: string): Promise<Verdict> {
       case 'c411':
       case 'tr4ker':
         return await testTorznab(service, cle);
+      case 'g3mini':
+        return await testUnit3d(service, cle);
+      case 'dcore':
+        return await testDigitalCore(cle);
       default:
         return { ok: false, message: `Service « ${service} » inconnu.` };
     }

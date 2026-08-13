@@ -28,6 +28,10 @@ export interface UserConfig {
   c411?: string;
   /** Cle Torznab Tr4ker. */
   tr4ker?: string;
+  /** Cle API G3mini (tracker UNIT3D). */
+  g3mini?: string;
+  /** Cle API DigitalCore. */
+  dcore?: string;
   /** Cle TMDB (optionnelle : enrichit en FR, sinon on sert Cinemeta + KissKH). */
   tmdb?: string;
   /** Langues de sous-titres, ISO 639-2, par ordre de preference. */
@@ -88,7 +92,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   subsSurFlux: true,
 };
 
-const KEY_FIELDS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const;
+const KEY_FIELDS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore'] as const;
 
 function asStringArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;

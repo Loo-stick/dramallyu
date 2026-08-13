@@ -26,6 +26,10 @@ export interface Settings {
   /** Nombre maximum de flux renvoyes, toutes sources confondues. */
   maxStreams: number;
   torznab: Record<string, TorznabIndexerSettings>;
+  /** Trackers UNIT3D (G3mini...). Meme forme que Torznab : l'adresse est a
+   *  l'operateur, la cle reste a l'utilisateur. */
+  unit3d: Record<string, { enabled: boolean; url: string }>;
+  digitalcore: { enabled: boolean; url: string };
 }
 
 const DEFAULTS: Settings = {
@@ -36,6 +40,8 @@ const DEFAULTS: Settings = {
     c411: true,
     tr4ker: true,
     zonetelechargement: true,
+    g3mini: true,
+    digitalcore: true,
     // Wawacity publie beaucoup sur des hebergeurs qu'AllDebrid ne prend pas (Uploady,
     // DailyUploads, Nitroflare) mais que TorBox prend. Le tri se fait desormais sur la
     // liste que chaque service publie, et non sur une liste ecrite a la main.
@@ -53,6 +59,13 @@ const DEFAULTS: Settings = {
     // suffit a le faire revenir : une entree dans cette table, une ligne dans
     // torznabSources(), un champ dans la page de configuration.
   },
+  // Trackers PRIVES : sans cle personnelle ils ne repondent pas, et l'operateur n'en
+  // fournit aucune. Actives par defaut ne coute donc rien a qui n'a pas de compte —
+  // la source est simplement ignoree dans son fan-out.
+  unit3d: {
+    g3mini: { enabled: true, url: 'https://gemini-tracker.org' },
+  },
+  digitalcore: { enabled: true, url: 'https://digitalcore.club' },
 };
 
 const store = makeEndpointConfig<Record<string, unknown>>(
@@ -71,6 +84,8 @@ export function getSettings(): Settings {
     fanoutBudgetMs: clamp(Number(raw.fanoutBudgetMs) || DEFAULTS.fanoutBudgetMs, 2000, 20000),
     maxStreams: clamp(Number(raw.maxStreams) || DEFAULTS.maxStreams, 5, 300),
     torznab: { ...DEFAULTS.torznab, ...(raw.torznab || {}) },
+    unit3d: { ...DEFAULTS.unit3d, ...(raw.unit3d || {}) },
+    digitalcore: { ...DEFAULTS.digitalcore, ...(raw.digitalcore || {}) },
   };
 }
 

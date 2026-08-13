@@ -175,3 +175,11 @@ test('chaque langue proposee a un libelle lisible', () => {
   assert.equal(nomLangue('xyz'), 'XYZ');
   assert.notEqual(nomLangue(''), undefined);
 });
+
+test('les cles des nouveaux trackers survivent a l aller-retour', () => {
+  // Le defaut a deja ete vecu : une cle absente de la liste blanche de l'encodeur est
+  // silencieusement perdue, et la source reste muette sans que rien ne le signale.
+  const cfg = parseConfig(encodeConfig({ g3mini: 'cle-g3', dcore: 'cle-dc' }));
+  assert.equal(cfg.g3mini, 'cle-g3');
+  assert.equal(cfg.dcore, 'cle-dc');
+});

@@ -37,6 +37,8 @@ import { demarrerDomainSync, synchroniserMaintenant, dernierEtat } from './core/
 import { voirdramaSource } from './sources/direct/voirdrama';
 import { nyaaSource } from './sources/torrent/nyaa';
 import { torznabSources } from './sources/torrent/torznab';
+import { makeUnit3dSource } from './sources/torrent/unit3d';
+import { digitalcoreSource } from './sources/torrent/digitalcore';
 import { zoneTelechargementSource } from './sources/ddl/zonetelechargement';
 import { wawacitySource } from './sources/ddl/wawacity';
 
@@ -53,6 +55,8 @@ register(
   voirdramaSource,
   nyaaSource,
   ...torznabSources(),
+  makeUnit3dSource('g3mini', 'G3mini', 'g3mini'),
+  digitalcoreSource,
   zoneTelechargementSource,
   wawacitySource,
 );
