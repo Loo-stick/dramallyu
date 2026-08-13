@@ -9,8 +9,9 @@ import type { Candidate, Query, SearchContext, Source, SubTrack } from '../../ty
 import { drama, episodeSubs, episodeVideo, search, type KkDrama, type KkSearchItem } from './client';
 import { bestMatch, seasonInTitle } from '../../../core/matching';
 import { normalizeLangCode } from '../../../core/config';
-import { getText } from '../../../core/http';
+import { getText, BROWSER_HEADERS } from '../../../core/http';
 import { cached } from '../../../core/cache';
+import { dimensionsDepuisTs, qualiteDepuis, type Dimensions } from '../../../core/h264';
 
 export const SOURCE_ID = 'kisskh';
 
@@ -95,13 +96,50 @@ async function probeQuality(hlsUrl: string, ctx: SearchContext): Promise<string>
     const height = Number(m[2]);
     if (height > best) best = height;
   }
-  if (best >= 2000) return '4K';
-  if (best >= 1000) return '1080p';
-  if (best >= 700) return '720p';
-  if (best >= 500) return '576p';
-  if (best >= 400) return '480p';
-  if (best > 0) return '360p';
-  return 'HD';
+  if (best > 0) return qualiteDepuis({ width: Math.round((best * 16) / 9), height: best });
+
+  // Aucune variante annoncee : c'est le cas de KissKH, dont la playlist ne liste que
+  // des segments. On lit alors la resolution DANS le flux (cf. core/h264.ts).
+  return (await mesurerDansLeFlux(body, ctx)) ?? 'HD';
+}
+
+/**
+ * Resolution lue dans le premier segment, quand la playlist ne l'annonce pas.
+ *
+ * Une requete Range de 128 Ko suffit a atteindre le SPS : ni telechargement de la
+ * video, ni ffmpeg. Le resultat est vrai pour toujours sur un episode donne — d'ou un
+ * cache de 24 h, la ou la playlist elle-meme n'est gardee que 30 min (ses URL signees
+ * expirent, pas les dimensions de l'image).
+ */
+async function mesurerDansLeFlux(playlist: string, ctx: SearchContext): Promise<string | null> {
+  const segment = playlist.split('\n').find((l) => l.startsWith('http'))?.trim();
+  if (!segment) return null;
+
+  // Cle stable : les URL de segment portent un jeton qui change a chaque resolution.
+  // Sans ce nettoyage, chaque requete creerait une entree de cache neuve et on
+  // retelechargerait 128 Ko a chaque fois — exactement ce qu'on cherche a eviter.
+  const cle = segment.split('?')[0];
+
+  const dims = await cached<Dimensions | null>(
+    `kisskh:dims:${cle}`,
+    24 * 60 * 60 * 1000,
+    async () => {
+      if (ctx.deadline.remainingMs() < 2500) return null;
+      try {
+        const res = await fetch(segment, {
+          headers: { ...BROWSER_HEADERS, Range: 'bytes=0-131071' },
+          signal: ctx.deadline.signal,
+        });
+        if (!res.ok) return null;
+        return dimensionsDepuisTs(Buffer.from(await res.arrayBuffer()));
+      } catch {
+        return null;
+      }
+    },
+    { scope: 'kisskh', shouldCache: (v) => v !== null, negativeTtlMs: 30 * 60 * 1000 },
+  );
+
+  return dims ? qualiteDepuis(dims) : null;
 }
 
 /** Pistes de sous-titres KissKH, converties en ISO 639-2 et FR en tete. */
