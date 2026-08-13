@@ -71,30 +71,36 @@ export interface FormatOptions {
   playUrl?: string;
   /** Vrai si la lecture passera par un debrideur (affiche le rappel a l'utilisateur). */
   viaDebrid?: boolean;
-  /** Nom du debrideur qui servira ce flux. */
-  debridName?: string;
+  /** Debrideur qui servira reellement ce flux. */
+  debrid?: 'alldebrid' | 'torbox';
   /**
    * Etat du cache : vrai = pret a lire, faux = a telecharger,
-   * `undefined` = ON NE SAIT PAS.
-   *
-   * Les trois cas sont distincts et le troisieme est frequent : AllDebrid n'expose
-   * plus d'API de disponibilite. Confondre « inconnu » et « non cache » decouragerait
-   * a tort des flux parfaitement jouables ; l'inverse promettrait une lecture
-   * immediate qui echouerait.
+   * `undefined` = ON NE SAIT PAS (typiquement un lien DDL, dont la disponibilite ne
+   * se verifie pas a l'avance). Les trois cas restent distincts : promettre une
+   * lecture immediate qui echoue, ou decourager un flux jouable, sont deux erreurs
+   * symetriques.
    */
   cached?: boolean;
 }
 
-/** Marqueur de disponibilite : symbole ET mot, jamais une couleur seule. */
-function marqueurCache(cached: boolean | undefined): string | null {
-  if (cached === true) return '⚡ pret';
-  if (cached === false) return '⏳ a debrider';
-  return null;
-}
-
-/** Coupe un nom de fichier trop long sans le rendre illisible. */
-function tronquer(texte: string, max = 46): string {
-  return texte.length <= max ? texte : `${texte.slice(0, max - 1)}…`;
+/**
+ * Etiquette de tete : d'ou sortira le flux, et s'il part tout de suite.
+ *
+ * Le ⚡ ne vit QU'ICI. Il servait aussi de puce decorative en tete de la ligne
+ * technique, alors qu'il a un sens etabli chez les addons de streaming — « en
+ * cache, demarre immediatement ». Le montrer a deux endroits pour deux raisons
+ * differentes le vidait de son sens.
+ *
+ *   [TB ⚡]  TorBox, fichier deja pret
+ *   [AD ⏳]  AllDebrid, telechargement a lancer
+ *   [▶ ⚡]   lecture directe, aucun debrideur en jeu
+ */
+function badge(opts: FormatOptions, kind: Candidate['kind']): string {
+  if (kind === 'direct') return '[▶ ⚡] ';
+  const service = opts.debrid === 'torbox' ? 'TB' : opts.debrid === 'alldebrid' ? 'AD' : null;
+  if (!service) return '';
+  const etat = opts.cached === true ? ' ⚡' : opts.cached === false ? ' ⏳' : '';
+  return `[${service}${etat}] `;
 }
 
 /** Assemble une ligne en sautant les segments inconnus, sans laisser de « • » orphelin. */
@@ -132,41 +138,29 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
 
   const lignes: string[] = [];
 
-  // Ligne 1 — la technique video, du plus decisif au plus accessoire, terminee par
-  // l'endroit d'ou le fichier sortira reellement : l'hebergeur pour du DDL, le
-  // debrideur pour un torrent, la plateforme pour un flux direct.
-  const destination =
-    candidate.kind === 'ddl'
-      ? candidate.ddlHost
-      : candidate.kind === 'torrent'
-        ? opts.debridName
-        : source;
-  lignes.push(
-    ligne('⚡ ', [quality, details.source, details.hdr, destination]) ?? `⚡ ${quality}`,
-  );
+  // Ligne 1 — la technique video, du plus decisif au plus accessoire.
+  // Seul l'hebergeur DDL termine cette ligne : le debrideur et la disponibilite sont
+  // deja dans l'etiquette de tete, les repeter ici serait du bruit.
+  const destination = candidate.kind === 'ddl' ? candidate.ddlHost : null;
+  lignes.push(ligne('🎞️ ', [quality, details.source, details.hdr, destination]) ?? `🎞️ ${quality}`);
 
-  // Ligne 2 — la disponibilite quand elle est CONNUE. C'est l'information qui decide
-  // si le flux se lance tout de suite ou pas du tout : elle merite sa propre ligne.
-  const dispo = marqueurCache(opts.cached);
-  if (dispo) lignes.push(dispo);
-
-  // Ligne 3 — langue, poids, provenance. La source n'est repetee que si elle differe
-  // de la destination : sur un flux direct les deux sont identiques, et « VoirDrama •
-  // VoirDrama » n'apprend rien a personne.
+  // Ligne 2 — langue, poids, provenance : le trio qu'on compare entre deux entrees.
   const l2 = ligne('', [
     languageLabel(candidate.language),
     size ? `💾 ${size}` : null,
     candidate.seeders !== undefined ? `👤 ${candidate.seeders}` : null,
-    destination === source ? null : source,
+    source,
   ]);
   if (l2) lignes.push(l2);
 
-  // Ligne 4 — codecs et team. Absente sur les sources directes, qui n'en disent rien :
+  // Ligne 3 — codecs et team. Absente sur les sources directes, qui n'en disent rien :
   // mieux vaut une ligne en moins qu'une ligne vide.
   const l3 = ligne('🎧 ', [details.video, details.audio, details.team]);
   if (l3) lignes.push(l3);
 
-  // Ligne 5 — le nom de fichier, seul juge de paix quand deux entrees se ressemblent.
+  // Ligne 4 — le nom de release, EN ENTIER. Il est souvent long, mais c'est le seul
+  // juge de paix quand deux entrees se ressemblent : le tronquer coupe justement la
+  // fin, la ou vivent le codec et la team qui les distinguent.
   // Omise quand le titre n'est qu'un libelle fabrique par la source (« VoirDrama -
   // voe ») : repeter le nom de la source sous une icone de fichier ne renseigne pas,
   // ca occupe juste une ligne.
@@ -174,7 +168,7 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
   // le motif d'episode (« s01e09 ») qui sert au debrideur a choisir dans un pack.
   // L'afficher donnait une ligne « 🗂️ s01e09 », qui n'apprend rien.
   const estLibelleFabrique = candidate.title.toLowerCase().startsWith(source.toLowerCase());
-  if (!estLibelleFabrique) lignes.push(`🗂️ ${tronquer(candidate.title)}`);
+  if (!estLibelleFabrique) lignes.push(`🗂️ ${candidate.title}`);
 
   if (candidate.subs && candidate.subs.length > 0) {
     const avecFr = candidate.subs.some((s) => s.lang === 'fre');
@@ -182,7 +176,7 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
   }
 
   const stream: StremioStream = {
-    name: ADDON_LABEL,
+    name: `${badge(opts, candidate.kind)}${ADDON_LABEL}`,
     description: lignes.join('\n'),
     behaviorHints: {
       // Le bingeGroup permet la lecture automatique de l'episode suivant en gardant

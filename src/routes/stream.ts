@@ -13,7 +13,8 @@ import { compareStreams, langOrderFromSubs, passesPreferences } from '../core/pr
 import { toStremioStream, type StremioStream } from '../core/display';
 import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
-import { cacheStatus } from '../debrid/resolver';
+import { cacheParService, type NomDebrid } from '../debrid/resolver';
+import { isRedirector } from '../debrid/alldebrid';
 import { throughMediaflow } from '../core/mediaflow';
 import type { Candidate, MediaType, Query } from '../sources/types';
 
@@ -104,15 +105,30 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // budget. AllDebrid n'expose plus rien d'equivalent — ses entrees restent donc
     // marquees « a debrider », sans jamais affirmer une disponibilite inconnue.
     const hashes = retenus.map((c) => c.infoHash).filter((h): h is string => Boolean(h));
-    const enCache = hashes.length > 0 ? await cacheStatus(hashes, config) : new Map<string, boolean>();
-    const estEnCache = (c: Candidate): boolean | undefined =>
-      c.infoHash ? enCache.get(c.infoHash.toLowerCase()) : undefined;
+    const enCache =
+      hashes.length > 0 ? await cacheParService(hashes, config) : new Map<string, NomDebrid[]>();
+
+    /** Le debrideur qui servira REELLEMENT ce flux, et s'il l'a deja. */
+    const servirPar = (c: Candidate): { service?: NomDebrid; pret?: boolean } => {
+      if (c.kind === 'direct') return {};
+      const detenteurs = c.infoHash ? enCache.get(c.infoHash.toLowerCase()) : undefined;
+      // Le premier detenteur suit l'ordre de `servicesFor`, donc celui que la
+      // resolution empruntera : l'etiquette ne peut pas mentir sur le service.
+      if (detenteurs && detenteurs.length > 0) return { service: detenteurs[0], pret: true };
+      // Un lien DDL derriere un redirecteur ne peut etre traverse que par AllDebrid :
+      // annoncer TorBox serait faux, meme s'il est configure.
+      const redirige = c.kind === 'ddl' && c.ddlUrl ? isRedirector(c.ddlUrl) : false;
+      const defaut: NomDebrid | undefined =
+        redirige && config.ad ? 'alldebrid' : config.tb ? 'torbox' : config.ad ? 'alldebrid' : undefined;
+      // Sans hash (DDL), la disponibilite ne se verifie pas : on n'affirme rien.
+      return { service: defaut, pret: c.infoHash ? false : undefined };
+    };
 
     const kept = retenus
       .sort((a, b) => {
         // Ce qui est pret passe DEVANT tout le reste : un flux injouable en tete de
         // liste, si bien classe soit-il par langue, ne sert a personne.
-        const rang = (c: Candidate): number => (estEnCache(c) === true ? 0 : 1);
+        const rang = (c: Candidate): number => (servirPar(c).pret === true ? 0 : 1);
         return rang(a) - rang(b) || compareStreams(a, b, { langOrder, sortBy: config.sortBy });
       })
       .slice(0, Math.min(config.maxResults, settings.maxStreams));
@@ -148,11 +164,12 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         ad: config.ad,
         tb: config.tb,
       });
+      const { service, pret } = servirPar(c);
       return toStremioStream(c, {
         playUrl: `${base}/resolve/${token}`,
         viaDebrid: true,
-        debridName: config.tb ? 'TorBox' : 'AllDebrid',
-        cached: estEnCache(c),
+        debrid: service,
+        cached: pret,
       });
     });
 

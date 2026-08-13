@@ -6,7 +6,7 @@
 
 import type { DebridService } from './types';
 import { extractHash } from './types';
-import { allDebrid } from './alldebrid';
+import { allDebrid, isRedirector } from './alldebrid';
 import { torbox } from './torbox';
 import { episodeHint } from './types';
 import { throughMediaflow } from '../core/mediaflow';
@@ -35,13 +35,6 @@ export interface ResolveRequest {
   tb?: string;
 }
 
-/**
- * Resout et rend un lien jouable, ou null.
- *
- * Le routage final applique la regle du projet : ce qui vient d'AllDebrid repart par
- * MediaFlow (compte partage, protection multi-IP), ce qui vient de TorBox part en
- * direct.
- */
 /**
  * Ordonne les services pour un torrent donne, en interrogeant d'abord ceux qui savent
  * repondre sur le cache.
@@ -82,6 +75,13 @@ async function ordonnerPourTorrent(
   return [...enCache, ...inconnu, ...absent];
 }
 
+/**
+ * Resout et rend un lien jouable, ou null.
+ *
+ * Le routage final applique la regle du projet : ce qui vient d'AllDebrid repart par
+ * MediaFlow (compte partage, protection multi-IP), ce qui vient de TorBox part en
+ * direct.
+ */
 export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promise<string | null> {
   let services = servicesFor({ ad: req.ad, tb: req.tb } as UserConfig);
   if (services.length === 0) return null;
@@ -89,6 +89,12 @@ export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promis
   if (req.kind === 'torrent') {
     const hash = extractHash(req.value);
     if (hash) services = await ordonnerPourTorrent(services, hash, signal);
+  } else if (isRedirector(req.value)) {
+    // Un lien DDL francais est presque toujours derriere un redirecteur (dl-protect,
+    // zoneurs). Seul AllDebrid sait les traverser, via /link/redirector : le placer
+    // en tete evite d'essayer TorBox pour rien, qui echouerait sur la page
+    // intermediaire.
+    services = [...services].sort((a, b) => (a.name === 'alldebrid' ? -1 : b.name === 'alldebrid' ? 1 : 0));
   }
 
   for (const service of services) {
@@ -106,28 +112,35 @@ export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promis
   return null;
 }
 
+export type NomDebrid = 'alldebrid' | 'torbox';
+
 /**
- * Etat de cache d'un lot de hashes, pour l'affichage.
+ * Qui, parmi les debrideurs de l'utilisateur, a deja ce fichier.
  *
- * Un hash absent de la carte signifie « on ne sait pas » — pas « non cache ». La
- * nuance compte : AllDebrid ne repond jamais, et afficher « non cache » a sa place
- * decouragerait a tort des flux parfaitement jouables.
+ * On garde le detail PAR SERVICE plutot qu'un simple oui/non : c'est ce qui permet
+ * d'annoncer le bon debrideur sur chaque flux au lieu de le deviner. Et l'ordre
+ * suivi ici est celui de `servicesFor`, donc le meme que celui de la resolution —
+ * l'etiquette affichee correspond bien au service qui servira le fichier.
  */
-export async function cacheStatus(
+export async function cacheParService(
   hashes: string[],
   config: UserConfig,
   signal?: AbortSignal,
-): Promise<Map<string, boolean>> {
-  const merged = new Map<string, boolean>();
+): Promise<Map<string, NomDebrid[]>> {
+  const parHash = new Map<string, NomDebrid[]>();
+
   for (const service of servicesFor(config)) {
     if (!service.supportsCacheCheck) continue;
     try {
       for (const [hash, cached] of await service.checkCached(hashes, signal)) {
-        if (cached || !merged.has(hash)) merged.set(hash, cached);
+        if (!cached) continue;
+        const liste = parHash.get(hash) ?? [];
+        liste.push(service.name);
+        parHash.set(hash, liste);
       }
     } catch {
       // Un check-cache en echec ne doit pas empecher d'afficher les flux.
     }
   }
-  return merged;
+  return parHash;
 }

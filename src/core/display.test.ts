@@ -18,14 +18,14 @@ function torrent(over: Partial<Candidate> = {}): Candidate {
 }
 
 test('les quatre lignes sont produites dans l ordre attendu', () => {
-  const s = toStremioStream(torrent(), { playUrl: 'https://x/resolve/t', viaDebrid: true, debridName: 'TorBox' });
+  const s = toStremioStream(torrent(), { playUrl: 'https://x/resolve/t', viaDebrid: true, debrid: 'torbox', cached: true });
   const l = s.description.split('\n');
 
-  assert.equal(s.name, 'Dramallyu');
-  assert.ok(l[0].startsWith('⚡ 4K'), l[0]);
+  assert.equal(s.name, '[TB ⚡] Dramallyu');
+  assert.ok(l[0].startsWith('🎞️ 4K'), l[0]);
   assert.ok(l[0].includes('REMUX'), 'la source doit apparaitre');
   assert.ok(l[0].includes('HDR10'));
-  assert.ok(l[0].includes('TorBox'), 'la ligne 1 se termine par la destination reelle');
+  assert.equal(s.name, '[TB ⚡] Dramallyu', 'le debrideur est dans l etiquette, pas dans la ligne 1');
   assert.ok(l[1].includes('🌐 MULTI') && l[1].includes('💾') && l[1].includes('👤 42'));
   assert.ok(l[2].includes('HEVC') && l[2].includes('TrueHD Atmos') && l[2].includes('FraMeSToR'));
   assert.ok(l[3].startsWith('🗂️'));
@@ -66,7 +66,7 @@ test('une source directe n affiche pas de ligne codecs vide', () => {
   const s = toStremioStream(direct, { playUrl: 'https://x/master.m3u8' });
   const l = s.description.split('\n');
   assert.ok(!l.some((x) => x === '🎧 '), 'pas de ligne codecs vide');
-  assert.ok(l[0].includes('KissKH'));
+  assert.ok(l[1].includes('KissKH'), 'la source figure sur la ligne langue/provenance');
   assert.ok(s.description.includes('💬 2 sous-titres dont FR'));
 });
 
@@ -81,7 +81,7 @@ test('un DDL montre son hebergeur en fin de premiere ligne', () => {
     ddlUrl: 'https://dl-protect.link/x',
     ddlHost: 'Rapidgator',
   };
-  const s = toStremioStream(ddl, { playUrl: 'https://x/resolve/t', viaDebrid: true, debridName: 'AllDebrid' });
+  const s = toStremioStream(ddl, { playUrl: 'https://x/resolve/t', viaDebrid: true, debrid: 'alldebrid' });
   assert.ok(s.description.split('\n')[0].includes('Rapidgator'));
   assert.ok(s.description.includes('Wawacity'));
 });
@@ -96,11 +96,13 @@ test('la ligne fichier montre la release, pas le motif d episode', () => {
   assert.ok(s.behaviorHints?.filename?.startsWith('Dune'), 'AIOStreams doit recevoir la release');
 });
 
-test('un nom de fichier tres long est tronque', () => {
+test('le nom de release est affiche EN ENTIER, jamais tronque', () => {
+  // Tronquer coupe la fin — exactement la ou vivent le codec et la team qui
+  // distinguent deux entrees par ailleurs identiques.
   const s = toStremioStream(torrent(), {});
   const ligneFichier = s.description.split('\n').find((l) => l.startsWith('🗂️'))!;
-  assert.ok(ligneFichier.length < 60);
-  assert.ok(ligneFichier.endsWith('…'));
+  assert.ok(!ligneFichier.includes('…'));
+  assert.ok(ligneFichier.endsWith('FraMeSToR'), ligneFichier);
 });
 
 test('les tailles sont lisibles', () => {
@@ -113,7 +115,7 @@ test('une qualite non mesuree est affichee telle quelle, pas promue en 1080p', (
   // normalizeQuality traduit « HD » en « 1080p » pour le TRI. L'afficher promettrait
   // une resolution qu'on ne connait pas.
   const s = toStremioStream(torrent({ title: 'Drama S01E01 HD', quality: 'HD' }), {});
-  assert.ok(s.description.startsWith('⚡ HD'), s.description.split('\n')[0]);
+  assert.ok(s.description.startsWith('🎞️ HD'), s.description.split('\n')[0]);
   assert.ok(!s.description.includes('1080p'));
 });
 
@@ -127,16 +129,25 @@ test('une source directe ne se repete pas sur deux lignes', () => {
   assert.ok(!s.description.includes('🗂️'), 'pas de ligne fichier pour un libelle fabrique');
 });
 
-test('la disponibilite distingue pret, a debrider, et inconnu', () => {
-  // Les trois cas sont distincts : AllDebrid ne sait pas repondre, et confondre
-  // « inconnu » avec « non cache » decouragerait des flux jouables.
-  const pret = toStremioStream(torrent(), { cached: true, debridName: 'TorBox' });
-  assert.ok(pret.description.includes('⚡ pret'));
+test('l etiquette de tete nomme le debrideur et son etat', () => {
+  assert.equal(toStremioStream(torrent(), { cached: true, debrid: 'torbox' }).name, '[TB ⚡] Dramallyu');
+  assert.equal(toStremioStream(torrent(), { cached: false, debrid: 'torbox' }).name, '[TB ⏳] Dramallyu');
+  assert.equal(toStremioStream(torrent(), { cached: true, debrid: 'alldebrid' }).name, '[AD ⚡] Dramallyu');
+  // Disponibilite inconnue (un lien DDL) : on nomme le service sans rien promettre.
+  assert.equal(toStremioStream(torrent(), { debrid: 'alldebrid' }).name, '[AD] Dramallyu');
+});
 
-  const aFaire = toStremioStream(torrent(), { cached: false, debridName: 'TorBox' });
-  assert.ok(aFaire.description.includes('⏳ a debrider'));
+test('un flux direct porte sa propre etiquette, sans debrideur', () => {
+  const direct = toStremioStream(
+    { sourceId: 'kisskh', kind: 'direct', title: 'Squid Game', quality: '1080p', language: 'VOSTFR', directUrl: 'https://x' },
+    {},
+  );
+  assert.equal(direct.name, '[▶ ⚡] Dramallyu');
+});
 
-  const inconnu = toStremioStream(torrent(), { debridName: 'AllDebrid' });
-  assert.ok(!inconnu.description.includes('pret'));
-  assert.ok(!inconnu.description.includes('debrider'));
+test('le ⚡ n apparait QU UNE fois, dans l etiquette', () => {
+  // Il servait aussi de puce en tete de la ligne technique, ce qui le vidait de son
+  // sens : chez les addons de streaming, ⚡ veut dire « en cache ».
+  const s = toStremioStream(torrent(), { cached: true, debrid: 'torbox' });
+  assert.equal((s.name + s.description).split('⚡').length - 1, 1);
 });
