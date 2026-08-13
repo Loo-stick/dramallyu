@@ -107,6 +107,12 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
 
     const settings = getSettings();
     const langOrder = langOrderFromSubs(config.subLangs);
+
+    // Episodes de la saison demandee. Sert AU FILTRE (juger un pack a l'episode) comme
+    // a l'AFFICHAGE (annoncer le poids d'un episode) : declare une seule fois, tot,
+    // pour que les deux disent la meme chose.
+    const episodesSaison =
+      parsed.season !== undefined ? work.episodesParSaison?.[parsed.season] : undefined;
     const deduplique = dedupe(candidates);
 
     // ETAT DU CACHE, avant le tri.
@@ -209,6 +215,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       maxResolution: config.maxResolution,
       minSource: config.minSource,
       maxSizeGb: config.maxSizeGb,
+      episodesSaison: episodesSaison,
       excludeFormats: config.excludeFormats,
       excludeCam: config.excludeCam,
     };
@@ -248,6 +255,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       saison: parsed.season,
       episode: parsed.episode,
       titreOeuvre: work.titles[0],
+      episodesSaison,
     };
 
     /**

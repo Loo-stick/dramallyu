@@ -227,3 +227,34 @@ test('l affichage n est pas touche par la fabrication du filename', () => {
   assert.match(s.description, /🎞️ 1080p/);
   assert.match(s.behaviorHints!.bingeGroup!, /^dramallyu-kisskh-1080p-VOSTFR$/);
 });
+
+test('un pack et un fichier ne portent pas le meme pictogramme', () => {
+  // Deux choses differentes, et la confusion coute cher : un pack de 23 Go effraie a
+  // juste titre si on croit devoir le telecharger, alors qu'on n'en lit qu'un episode.
+  const pack = toStremioStream(
+    { sourceId: 'darkpeers', kind: 'torrent', title: 'Squid.Game.S01.1080p.NF.WEB-DL-TEAM',
+      quality: '1080p', language: 'MULTI', sizeBytes: 23 * 1024 ** 3, infoHash: 'a'.repeat(40) },
+    { playUrl: 'http://x/r', saison: 1, episode: 1, episodesSaison: 9, annee: 2021, titreOeuvre: 'Squid Game' },
+  );
+  assert.match(pack.description, /📦 Squid\.Game\.S01/);
+  assert.match(pack.description, /📄 S01E01 extrait du pack/);
+  assert.match(pack.description, /≈ 2\.6 Go l episode|≈ 2\.6 Go l'episode/);
+
+  const episode = toStremioStream(
+    { sourceId: 'c411', kind: 'torrent', title: 'Squid.Game.S01E01.1080p.WEB-DL-TEAM',
+      quality: '1080p', language: 'MULTI', sizeBytes: 3 * 1024 ** 3, infoHash: 'b'.repeat(40) },
+    { playUrl: 'http://x/r', saison: 1, episode: 1, episodesSaison: 9 },
+  );
+  assert.match(episode.description, /🗂️ Squid\.Game\.S01E01/);
+  assert.doesNotMatch(episode.description, /📦|extrait du pack/);
+});
+
+test('sans compte d episodes, on annonce le pack sans inventer un poids', () => {
+  const pack = toStremioStream(
+    { sourceId: 'darkpeers', kind: 'torrent', title: 'Drama.S01.COMPLETE.1080p',
+      quality: '1080p', language: 'VOSTFR', sizeBytes: 30 * 1024 ** 3, infoHash: 'c'.repeat(40) },
+    { playUrl: 'http://x/r', saison: 1, episode: 3 },
+  );
+  assert.match(pack.description, /📄 S01E03 extrait du pack/);
+  assert.doesNotMatch(pack.description, /≈/, 'aucun poids par episode sans le compte');
+});

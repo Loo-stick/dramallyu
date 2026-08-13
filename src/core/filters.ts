@@ -11,7 +11,7 @@
 // comprendre pourquoi sa liste s'est videe.
 
 import type { Candidate } from '../sources/types';
-import { releaseDetails } from '../sources/torrent/release';
+import { releaseDetails, parseRelease } from '../sources/torrent/release';
 import { normalizeQuality, isUnknownQuality, normalizeLanguage } from './prefs';
 
 /** Echelle des resolutions. Sert aux bornes minimale et maximale. */
@@ -98,6 +98,15 @@ export interface Filtres {
   minSource: string;
   /** Taille maximale en gigaoctets. 0 = pas de limite. */
   maxSizeGb: number;
+  /**
+   * Nombre d'episodes de la saison demandee, quand on le connait.
+   *
+   * Un plafond de taille vise le fichier qu'on va LIRE. Sur un pack, le poids annonce
+   * est celui du dossier entier : juger « Squid Game S01 » (23 Go) contre un plafond
+   * de 10 Go supprimait une release dont chaque episode pese 2,6 Go — soit tres en
+   * dessous de ce que l'utilisateur a demande. On divise donc par le compte.
+   */
+  episodesSaison?: number;
   /** Formats a retirer (table ci-dessus, ou texte libre). */
   excludeFormats: string[];
   /** Retirer les captations en salle. */
@@ -151,7 +160,7 @@ export function passeFiltres(etat: EtatFlux, f: Filtres): boolean {
   }
 
   if (f.maxSizeGb > 0 && c.sizeBytes) {
-    if (c.sizeBytes > f.maxSizeGb * 1024 ** 3) return false;
+    if (tailleJugee(c, f.episodesSaison) > f.maxSizeGb * 1024 ** 3) return false;
   }
 
   for (const format of f.excludeFormats) {
@@ -159,6 +168,23 @@ export function passeFiltres(etat: EtatFlux, f: Filtres): boolean {
   }
 
   return true;
+}
+
+/**
+ * Poids a comparer au plafond de l'utilisateur.
+ *
+ * Sur un pack dont on connait le nombre d'episodes, c'est le poids d'UN episode : le
+ * debrideur n'ouvre que ce fichier, les autres ne sont jamais telecharges.
+ *
+ * Sans ce compte, on rend le poids brut plutot que de deviner. Regle constante du
+ * projet : on ne coupe pas sur une information qu'on n'a pas — mais ici l'inconnu
+ * penche du cote severe, alors on prefere laisser passer, cf. `passeFiltres`.
+ */
+export function tailleJugee(c: Candidate, episodesSaison?: number): number {
+  const brut = c.sizeBytes ?? 0;
+  if (!parseRelease(c.title).isPack) return brut;
+  if (!episodesSaison || episodesSaison < 2) return brut;
+  return brut / episodesSaison;
 }
 
 export type TriPar = 'language' | 'quality' | 'size';

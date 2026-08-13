@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { passeFiltres, comparer, estCam, contientFormat, rangResolution, rangSource } from './filters';
+import { passeFiltres, comparer, estCam, contientFormat, rangResolution, rangSource, tailleJugee } from './filters';
 import type { Filtres, EtatFlux, OptionsTri } from './filters';
 import type { Candidate } from '../sources/types';
 
@@ -170,4 +170,31 @@ test('avec la priorite « direct », KissKH est en tete de toute la liste', () =
   ];
   const trie = [...liste].sort((a, b) => comparer(a, b, { ...TRI, priorite: 'direct' }));
   assert.equal(trie[0].candidate.sourceId, 'kisskh');
+});
+
+test('un pack est juge au poids d UN episode, pas du dossier', () => {
+  // Vecu : « Squid Game S01 » (23 Go, 9 episodes) etait supprime par un plafond de
+  // 10 Go, alors que l'episode qu'on en tire pese 2,6 Go. Le debrideur n'ouvre que ce
+  // fichier — les huit autres ne sont jamais telecharges. Le plafond visait donc
+  // quelque chose que l'utilisateur ne lit jamais, et faisait perdre des sources
+  // entieres (DarkPeers ne publie QUE des packs).
+  const pack = flux({ title: 'Squid.Game.S01.1080p.NF.WEB-DL.x264-TEAM', sizeBytes: 23 * 1024 ** 3 });
+  const f = { ...NEUTRE, maxSizeGb: 10 };
+  assert.equal(passeFiltres(pack, f), false, 'sans le compte, le poids brut fait foi');
+  assert.equal(passeFiltres(pack, { ...f, episodesSaison: 9 }), true, '23 Go / 9 = 2,6 Go');
+  assert.equal(tailleJugee(pack.candidate, 9) / 1024 ** 3 < 3, true);
+});
+
+test('un episode unitaire reste juge sur son propre poids', () => {
+  const episode = flux({ title: 'Squid.Game.S01E01.1080p.WEB-DL.x264', sizeBytes: 12 * 1024 ** 3 });
+  assert.equal(passeFiltres(episode, { ...NEUTRE, maxSizeGb: 10, episodesSaison: 9 }), false);
+  assert.equal(tailleJugee(episode.candidate, 9), 12 * 1024 ** 3, 'aucune division sur un episode');
+});
+
+test('un compte d episodes absurde ne divise pas', () => {
+  // Une saison a 1 episode, ou un compte manquant, doit laisser le poids brut : diviser
+  // par 1 ne change rien, et diviser par 0 rendrait tout acceptable.
+  const pack = flux({ title: 'Drama.S01.COMPLETE.1080p', sizeBytes: 40 * 1024 ** 3 });
+  assert.equal(tailleJugee(pack.candidate, 1), 40 * 1024 ** 3);
+  assert.equal(tailleJugee(pack.candidate, undefined), 40 * 1024 ** 3);
 });

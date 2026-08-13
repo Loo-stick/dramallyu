@@ -34,6 +34,13 @@ export interface WorkInfo {
   kkhId?: string;
   poster?: string;
   description?: string;
+  /**
+   * Nombre d'episodes par saison, quand on le connait.
+   *
+   * Sert a juger un PACK a l'episode plutot qu'au dossier : un plafond de taille pose
+   * par l'utilisateur vise le fichier qu'il va lire, pas les neuf qui l'accompagnent.
+   */
+  episodesParSaison?: Record<number, number>;
 }
 
 interface CinemetaMeta {
@@ -45,6 +52,23 @@ interface CinemetaMeta {
   description?: string;
   imdb_id?: string;
   moviedb_id?: number;
+  videos?: { season?: number }[];
+}
+
+/**
+ * Episodes par saison, depuis la liste que Cinemeta livre avec la fiche.
+ *
+ * La saison 0 (bonus, specials) est ignoree : elle n'a pas de pack et fausserait le
+ * compte. Aucun appel supplementaire — l'information arrive dans la meme reponse.
+ */
+function compterEpisodes(videos?: { season?: number }[]): Record<number, number> | undefined {
+  if (!videos || videos.length === 0) return undefined;
+  const parSaison: Record<number, number> = {};
+  for (const v of videos) {
+    if (typeof v.season !== 'number' || v.season < 1) continue;
+    parSaison[v.season] = (parSaison[v.season] ?? 0) + 1;
+  }
+  return Object.keys(parSaison).length > 0 ? parSaison : undefined;
 }
 
 function yearOf(raw?: string): number | undefined {
@@ -67,7 +91,10 @@ async function fromCinemeta(
     // Sans ce numero, le nouveau code lit pendant une semaine des donnees a l'ancien
     // format, et se comporte comme s'il n'avait pas ete modifie. Constate en
     // production : Spider-Man repassait le filtre faute de pays memorise.
-    `cinemeta:v2:${stremioType}:${imdbId}`,
+    // v3 : la forme mise en cache a change (ajout du compte d'episodes). Une entree
+    // ecrite par la version precedente n'aurait pas ce champ et ferait juger les packs
+    // au dossier pendant sept jours, sans que rien ne le signale.
+    `cinemeta:v3:${stremioType}:${imdbId}`,
     META_TTL_MS,
     async () => {
       const data = await getJson<{ meta?: CinemetaMeta }>(
@@ -85,6 +112,7 @@ async function fromCinemeta(
         tmdbId: meta.moviedb_id ? String(meta.moviedb_id) : undefined,
         poster: meta.poster,
         description: meta.description,
+        episodesParSaison: compterEpisodes(meta.videos),
       };
     },
     { scope: 'cinemeta', shouldCache: (v) => v !== null, negativeTtlMs: 60 * 60 * 1000 },

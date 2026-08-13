@@ -15,7 +15,7 @@
 import type { Candidate } from '../sources/types';
 
 import { normalizeLanguage, normalizeQuality, isUnknownQuality } from './prefs';
-import { releaseDetails } from '../sources/torrent/release';
+import { releaseDetails, parseRelease } from '../sources/torrent/release';
 
 /**
  * Une piste attachee a un flux.
@@ -109,6 +109,8 @@ export interface FormatOptions {
   episode?: number;
   /** Titre canonique, sans mention de saison. */
   titreOeuvre?: string;
+  /** Episodes de la saison demandee : sert a annoncer le poids d'UN episode. */
+  episodesSaison?: number;
   /**
    * Etat du cache : vrai = pret a lire, faux = a telecharger,
    * `undefined` = ON NE SAIT PAS (typiquement un lien DDL, dont la disponibilite ne
@@ -137,6 +139,19 @@ function badge(opts: FormatOptions, kind: Candidate['kind']): string {
   if (!service) return '';
   const etat = opts.cached === true ? ' ⚡' : opts.cached === false ? ' ⏳' : '';
   return `[${service}${etat}] `;
+}
+
+/**
+ * Poids d'un episode dans un pack, quand les deux informations sont la.
+ *
+ * Le « ≈ » n'est pas une coquetterie : les episodes d'une saison n'ont pas tous le
+ * meme poids, et annoncer une valeur exacte serait faux. L'ordre de grandeur suffit a
+ * repondre a la seule question qui compte — est-ce que ca rentre dans mon plafond ?
+ */
+function poidsEpisode(total?: number, episodes?: number): string | null {
+  if (!total || !episodes || episodes < 2) return null;
+  const taille = formatSize(total / episodes);
+  return taille ? `≈ ${taille} l'episode` : null;
 }
 
 /** Assemble une ligne en sautant les segments inconnus, sans laisser de « • » orphelin. */
@@ -258,8 +273,22 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
   // On affiche le TITRE, pas `fileHint` : ce dernier n'est pas un nom de fichier mais
   // le motif d'episode (« s01e09 ») qui sert au debrideur a choisir dans un pack.
   // L'afficher donnait une ligne « 🗂️ s01e09 », qui n'apprend rien.
+  // PACK ou FICHIER : deux pictogrammes distincts, parce que ce sont deux choses
+  // differentes et que la confusion coute cher. Un pack de 23 Go effraie a juste titre
+  // si on croit devoir le telecharger — alors qu'on n'en lit qu'un episode.
+  //
+  // Le carton porte le nom du DOSSIER. La ligne suivante annonce l'episode qui en sera
+  // extrait. On n'affiche PAS un nom de fichier : il n'existe pas encore a cet
+  // instant, le debrideur n'ouvre le dossier qu'au moment du Play. Annoncer un nom
+  // qu'on ne connait pas serait une promesse en l'air.
+  const estPack = parseRelease(candidate.title).isPack;
   const estLibelleFabrique = candidate.title.toLowerCase().startsWith(source.toLowerCase());
-  if (!estLibelleFabrique) lignes.push(`🗂️ ${candidate.title}`);
+  if (!estLibelleFabrique) lignes.push(`${estPack ? '📦' : '🗂️'} ${candidate.title}`);
+  if (estPack && opts.saison !== undefined && opts.episode !== undefined) {
+    const cible = `S${String(opts.saison).padStart(2, '0')}E${String(opts.episode).padStart(2, '0')}`;
+    const part = poidsEpisode(candidate.sizeBytes, opts.episodesSaison);
+    lignes.push(`📄 ${cible} extrait du pack${part ? ` • ${part}` : ''}`);
+  }
 
   if (candidate.subs && candidate.subs.length > 0) {
     const avecFr = candidate.subs.some((s) => s.lang === 'fre');
