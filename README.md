@@ -99,7 +99,7 @@ interfaces : chaque etat porte un symbole et un mot.
 | Nyaa | analyseur valide sur le flux RSS reel |
 | C411 / Tr4ker / Ygg | implementes (Torznab) — **non verifiables sans compte** |
 | Zone-Telechargement | verifiee en reel — recherche DLE en POST, liens proteges zoneurs |
-| Wawacity | verifiee en reel sur **wawacity.estate** — 16 candidats VF et VOSTFR sur un episode, hebergeurs debridables uniquement |
+| Wawacity | verifiee en reel sur **wawacity.estate** (domaine suivi automatiquement) — 16 candidats VF et VOSTFR sur un episode, hebergeurs debridables uniquement |
 
 ## Synchronisation automatique des domaines
 
