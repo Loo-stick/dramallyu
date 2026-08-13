@@ -79,6 +79,78 @@ export function isRedirector(url: string): boolean {
   return REDIRECTORS.some((r) => bas.includes(r));
 }
 
+export interface InfoLien {
+  /** Taille reelle du fichier, quand l'hebergeur l'annonce. */
+  taille?: number;
+  /** Le fichier n'existe plus chez l'hebergeur. */
+  mort: boolean;
+  /** AllDebrid ne sait pas traiter cet hote — n'apprend RIEN sur le fichier. */
+  hoteInconnu: boolean;
+}
+
+/**
+ * Etat de plusieurs liens d'hebergeur, EN UNE SEULE REQUETE.
+ *
+ * `link/infos` accepte un lot de `link[]` et rend un verdict par lien. C'est ce qui
+ * permet de savoir avant de proposer un flux si le fichier existe encore — mesure
+ * faite sur un episode : 6 liens DDL sur 22 etaient deja morts, et l'addon les
+ * proposait quand meme. Chaque clic dessus etait une erreur garantie.
+ *
+ * DEUX ERREURS A NE PAS CONFONDRE. `LINK_DOWN` dit que le fichier n'est plus la, et
+ * c'est une information sure. `LINK_HOST_NOT_SUPPORTED` dit seulement qu'AllDebrid ne
+ * gere pas cet hebergeur : le fichier peut etre parfaitement vivant, et TorBox peut
+ * savoir l'ouvrir. Traiter le second comme le premier ferait disparaitre tout ce que
+ * seul TorBox sert — la moitie du catalogue Wawacity.
+ *
+ * Les REDIRECTEURS ne se verifient pas ici : ils masquent l'hebergeur derriere une
+ * page, donc `link/infos` rend forcement « hote inconnu ». Il faudrait les traverser
+ * d'abord, une requete chacun — trop cher pendant une recherche.
+ */
+export async function infosLiens(
+  urls: string[],
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<Map<string, InfoLien>> {
+  const out = new Map<string, InfoLien>();
+  const aVerifier = urls.filter((u) => !isRedirector(u));
+  if (aVerifier.length === 0) return out;
+
+  const corps = aVerifier.map((u) => `link[]=${encodeURIComponent(u)}`).join('&');
+  try {
+    const res = await axios.post<AdResponse<{ infos?: InfoBrute[] }>>(
+      `${BASE}/link/infos?agent=${AGENT}&apikey=${encodeURIComponent(apiKey)}`,
+      corps,
+      {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: 12000,
+        validateStatus: () => true,
+        signal,
+      },
+    );
+    if (res.status < 200 || res.status >= 300 || res.data?.status === 'error') return out;
+
+    for (const info of res.data?.data?.infos ?? []) {
+      if (!info.link) continue;
+      const code = info.error?.code;
+      out.set(info.link, {
+        taille: typeof info.size === 'number' && info.size > 0 ? info.size : undefined,
+        mort: code === 'LINK_DOWN',
+        hoteInconnu: code === 'LINK_HOST_NOT_SUPPORTED',
+      });
+    }
+  } catch {
+    // Reseau indisponible ou lot refuse : on ne sait rien, donc on ne touche a rien.
+    // Ne RIEN savoir doit laisser les flux passer, jamais les faire disparaitre.
+  }
+  return out;
+}
+
+interface InfoBrute {
+  link?: string;
+  size?: number;
+  error?: { code?: string };
+}
+
 interface UploadedMagnet {
   id?: number;
   hash?: string;

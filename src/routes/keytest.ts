@@ -148,7 +148,25 @@ async function testUnit3d(id: string, cle: string): Promise<Verdict> {
   if (res.status === 401 || res.status === 403) return { ok: false, message: 'Cle refusee par le tracker.' };
   if (res.status === 429) return { ok: false, message: 'Trop de requetes. Reessayez dans une minute.' };
   if (res.status < 200 || res.status >= 300) return { ok: false, message: `Le tracker a repondu ${res.status}.` };
-  return { ok: true, message: 'Cle acceptee.' };
+
+  // LE CODE HTTP NE SUFFIT PAS. Constate sur G3mini : un compte banni recoit
+  // `200 OK` accompagne de `{"message":"Ce compte est banni !"}`. Se fier au seul
+  // statut donnait donc « Cle acceptee » a quelqu'un dont le compte est ferme — le
+  // pire des verdicts, puisqu'il installe, croit la source active, et ne comprend
+  // jamais pourquoi elle ne remonte rien.
+  //
+  // Meme lecon que sur Torznab, ou `t=caps` validait n'importe quelle cle.
+  const corps = res.data as { data?: unknown; message?: string } | unknown[] | null;
+  if (corps && !Array.isArray(corps) && typeof corps === 'object') {
+    // Le tracker explique lui-meme le refus : on relaie son message plutot qu'un
+    // « cle refusee » vague qui enverrait chercher au mauvais endroit.
+    if (typeof corps.message === 'string' && !Array.isArray(corps.data)) {
+      return { ok: false, message: `Tracker : ${corps.message}` };
+    }
+    if (Array.isArray(corps.data)) return { ok: true, message: 'Cle acceptee.' };
+  }
+  if (Array.isArray(corps)) return { ok: true, message: 'Cle acceptee.' };
+  return { ok: false, message: 'Reponse inattendue : la cle est probablement invalide.' };
 }
 
 /**

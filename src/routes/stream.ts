@@ -15,7 +15,9 @@ import { toStremioStream, type StremioStream, type PisteFlux } from '../core/dis
 import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
 import { cacheParService, type NomDebrid } from '../debrid/resolver';
-import { isRedirector } from '../debrid/alldebrid';
+import { marquerMort } from '../debrid/deadlinks';
+import { cached } from '../core/cache';
+import { isRedirector, infosLiens, type InfoLien } from '../debrid/alldebrid';
 import { throughMediaflow } from '../core/mediaflow';
 import type { Candidate, MediaType, Query } from '../sources/types';
 
@@ -115,6 +117,42 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     const enCache =
       hashes.length > 0 ? await cacheParService(hashes, config) : new Map<string, NomDebrid[]>();
 
+    // ETAT DES LIENS DDL, en UNE requete pour tous.
+    //
+    // Mesure sur un episode : 6 des 22 liens DDL proposes etaient DEJA MORTS chez
+    // l'hebergeur. Chaque clic dessus etait une erreur garantie, apres l'attente du
+    // debridage. `link/infos` accepte un lot et rend un verdict par lien — le cout est
+    // donc d'une requete, pas d'une par lien.
+    //
+    // Les redirecteurs en sont exclus : ils masquent l'hebergeur, `link/infos` ne peut
+    // rien en dire. Ils restent parfaitement exploitables par `/link/redirector`, qui
+    // est le chemin que la resolution emprunte pour eux.
+    const liensAVerifier = deduplique
+      .filter((c) => c.kind === 'ddl' && c.ddlUrl && !isRedirector(c.ddlUrl))
+      .map((c) => c.ddlUrl as string);
+
+    // Le cache serialise en JSON : une Map y perd son type et revient en objet nu.
+    // On memorise donc des PAIRES, et on reconstruit la Map a la sortie. Le defaut ne
+    // se voyait pas au premier appel — seulement au second, quand le cache repondait.
+    const paires =
+      config.ad && liensAVerifier.length > 0
+        ? await cached<[string, InfoLien][]>(
+            // Cle VERSIONNEE. Une entree ecrite par une version anterieure du code peut
+            // avoir une tout autre forme — ici une Map serialisee, devenue « {} », que
+            // le code suivant ne sait pas parcourir. Changer de version a chaque
+            // changement de forme evite de servir un objet qu'on ne comprend plus.
+            `ddlinfos:v2:${[...new Set(liensAVerifier)].sort().join('|').slice(0, 300)}:${liensAVerifier.length}`,
+            2 * 60 * 60 * 1000,
+            async () => [...(await infosLiens(liensAVerifier, config.ad as string, AbortSignal.timeout(6000)))],
+            { scope: 'ddlinfos', shouldCache: (v) => v.length > 0, negativeTtlMs: 10 * 60 * 1000 },
+          )
+        : [];
+
+    // Ceinture ET bretelles : meme avec une cle versionnee, une entree inattendue ne
+    // doit pas faire echouer toute la reponse. Ne rien savoir sur les liens rend juste
+    // la liste moins fine, ce qui est sans commune mesure avec une liste vide.
+    const etatLiens = new Map<string, InfoLien>(Array.isArray(paires) ? paires : []);
+
     /** Le debrideur qui servira REELLEMENT ce flux, et s'il l'a deja. */
     const servirPar = (c: Candidate): { service?: NomDebrid; pret?: boolean } => {
       if (c.kind === 'direct') return {};
@@ -133,7 +171,32 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
 
     // Filtres puis tri, sur des flux qui portent leur etat de cache : c'est lui qui
     // decide de l'option « seulement le cache » comme de la tete de liste.
-    const etats: EtatFlux[] = deduplique.map((c) => ({ candidate: c, cached: servirPar(c).pret }));
+    const etats: EtatFlux[] = deduplique
+      .filter((c) => {
+        // Fichier disparu de chez l'hebergeur : on ne le propose pas, et on le retient
+        // pour ne pas le reproposer aux autres. `hoteInconnu` n'est PAS un motif de
+        // rejet — il dit seulement qu'AllDebrid ne gere pas cet hote, alors que TorBox
+        // le gere peut-etre.
+        const info = c.ddlUrl ? etatLiens.get(c.ddlUrl) : undefined;
+        if (info?.mort) {
+          marquerMort(c.ddlUrl as string);
+          return false;
+        }
+        return true;
+      })
+      .map((c) => {
+        const info = c.ddlUrl ? etatLiens.get(c.ddlUrl) : undefined;
+        // Un lien d'hebergeur VERIFIE vivant demarre tout de suite : rien a
+        // telecharger, juste un deblocage. Il merite donc le meme statut qu'un fichier
+        // en cache, sans quoi « uniquement ce qui est pret » le ferait disparaitre
+        // alors qu'il est precisement ce qu'on peut promettre.
+        const vivant = info !== undefined && !info.mort && !info.hoteInconnu;
+        return {
+          // La taille vient de l'hebergeur lui-meme : les sites DDL ne l'annoncent pas.
+          candidate: info?.taille ? { ...c, sizeBytes: c.sizeBytes ?? info.taille } : c,
+          cached: vivant ? true : servirPar(c).pret,
+        };
+      });
 
     const filtres = {
       cachedOnly: config.cachedOnly,
