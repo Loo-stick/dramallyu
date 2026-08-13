@@ -43,6 +43,7 @@ const DEFAULTS: Settings = {
     g3mini: true,
     digitalcore: true,
     yggreborn: true,
+    darkpeers: true,
     // Wawacity publie beaucoup sur des hebergeurs qu'AllDebrid ne prend pas (Uploady,
     // DailyUploads, Nitroflare) mais que TorBox prend. Le tri se fait desormais sur la
     // liste que chaque service publie, et non sur une liste ecrite a la main.
@@ -69,6 +70,7 @@ const DEFAULTS: Settings = {
   // la source est simplement ignoree dans son fan-out.
   unit3d: {
     g3mini: { enabled: true, url: 'https://gemini-tracker.org' },
+    darkpeers: { enabled: true, url: 'https://darkpeers.org' },
   },
   digitalcore: { enabled: true, url: 'https://digitalcore.club' },
 };

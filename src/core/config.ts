@@ -34,6 +34,8 @@ export interface UserConfig {
   dcore?: string;
   /** Passkey YggReborn (Torznab). */
   ygg?: string;
+  /** Cle API DarkPeers (tracker UNIT3D). */
+  dpeers?: string;
   /** Cle TMDB (optionnelle : enrichit en FR, sinon on sert Cinemeta + KissKH). */
   tmdb?: string;
   /** Langues de sous-titres, ISO 639-2, par ordre de preference. */
@@ -103,7 +105,7 @@ export const DEFAULT_CONFIG: UserConfig = {
  * testee avec succes, puis silencieusement absente du lien genere. C'est exactement ce
  * qui est arrive a G3mini et DigitalCore.
  */
-export const CHAMPS_CLES = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore', 'ygg'] as const;
+export const CHAMPS_CLES = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore', 'ygg', 'dpeers'] as const;
 export type ChampCle = (typeof CHAMPS_CLES)[number];
 
 const KEY_FIELDS = CHAMPS_CLES;

@@ -112,7 +112,7 @@ async function interroger(
   );
 }
 
-export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini'): Source {
+export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 'dpeers'): Source {
   return {
     id,
     label,

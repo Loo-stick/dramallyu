@@ -56,6 +56,7 @@ register(
   nyaaSource,
   ...torznabSources(),
   makeUnit3dSource('g3mini', 'G3mini', 'g3mini'),
+  makeUnit3dSource('darkpeers', 'DarkPeers', 'dpeers'),
   digitalcoreSource,
   zoneTelechargementSource,
   wawacitySource,

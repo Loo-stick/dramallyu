@@ -248,6 +248,8 @@ export async function tester(service: string, cle: string): Promise<Verdict> {
         return await testTorznab('yggreborn', cle);
       case 'g3mini':
         return await testUnit3d(service, cle);
+      case 'dpeers':
+        return await testUnit3d('darkpeers', cle);
       case 'dcore':
         return await testDigitalCore(cle);
       default:
