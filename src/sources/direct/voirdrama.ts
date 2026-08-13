@@ -18,6 +18,8 @@ import { makeEndpointConfig } from '../../core/endpoint-config';
 import { extractStream, detectExtractor, type ExtractorConfig } from '../../extractors';
 import { mediaflowConfig } from '../../core/mediaflow';
 import { normalizeTitle } from '../../core/matching';
+import { mesurerQualite } from '../../core/resolution';
+import { isUnknownQuality } from '../../core/prefs';
 import type { Candidate, Query, SearchContext, Source } from '../types';
 
 const TTL_MS = 15 * 60 * 1000;
@@ -212,6 +214,31 @@ function extractorConfig(): ExtractorConfig {
 }
 
 /** Extrait les embeds jouables, un par hebergeur, en parallele. */
+/**
+ * Complete la resolution que l'extracteur n'a pas su lire.
+ *
+ * Les extracteurs annoncent souvent « HD » : certains ne sondent pas la playlist,
+ * d'autres tombent sur un hebergeur qui ne publie rien. Le flux, lui, porte toujours
+ * l'information — mesuree ici comme pour KissKH. Constate sur voembed, dont le master
+ * annonce pourtant `RESOLUTION=1800x900` sans que l'extracteur le releve.
+ *
+ * On ne mesure QUE l'inconnu : une resolution deja lue par l'extracteur fait foi, et
+ * la mesure coute une requete.
+ */
+async function completerQualites(candidats: Candidate[], ctx: SearchContext): Promise<Candidate[]> {
+  return Promise.all(
+    candidats.map(async (c) => {
+      if (!isUnknownQuality(c.quality) || !c.directUrl) return c;
+      const mesuree = await mesurerQualite(c.directUrl, {
+        headers: c.headers,
+        signal: ctx.deadline.signal,
+        restantMs: ctx.deadline.remainingMs(),
+      });
+      return mesuree ? { ...c, quality: mesuree } : c;
+    }),
+  );
+}
+
 async function extractAll(embeds: Embed[], language: string): Promise<Candidate[]> {
   const supported = embeds.filter((e) => {
     try {
@@ -271,7 +298,7 @@ async function searchVoirDrama(q: Query, ctx: SearchContext): Promise<Candidate[
       if (q.type === 'series' && q.tmdbId && q.season && q.episode) {
         const { embeds, definitive } = await fromMovixApi(q.tmdbId, q.season, q.episode, signal);
         if (embeds.length > 0) {
-          const streams = await extractAll(embeds, 'VOSTFR');
+          const streams = await completerQualites(await extractAll(embeds, 'VOSTFR'), ctx);
           if (streams.length > 0) return streams;
         }
         // Reponse autoritaire sur du non-asiatique : inutile de scraper derriere.
@@ -291,7 +318,7 @@ async function searchVoirDrama(q: Query, ctx: SearchContext): Promise<Candidate[
           return embeds.length > 0 ? extractAll(embeds, f.language) : [];
         }),
       );
-      return perFiche.flat();
+      return completerQualites(perFiche.flat(), ctx);
     },
     { scope: 'voirdrama', shouldCache: (v) => v.length > 0, negativeTtlMs: EMPTY_TTL_MS },
   );

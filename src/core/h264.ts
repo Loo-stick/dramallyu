@@ -226,3 +226,27 @@ export function qualiteDepuis({ width, height }: Dimensions): string {
   if (hauteurUtile >= 400) return '480p';
   return '360p';
 }
+
+/**
+ * Dimensions portees par un conteneur MP4.
+ *
+ * On ne parcourt pas l'arborescence de boites : on cherche directement le code de
+ * l'echantillon video (`avc1`, `hvc1`...), dont l'en-tete porte largeur et hauteur a
+ * des positions fixes. Un vrai parcours moov > trak > mdia > minf > stbl > stsd serait
+ * plus rigoureux, mais echouerait sur les fichiers dont le `moov` est en fin — alors
+ * que la recherche directe trouve ce qu'elle cherche des qu'il est dans la fenetre.
+ */
+export function dimensionsDepuisMp4(buf: Buffer): Dimensions | null {
+  for (const code of ['avc1', 'hvc1', 'hev1', 'av01']) {
+    const at = buf.indexOf(code, 0, 'latin1');
+    if (at === -1) continue;
+    // VisualSampleEntry : taille(4) type(4) reserve(6) index(2) predefini(2) reserve(2)
+    // predefini(12) largeur(2) hauteur(2). Le code lu est en tete+4.
+    const posLargeur = at + 28;
+    if (posLargeur + 4 > buf.length) continue;
+    const width = buf.readUInt16BE(posLargeur);
+    const height = buf.readUInt16BE(posLargeur + 2);
+    if (width >= 160 && height >= 90 && width <= 16384 && height <= 16384) return { width, height };
+  }
+  return null;
+}

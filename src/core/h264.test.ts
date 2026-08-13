@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dimensionsDepuisSps, qualiteDepuis } from './h264';
+import { dimensionsDepuisSps, dimensionsDepuisMp4, qualiteDepuis } from './h264';
 
 // SPS reel, capture sur un segment KissKH (« Sex Plate 17 », profil High 4.2).
 // L'echantillon rend le test hors-ligne : le CDN change ses URL, pas ses dimensions.
@@ -33,4 +33,20 @@ test('les formats classiques restent classes comme on les nomme', () => {
   assert.equal(qualiteDepuis({ width: 640, height: 480 }), '480p');
   // Un 4/3 ne doit pas etre promu par sa largeur.
   assert.equal(qualiteDepuis({ width: 720, height: 576 }), '576p');
+});
+
+test('les dimensions se lisent aussi dans un en-tete MP4', () => {
+  // En-tete d'echantillon video minimal : taille + « avc1 » + les champs fixes qui
+  // precedent largeur et hauteur. Sert de garde-fou sur les positions, seule chose
+  // que ce lecteur ait a savoir.
+  const boite = Buffer.alloc(40);
+  boite.write('avc1', 4, 'latin1');
+  boite.writeUInt16BE(1920, 32);
+  boite.writeUInt16BE(1080, 34);
+  assert.deepEqual(dimensionsDepuisMp4(boite), { width: 1920, height: 1080 });
+});
+
+test('un MP4 sans en-tete video lisible rend null', () => {
+  assert.equal(dimensionsDepuisMp4(Buffer.alloc(64)), null);
+  assert.equal(dimensionsDepuisMp4(Buffer.from('pas un mp4', 'latin1')), null);
 });

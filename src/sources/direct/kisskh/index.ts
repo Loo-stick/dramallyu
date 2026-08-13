@@ -9,9 +9,9 @@ import type { Candidate, Query, SearchContext, Source, SubTrack } from '../../ty
 import { drama, episodeSubs, episodeVideo, search, type KkDrama, type KkSearchItem } from './client';
 import { bestMatch, seasonInTitle } from '../../../core/matching';
 import { normalizeLangCode } from '../../../core/config';
-import { getText, BROWSER_HEADERS } from '../../../core/http';
+import { getText } from '../../../core/http';
 import { cached } from '../../../core/cache';
-import { dimensionsDepuisTs, qualiteDepuis, type Dimensions } from '../../../core/h264';
+import { mesurerQualite } from '../../../core/resolution';
 
 export const SOURCE_ID = 'kisskh';
 
@@ -74,72 +74,19 @@ async function resolveEpisode(q: Query, signal?: AbortSignal): Promise<Resolved 
 }
 
 /**
- * Vraie resolution du flux HLS, quand le budget le permet.
+ * Vraie resolution du flux, quand le budget le permet.
  *
- * La master playlist est minuscule et porte les RESOLUTION= des variantes. Sans ca on
- * afficherait « HD » a l'aveugle, et le tri par qualite ne voudrait rien dire. Le
- * garde-fou est le budget : si le fan-out est deja serre, on n'engage pas cette
- * requete et on assume l'etiquette generique.
+ * KissKH n'annonce rien : sa playlist ne liste que des segments, et son API ne rend
+ * qu'une URL. La mesure descend donc jusqu'au SPS du flux (cf. core/resolution.ts).
+ * Le garde-fou reste le budget : si le fan-out est deja serre, on n'engage pas la
+ * lecture et on assume l'etiquette generique.
  */
 async function probeQuality(hlsUrl: string, ctx: SearchContext): Promise<string> {
-  if (ctx.deadline.remainingMs() < 3500) return 'HD';
-  const body = await cached<string | null>(
-    `kisskh:hlsq:${hlsUrl}`,
-    30 * 60 * 1000,
-    () => getText(hlsUrl, { timeoutMs: 3000, signal: ctx.deadline.signal, retries: 0, maxBytes: 256 * 1024 }),
-    { scope: 'kisskh', shouldCache: (v) => v !== null, negativeTtlMs: 5 * 60 * 1000 },
-  );
-  if (!body) return 'HD';
-
-  let best = 0;
-  for (const m of body.matchAll(/RESOLUTION=(\d{2,5})x(\d{2,5})/g)) {
-    const height = Number(m[2]);
-    if (height > best) best = height;
-  }
-  if (best > 0) return qualiteDepuis({ width: Math.round((best * 16) / 9), height: best });
-
-  // Aucune variante annoncee : c'est le cas de KissKH, dont la playlist ne liste que
-  // des segments. On lit alors la resolution DANS le flux (cf. core/h264.ts).
-  return (await mesurerDansLeFlux(body, ctx)) ?? 'HD';
-}
-
-/**
- * Resolution lue dans le premier segment, quand la playlist ne l'annonce pas.
- *
- * Une requete Range de 128 Ko suffit a atteindre le SPS : ni telechargement de la
- * video, ni ffmpeg. Le resultat est vrai pour toujours sur un episode donne — d'ou un
- * cache de 24 h, la ou la playlist elle-meme n'est gardee que 30 min (ses URL signees
- * expirent, pas les dimensions de l'image).
- */
-async function mesurerDansLeFlux(playlist: string, ctx: SearchContext): Promise<string | null> {
-  const segment = playlist.split('\n').find((l) => l.startsWith('http'))?.trim();
-  if (!segment) return null;
-
-  // Cle stable : les URL de segment portent un jeton qui change a chaque resolution.
-  // Sans ce nettoyage, chaque requete creerait une entree de cache neuve et on
-  // retelechargerait 128 Ko a chaque fois — exactement ce qu'on cherche a eviter.
-  const cle = segment.split('?')[0];
-
-  const dims = await cached<Dimensions | null>(
-    `kisskh:dims:${cle}`,
-    24 * 60 * 60 * 1000,
-    async () => {
-      if (ctx.deadline.remainingMs() < 2500) return null;
-      try {
-        const res = await fetch(segment, {
-          headers: { ...BROWSER_HEADERS, Range: 'bytes=0-131071' },
-          signal: ctx.deadline.signal,
-        });
-        if (!res.ok) return null;
-        return dimensionsDepuisTs(Buffer.from(await res.arrayBuffer()));
-      } catch {
-        return null;
-      }
-    },
-    { scope: 'kisskh', shouldCache: (v) => v !== null, negativeTtlMs: 30 * 60 * 1000 },
-  );
-
-  return dims ? qualiteDepuis(dims) : null;
+  const mesuree = await mesurerQualite(hlsUrl, {
+    signal: ctx.deadline.signal,
+    restantMs: ctx.deadline.remainingMs(),
+  });
+  return mesuree ?? 'HD';
 }
 
 /** Pistes de sous-titres KissKH, converties en ISO 639-2 et FR en tete. */
