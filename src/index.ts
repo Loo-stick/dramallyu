@@ -157,7 +157,26 @@ app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
   for (const champ of ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const) {
     if (propre[champ]) compact[champ] = propre[champ];
   }
-  for (const champ of ['subLangs', 'excludeQualities', 'sources', 'sortBy', 'maxResults'] as const) {
+  // Liste EXHAUSTIVE des reglages transportables. Tout champ oublie ici est
+  // silencieusement perdu a la generation du lien : le reglage semble accepte dans le
+  // formulaire, puis reste sans effet. C'est arrive avec les filtres avances — d'ou
+  // ce commentaire, et la verification qui l'accompagne dans les tests.
+  for (const champ of [
+    'subLangs',
+    'excludeQualities',
+    'sources',
+    'sortBy',
+    'maxResults',
+    'cachedOnly',
+    'priorite',
+    'minResolution',
+    'maxResolution',
+    'minSource',
+    'maxSizeGb',
+    'excludeFormats',
+    'excludeCam',
+    'bonusHdr',
+  ] as const) {
     if (aChange(champ)) compact[champ] = propre[champ];
   }
 

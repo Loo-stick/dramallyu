@@ -9,7 +9,8 @@ import { parseStremioId } from '../core/ids';
 import { resolveWork } from '../core/meta';
 import { searchAll } from '../core/registry';
 import { getSettings } from '../core/settings';
-import { compareStreams, langOrderFromSubs, passesPreferences } from '../core/prefs';
+import { langOrderFromSubs } from '../core/prefs';
+import { comparer, passeFiltres, type EtatFlux } from '../core/filters';
 import { toStremioStream, type StremioStream } from '../core/display';
 import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
@@ -91,9 +92,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
 
     const settings = getSettings();
     const langOrder = langOrderFromSubs(config.subLangs);
-    const retenus = dedupe(candidates).filter((c) =>
-      passesPreferences(c, config.excludeQualities),
-    );
+    const deduplique = dedupe(candidates);
 
     // ETAT DU CACHE, avant le tri.
     //
@@ -104,7 +103,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // TorBox repond par LOT, en une requete : c'est assez rapide pour tenir dans le
     // budget. AllDebrid n'expose plus rien d'equivalent — ses entrees restent donc
     // marquees « a debrider », sans jamais affirmer une disponibilite inconnue.
-    const hashes = retenus.map((c) => c.infoHash).filter((h): h is string => Boolean(h));
+    const hashes = deduplique.map((c) => c.infoHash).filter((h): h is string => Boolean(h));
     const enCache =
       hashes.length > 0 ? await cacheParService(hashes, config) : new Map<string, NomDebrid[]>();
 
@@ -124,14 +123,36 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       return { service: defaut, pret: c.infoHash ? false : undefined };
     };
 
-    const kept = retenus
-      .sort((a, b) => {
-        // Ce qui est pret passe DEVANT tout le reste : un flux injouable en tete de
-        // liste, si bien classe soit-il par langue, ne sert a personne.
-        const rang = (c: Candidate): number => (servirPar(c).pret === true ? 0 : 1);
-        return rang(a) - rang(b) || compareStreams(a, b, { langOrder, sortBy: config.sortBy });
-      })
-      .slice(0, Math.min(config.maxResults, settings.maxStreams));
+    // Filtres puis tri, sur des flux qui portent leur etat de cache : c'est lui qui
+    // decide de l'option « seulement le cache » comme de la tete de liste.
+    const etats: EtatFlux[] = deduplique.map((c) => ({ candidate: c, cached: servirPar(c).pret }));
+
+    const filtres = {
+      cachedOnly: config.cachedOnly,
+      minResolution: config.minResolution,
+      maxResolution: config.maxResolution,
+      minSource: config.minSource,
+      maxSizeGb: config.maxSizeGb,
+      excludeFormats: config.excludeFormats,
+      excludeCam: config.excludeCam,
+    };
+
+    // 0 = « pas de limite de mon cote » : le plafond de l'operateur s'applique quand meme.
+    const plafond = config.maxResults > 0
+      ? Math.min(config.maxResults, settings.maxStreams)
+      : settings.maxStreams;
+
+    const kept = etats
+      .filter((e) => passeFiltres(e, filtres))
+      .sort((a, b) =>
+        comparer(a, b, {
+          langOrder,
+          sortBy: config.sortBy,
+          priorite: config.priorite,
+          bonusHdr: config.bonusHdr,
+        }),
+      )
+      .slice(0, plafond);
 
     // SANS le segment de config, volontairement : le jeton /resolve porte deja les
     // cles debrid dont la resolution a besoin. L'y ajouter n'apportait rien et
@@ -141,7 +162,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // etaient bien emis en /<config>/resolve/<jeton>, mais seule la route /resolve
     // etait enregistree — donc 404 au moindre appui sur Play.
     const base = getBaseUrl(req);
-    const streams: StremioStream[] = kept.map((c) => {
+    const streams: StremioStream[] = kept.map(({ candidate: c }) => {
       if (c.kind === 'direct' && c.directUrl) {
         // Un flux qui exige un Referer casse chez plusieurs lecteurs : Stremio
         // n'applique pas toujours proxyHeaders aux segments HLS, seulement a la

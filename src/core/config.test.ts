@@ -62,11 +62,44 @@ test('les cles vides ne sont pas retenues', () => {
   assert.equal(hasDebrid(cfg), false);
 });
 
-test('maxResults est borne', () => {
-  const low = parseConfig(Buffer.from(JSON.stringify({ maxResults: -5 })).toString('base64url'));
-  const high = parseConfig(Buffer.from(JSON.stringify({ maxResults: 9999 })).toString('base64url'));
-  assert.equal(low.maxResults, 1);
-  assert.equal(high.maxResults, 200);
+test('maxResults est borne, et 0 signifie illimite', () => {
+  const b64 = (o: unknown): string => Buffer.from(JSON.stringify(o)).toString('base64url');
+  assert.equal(parseConfig(b64({ maxResults: -5 })).maxResults, 0);
+  assert.equal(parseConfig(b64({ maxResults: 0 })).maxResults, 0);
+  assert.equal(parseConfig(b64({ maxResults: 9999 })).maxResults, 200);
+});
+
+test('les filtres avances sont neutres par defaut', () => {
+  // Quelqu'un qui installe sans rien regler doit voir l'offre entiere.
+  const cfg = parseConfig('');
+  assert.equal(cfg.cachedOnly, false);
+  assert.equal(cfg.priorite, 'aucune');
+  assert.equal(cfg.maxSizeGb, 0);
+  assert.equal(cfg.minResolution, '');
+  assert.deepEqual(cfg.excludeFormats, []);
+  assert.equal(cfg.excludeCam, false);
+});
+
+test('les filtres avances font l aller-retour', () => {
+  const segment = encodeConfig({
+    cachedOnly: true,
+    priorite: 'direct',
+    minResolution: '720p',
+    maxSizeGb: 15,
+    excludeFormats: ['HEVC', 'DTS'],
+    excludeCam: true,
+    bonusHdr: true,
+    sortBy: 'size',
+  });
+  const cfg = parseConfig(segment);
+  assert.equal(cfg.cachedOnly, true);
+  assert.equal(cfg.priorite, 'direct');
+  assert.equal(cfg.minResolution, '720p');
+  assert.equal(cfg.maxSizeGb, 15);
+  assert.deepEqual(cfg.excludeFormats, ['HEVC', 'DTS']);
+  assert.equal(cfg.excludeCam, true);
+  assert.equal(cfg.bonusHdr, true);
+  assert.equal(cfg.sortBy, 'size');
 });
 
 test('les codes langue a 2 lettres sont convertis en ISO 639-2', () => {
@@ -91,4 +124,26 @@ test('hasDebrid detecte une cle presente', () => {
   assert.equal(hasDebrid(parseConfig(encodeConfig({ ad: 'k' }))), true);
   assert.equal(hasDebrid(parseConfig(encodeConfig({ tb: 'k' }))), true);
   assert.equal(hasDebrid(parseConfig('')), false);
+});
+
+test('TOUS les champs de UserConfig survivent a l aller-retour', () => {
+  // Garde-fou contre une regression vecue : les filtres avances etaient lus par
+  // parseConfig mais absents de la liste blanche de l'encodeur, donc perdus a la
+  // generation du lien. Le reglage semblait accepte, puis restait sans effet.
+  const complet = {
+    ad: 'A', tb: 'B', c411: 'C', tr4ker: 'D', tmdb: 'E',
+    subLangs: ['kor'], excludeQualities: ['360p'], sources: ['kisskh'],
+    sortBy: 'size' as const, maxResults: 12,
+    cachedOnly: true, priorite: 'torrent' as const,
+    minResolution: '480p', maxResolution: '1080p', minSource: 'WEBRip',
+    maxSizeGb: 9, excludeFormats: ['DTS'], excludeCam: true, bonusHdr: true,
+  };
+  const relu = parseConfig(encodeConfig(complet));
+  for (const [cle, attendu] of Object.entries(complet)) {
+    assert.deepEqual(
+      (relu as Record<string, unknown>)[cle],
+      attendu,
+      `le champ « ${cle} » ne survit pas a l aller-retour`,
+    );
+  }
 });

@@ -293,29 +293,96 @@
       <section class="bloc">
         <header>
           <span class="rang">05</span>
-          <h2>Affichage des flux</h2>
+          <h2>Ce que vous voulez voir</h2>
         </header>
 
-        <label for="sortBy">Ce qui prime dans le classement</label>
-        <select id="sortBy">
-          <option value="language">La langue, puis la qualite</option>
-          <option value="quality">La qualite, puis la langue</option>
-        </select>
-
-        <label>Qualites a masquer</label>
-        <div class="pastilles" id="qualites"></div>
-        <p class="indice">
-          Rien de masque par defaut, et c'est voulu : un filtre de qualite fait
-          disparaitre des flux valides — typiquement la seule VF disponible, en 480p.
+        <label class="pastille" style="margin:0 0 10px" for="cachedOnly">
+          <input type="checkbox" id="cachedOnly">
+          <span class="signe">+</span><span>Uniquement ce qui est deja pret</span>
+        </label>
+        <p class="indice" style="margin-top:0">
+          Masque tout ce que votre debrideur devrait d'abord telecharger. Attention :
+          les liens de telechargement direct n'ont pas de somme de controle, leur
+          disponibilite ne se verifie donc pas — ils disparaissent aussi.
         </p>
 
-        <label for="maxResults">Nombre maximum de flux affiches</label>
-        <input type="text" id="maxResults" value="40" inputmode="numeric" style="max-width:120px">
+        <label for="priorite">Pilier a remonter en tete</label>
+        <select id="priorite">
+          <option value="aucune">Aucune preference</option>
+          <option value="direct">Lecture directe (sans debrideur)</option>
+          <option value="torrent">Torrents</option>
+        </select>
+
+        <label for="sortBy">Ensuite, classer par</label>
+        <select id="sortBy">
+          <option value="language">Langue</option>
+          <option value="quality">Qualite</option>
+          <option value="size">Leger (le plus petit fichier d'abord)</option>
+        </select>
+
+        <label class="pastille" style="margin:14px 0 0" for="bonusHdr">
+          <input type="checkbox" id="bonusHdr">
+          <span class="signe">+</span><span>Remonter le HDR a qualite egale</span>
+        </label>
       </section>
 
       <section class="bloc">
         <header>
           <span class="rang">06</span>
+          <h2>Filtres avances</h2>
+          <span class="facultatif">Facultatif</span>
+        </header>
+        <p class="chapeau">
+          Tout est neutre par defaut. Un flux dont l'information n'est pas lisible
+          (resolution non annoncee, taille inconnue) passe toujours : on ne masque
+          jamais sur ce qu'on ne sait pas.
+        </p>
+
+        <div class="grille">
+          <div>
+            <label for="minResolution">Resolution minimale</label>
+            <select id="minResolution"></select>
+          </div>
+          <div>
+            <label for="maxResolution">Resolution maximale</label>
+            <select id="maxResolution"></select>
+          </div>
+        </div>
+
+        <label for="minSource">Qualite de source minimale</label>
+        <select id="minSource"></select>
+        <p class="indice">
+          Independante de la resolution : un CAM annonce en 1080p reste un CAM.
+        </p>
+
+        <label for="maxSizeGb">Taille maximale, en Go</label>
+        <input type="text" id="maxSizeGb" value="0" inputmode="numeric" style="max-width:120px">
+        <p class="indice">0 = pas de limite.</p>
+
+        <label>Formats a exclure</label>
+        <p class="indice" style="margin-top:0">
+          Pour les televiseurs et lecteurs qui ne les gerent pas. Cliquez, ou tapez le
+          votre.
+        </p>
+        <div class="pastilles" id="formats"></div>
+        <div class="ajout-langue" style="margin-top:10px">
+          <input type="text" id="formatLibre" placeholder="autre format a retirer (ex : DDP)">
+          <button type="button" class="btn" id="ajouter-format">Ajouter</button>
+        </div>
+
+        <label class="pastille" style="margin:16px 0 0" for="excludeCam">
+          <input type="checkbox" id="excludeCam">
+          <span class="signe">+</span><span>Exclure les captations en salle (CAM, TS)</span>
+        </label>
+
+        <label for="maxResults">Nombre maximum de flux affiches</label>
+        <input type="text" id="maxResults" value="40" inputmode="numeric" style="max-width:120px">
+        <p class="indice">0 = pas de limite de votre cote.</p>
+      </section>
+
+      <section class="bloc">
+        <header>
+          <span class="rang">07</span>
           <h2>Sources</h2>
         </header>
         <p class="chapeau">Tout decocher revient a tout activer.</p>
@@ -375,10 +442,10 @@ var LANGUES = [
   ['ind','Indonesien'], ['vie','Vietnamien'], ['tur','Turc'], ['dut','Neerlandais'],
   ['pol','Polonais']
 ];
-var QUALITES = [
-  ['4K','4K / 2160p'], ['1080p','1080p'], ['720p','720p'],
-  ['480p','480p'], ['360p','360p'], ['unknown','Resolution inconnue']
-];
+var RESOLUTIONS = [['','Toutes'],['360p','360p'],['480p','480p'],['576p','576p'],['720p','720p'],['1080p','1080p'],['4K','4K / 2160p']];
+var SOURCES_QUALITE = [['','Toutes'],['CAM','CAM / TS'],['DVDRip','DVDRip'],['HDTV','HDTV'],['WEBRip','WEBRip'],['WEB-DL','WEB-DL'],['BluRay','BluRay'],['REMUX','REMUX']];
+var FORMATS = ['HEVC','AV1','HDR','Dolby Vision','DTS','TrueHD','Atmos'];
+var formatsExclus = [];
 
 var choisies = ['fre','eng'];
 var sourcesExclues = [];
@@ -437,42 +504,60 @@ $('ajouter-langue').addEventListener('click', function(){
   if (code && choisies.indexOf(code) === -1) { choisies.push(code); rendreLangues(); }
 });
 
-/* ---------- Pastilles de qualite ---------- */
-function rendreQualites(){
-  $('qualites').innerHTML = QUALITES.map(function(q){
-    return '<label class="pastille" data-q="' + q[0] + '">' +
-      '<input type="checkbox" value="' + q[0] + '">' +
-      '<span class="signe">+</span><span>' + q[1] + '</span></label>';
+/* ---------- Filtres avances ---------- */
+function remplirSelect(id, entrees, defaut){
+  $(id).innerHTML = entrees.map(function(e){
+    return '<option value="' + e[0] + '"' + (e[0] === defaut ? ' selected' : '') + '>' + e[1] + '</option>';
+  }).join('');
+}
+
+function rendreFormats(){
+  $('formats').innerHTML = FORMATS.concat(
+    formatsExclus.filter(function(f){ return FORMATS.indexOf(f) === -1; })
+  ).map(function(f){
+    var actif = formatsExclus.indexOf(f) !== -1;
+    return '<label class="pastille' + (actif ? ' exclue' : '') + '">' +
+      '<input type="checkbox" value="' + f + '"' + (actif ? ' checked' : '') + '>' +
+      '<span class="signe">' + (actif ? '✕' : '+') + '</span><span>' + f + '</span></label>';
   }).join('');
 
-  $('qualites').querySelectorAll('input').forEach(function(input){
+  $('formats').querySelectorAll('input').forEach(function(input){
     input.addEventListener('change', function(){
-      var pastille = input.closest('.pastille');
-      pastille.classList.toggle('exclue', input.checked);
-      // Symbole ET texte : le sens ne repose jamais sur la couleur.
-      pastille.querySelector('.signe').textContent = input.checked ? '✕' : '+';
+      var v = input.value;
+      var i = formatsExclus.indexOf(v);
+      if (input.checked && i === -1) formatsExclus.push(v);
+      if (!input.checked && i !== -1) formatsExclus.splice(i, 1);
+      rendreFormats();
     });
   });
 }
 
-function qualitesExclues(){
-  return Array.prototype.slice
-    .call($('qualites').querySelectorAll('input:checked'))
-    .map(function(i){ return i.value; });
-}
+$('ajouter-format').addEventListener('click', function(){
+  var v = valeur('formatLibre');
+  if (v && formatsExclus.indexOf(v) === -1) { formatsExclus.push(v); $('formatLibre').value = ''; rendreFormats(); }
+});
 
 /* ---------- Config courante ---------- */
 function configActuelle(){
   var cfg = {};
   ['ad','tb','c411','tr4ker','tmdb'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
   if (choisies.length) cfg.subLangs = choisies;
-  var ex = qualitesExclues(); if (ex.length) cfg.excludeQualities = ex;
+  if (formatsExclus.length) cfg.excludeFormats = formatsExclus;
+  if ($('cachedOnly').checked) cfg.cachedOnly = true;
+  if ($('excludeCam').checked) cfg.excludeCam = true;
+  if ($('bonusHdr').checked) cfg.bonusHdr = true;
+  if ($('priorite').value !== 'aucune') cfg.priorite = $('priorite').value;
+  if (valeur('minResolution')) cfg.minResolution = valeur('minResolution');
+  if (valeur('maxResolution')) cfg.maxResolution = valeur('maxResolution');
+  if (valeur('minSource')) cfg.minSource = valeur('minSource');
+  var taille = parseFloat(valeur('maxSizeGb'));
+  if (taille > 0) cfg.maxSizeGb = taille;
   if (sourcesExclues.length) {
     cfg.sources = TOUTES_SOURCES.filter(function(id){ return sourcesExclues.indexOf(id) === -1; });
   }
   cfg.sortBy = $('sortBy').value;
   var max = parseInt(valeur('maxResults'), 10);
-  if (max > 0) cfg.maxResults = max;
+  if (!isNaN(max) && max >= 0) cfg.maxResults = max;
   return cfg;
 }
 
@@ -609,13 +694,17 @@ $('copier').addEventListener('click', function(){
 });
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
-['ad','tb','c411','tr4ker','tmdb','sortBy','maxResults'].forEach(function(id){
+['ad','tb','c411','tr4ker','tmdb','sortBy','maxResults','cachedOnly','priorite',
+ 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','bonusHdr'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);
 });
 
 rendreLangues();
-rendreQualites();
+remplirSelect('minResolution', RESOLUTIONS, '');
+remplirSelect('maxResolution', RESOLUTIONS, '');
+remplirSelect('minSource', SOURCES_QUALITE, '');
+rendreFormats();
 rafraichirApercu();
 </script>
 </body>

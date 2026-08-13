@@ -17,7 +17,7 @@
 
 import { chiffrer, dechiffrer, estChiffre, chiffrementDisponible } from './crypto';
 
-export type SortBy = 'language' | 'quality';
+export type SortBy = 'language' | 'quality' | 'size';
 
 export interface UserConfig {
   /** Cle API AllDebrid. */
@@ -36,10 +36,28 @@ export interface UserConfig {
   excludeQualities: string[];
   /** Sources activees par leur id. Vide = toutes celles que l'operateur autorise. */
   sources: string[];
-  /** Ce qui prime au tri : la langue ou la qualite. */
+  /** Ce qui prime au tri : la langue, la qualite, ou le poids le plus leger. */
   sortBy: SortBy;
-  /** Nombre maximum de flux renvoyes. */
+  /** Nombre maximum de flux renvoyes. 0 = pas de limite propre a l'utilisateur. */
   maxResults: number;
+
+  /** N'afficher que ce dont la presence en cache a ete VERIFIEE. */
+  cachedOnly: boolean;
+  /** Pilier remonte en tete de liste. */
+  priorite: 'aucune' | 'direct' | 'torrent';
+  /** Bornes de resolution. Chaine vide = pas de borne. */
+  minResolution: string;
+  maxResolution: string;
+  /** Qualite de source plancher (CAM, WEBRip, BluRay...). Vide = pas de borne. */
+  minSource: string;
+  /** Taille maximale en Go. 0 = illimite. */
+  maxSizeGb: number;
+  /** Formats a retirer (HEVC, HDR, DTS... ou texte libre). */
+  excludeFormats: string[];
+  /** Retirer les captations en salle. */
+  excludeCam: boolean;
+  /** Remonter les flux HDR a qualite comparable. */
+  bonusHdr: boolean;
 }
 
 export const DEFAULT_CONFIG: UserConfig = {
@@ -48,6 +66,17 @@ export const DEFAULT_CONFIG: UserConfig = {
   sources: [],
   sortBy: 'language',
   maxResults: 40,
+  // Tous les filtres sont NEUTRES par defaut. Quelqu'un qui installe sans rien regler
+  // doit voir l'offre entiere ; c'est a lui de la restreindre s'il le souhaite.
+  cachedOnly: false,
+  priorite: 'aucune',
+  minResolution: '',
+  maxResolution: '',
+  minSource: '',
+  maxSizeGb: 0,
+  excludeFormats: [],
+  excludeCam: false,
+  bonusHdr: false,
 };
 
 const KEY_FIELDS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const;
@@ -75,6 +104,7 @@ export function parseConfig(raw?: string | null): UserConfig {
     subLangs: [...DEFAULT_CONFIG.subLangs],
     excludeQualities: [],
     sources: [],
+    excludeFormats: [],
   };
   if (!raw) return cfg;
 
@@ -114,11 +144,33 @@ export function parseConfig(raw?: string | null): UserConfig {
   const sources = asStringArray(o.sources);
   if (sources) cfg.sources = sources;
 
-  if (o.sortBy === 'quality' || o.sortBy === 'language') cfg.sortBy = o.sortBy;
+  if (o.sortBy === 'quality' || o.sortBy === 'language' || o.sortBy === 'size') {
+    cfg.sortBy = o.sortBy;
+  }
 
   if (typeof o.maxResults === 'number' && Number.isFinite(o.maxResults)) {
-    cfg.maxResults = Math.min(200, Math.max(1, Math.floor(o.maxResults)));
+    // 0 signifie « pas de limite de mon cote » — le plafond de l'operateur s'applique
+    // toujours par-dessus.
+    cfg.maxResults = Math.min(200, Math.max(0, Math.floor(o.maxResults)));
   }
+
+  cfg.cachedOnly = o.cachedOnly === true;
+  cfg.excludeCam = o.excludeCam === true;
+  cfg.bonusHdr = o.bonusHdr === true;
+
+  if (o.priorite === 'direct' || o.priorite === 'torrent') cfg.priorite = o.priorite;
+
+  for (const champ of ['minResolution', 'maxResolution', 'minSource'] as const) {
+    const v = asTrimmedString(o[champ]);
+    if (v) cfg[champ] = v;
+  }
+
+  if (typeof o.maxSizeGb === 'number' && Number.isFinite(o.maxSizeGb) && o.maxSizeGb > 0) {
+    cfg.maxSizeGb = Math.min(2000, o.maxSizeGb);
+  }
+
+  const formats = asStringArray(o.excludeFormats);
+  if (formats) cfg.excludeFormats = formats.slice(0, 30);
 
   return cfg;
 }
