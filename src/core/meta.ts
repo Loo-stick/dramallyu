@@ -61,7 +61,13 @@ async function fromCinemeta(
 ): Promise<WorkInfo | null> {
   const stremioType = type === 'series' ? 'series' : 'movie';
   return cached<WorkInfo | null>(
-    `cinemeta:${stremioType}:${imdbId}`,
+    // Le numero de version fait partie de la CLE, volontairement : ces objets vivent
+    // 7 jours en cache, et le jour ou l'on ajoute un champ — ici `country`, dont
+    // depend le garde-fou de perimetre — les entrees ecrites avant ne le portent pas.
+    // Sans ce numero, le nouveau code lit pendant une semaine des donnees a l'ancien
+    // format, et se comporte comme s'il n'avait pas ete modifie. Constate en
+    // production : Spider-Man repassait le filtre faute de pays memorise.
+    `cinemeta:v2:${stremioType}:${imdbId}`,
     META_TTL_MS,
     async () => {
       const data = await getJson<{ meta?: CinemetaMeta }>(
@@ -202,6 +208,30 @@ export async function tmdbImagePaths(
   );
 }
 
+/**
+ * Resolution PAR TMDB, quand l'utilisateur a une cle.
+ *
+ * Rend un socle complet a partir d'un id TMDB seul — sans dependre de Cinemeta.
+ * Deux raisons de s'en servir en PREMIER plutot qu'en simple enrichissement :
+ *
+ *  - certains utilisateurs desinstallent Cinemeta et naviguent avec un catalogue
+ *    TMDB : leurs identifiants arrivent alors en `tmdb:`, que Cinemeta ne sait pas
+ *    lire (verifie : il repond 307) ;
+ *  - pour un drama asiatique, TMDB est de toute façon la meilleure source — il donne
+ *    la langue d'origine et les titres alternatifs, qui sont exactement ce qui
+ *    rattrape les romanisations.
+ */
+async function fromTmdbSeul(
+  tmdbId: string,
+  type: MediaType,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<WorkInfo | null> {
+  const base: WorkInfo = { type, titles: [], tmdbId };
+  const enrichi = await enrichWithTmdb(base, apiKey, signal);
+  return enrichi.titles.length > 0 ? enrichi : null;
+}
+
 /** Resolution depuis notre propre catalogue : la fiche KissKH porte tout le necessaire. */
 async function fromKisskh(kkhId: string, signal?: AbortSignal): Promise<WorkInfo | null> {
   // Import tardif : evite un cycle client KissKH <-> meta.
@@ -248,24 +278,40 @@ export async function resolveWork(
 ): Promise<WorkInfo | null> {
   let info: WorkInfo | null = null;
 
-  if (parsed.kind === 'imdb') {
-    info = await fromCinemeta(parsed.value, type, signal);
-    if (!info) info = { type, titles: [], imdbId: parsed.value };
-  } else if (parsed.kind === 'kkh') {
+  if (parsed.kind === 'kkh') {
     info = await fromKisskh(parsed.value, signal);
+  } else if (parsed.kind === 'tmdb') {
+    // Sans cle, un id TMDB est irresolvable : ni Cinemeta, ni Trakt, ni TMDB lui-meme
+    // ne repondent sans authentification (verifie : 307, 403, 401).
+    info = config.tmdb ? await fromTmdbSeul(parsed.value, type, config.tmdb, signal) : null;
+    if (!info) {
+      console.log(`[Meta] tmdb:${parsed.value} irresolvable — une cle TMDB est requise`);
+      return null;
+    }
   } else {
-    info = { type, titles: [], tmdbId: parsed.value };
+    // Identifiant IMDb. Avec une cle, TMDB passe EN PREMIER : il connait la langue
+    // d'origine et les titres alternatifs, et il rend l'addon independant de
+    // Cinemeta. Cinemeta reste le socle sans cle, et le repli si TMDB ne trouve rien.
+    if (config.tmdb) {
+      const base: WorkInfo = { type, titles: [], imdbId: parsed.value };
+      try {
+        const parTmdb = await enrichWithTmdb(base, config.tmdb, signal);
+        if (parTmdb.titles.length > 0) info = parTmdb;
+      } catch {
+        // Cle invalide ou quota atteint : on retombe sur Cinemeta, jamais en erreur.
+      }
+    }
+    if (!info) info = await fromCinemeta(parsed.value, type, signal);
+
+    // Cinemeta apporte le PAYS, que TMDB ne donne pas sous cette forme et dont le
+    // garde-fou de perimetre se sert quand la langue d'origine manque.
+    if (info && !info.country && !info.originalLanguage) {
+      const parCinemeta = await fromCinemeta(parsed.value, type, signal);
+      if (parCinemeta?.country) info.country = parCinemeta.country;
+    }
   }
 
   if (!info) return null;
-  if (config.tmdb) {
-    try {
-      info = await enrichWithTmdb(info, config.tmdb, signal);
-    } catch {
-      // Une cle TMDB invalide ou un quota atteint ne doit jamais faire echouer la
-      // requete : on continue avec ce que Cinemeta a donne.
-    }
-  }
   return info.titles.length > 0 ? info : null;
 }
 
