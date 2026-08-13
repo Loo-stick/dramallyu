@@ -85,6 +85,11 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
   try {
     const work = await resolveWork(parsed, type, config);
     if (!work) {
+      // Identite introuvable : aucune source ne peut chercher sans titre. On le TRACE,
+      // sinon ce cas est indiscernable d'une recherche qui n'a rien trouve — la
+      // reponse est la meme liste vide, et le journal restait muet. C'est ce qui m'a
+      // fait suspecter les sources alors que l'identifiant demande n'existait pas.
+      console.log(`[Stream] ${req.params.type}/${req.params.id} -> identite non resolue (aucune fiche)`);
       res.json({ streams: [] });
       return;
     }
