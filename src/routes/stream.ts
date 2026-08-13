@@ -246,6 +246,15 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         (timedOut.length ? ` [abandon: ${timedOut.join(',')}]` : ''),
     );
 
+    // Quand on ne trouve RIEN, la question suivante est toujours la meme : a-t-on
+    // cherche sous le bon nom ? Un film coreen listé sous son titre d'origine est
+    // introuvable si on n'a interroge que sa traduction anglaise. On trace donc les
+    // formes de titre reellement employees — c'est la difference entre « aucune
+    // source ne l'a » et « on a mal demande », et sans ca les deux se ressemblent.
+    if (streams.length === 0) {
+      console.log(`[Stream] ...titres cherches : ${query.titles.join(' | ') || '(aucun)'}`);
+    }
+
     res.json({ streams });
   } catch (e) {
     console.error(`[Stream] echec ${req.params.id}: ${(e as Error).message}`);
