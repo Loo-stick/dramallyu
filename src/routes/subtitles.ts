@@ -111,11 +111,18 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
         lang: t.lang,
         // Meme raison que pour les pistes attachees : Nuvio lit un NOM de langue.
         language: nomLangue(t.lang),
-        // La liste est deja triee sur les preferences : la premiere est donc la langue
-        // la plus demandee. Le drapeau la fait selectionner d'emblee chez les lecteurs
-        // qui l'honorent, ce qui vaut mieux que d'esperer un bon rang d'affichage quand
-        // plusieurs addons de sous-titres repondent en meme temps.
-        ...(i === 0 ? { default: true } : {}),
+        // AUCUN DRAPEAU « default » ICI, et c'est un retour en arriere assume.
+        //
+        // Cette ressource repond pour N'IMPORTE QUEL flux, y compris ceux d'un autre
+        // addon et les releases torrent qui embarquent leurs propres pistes. Sur une
+        // release « Multi-Subs », les sous-titres INTEGRES sont cales au frame pres,
+        // alors que les notres viennent d'un autre encodage — montage different,
+        // recaps, coupures : tout glisse.
+        //
+        // Marquer notre piste par defaut detournait donc la selection automatique du
+        // lecteur au profit de la moins bonne. Le drapeau avait ete pose pour corriger
+        // l'ordre d'affichage dans Nuvio ; il ne l'a jamais corrige (c'est la position
+        // de l'addon dans la liste qui commande), et il coutait ça.
       }));
 
     res.json({ subtitles });
