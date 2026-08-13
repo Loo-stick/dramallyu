@@ -155,13 +155,19 @@ export function passeFiltres(etat: EtatFlux, f: Filtres): boolean {
 
   if (f.excludeCam && estCam(nom)) return false;
 
-  // « Uniquement le francais » : on juge sur ce que la release DECLARE.
+  // « Uniquement le francais » : on n'ecarte que ce dont on SAIT qu'il n'en a pas.
   //
-  // On ne peut pas faire mieux : les pistes integrees d'un .mkv ne se lisent qu'apres
-  // resolution chez le debrideur, soit bien apres le moment ou il faudrait filtrer.
-  // Une source directe qui porte une piste FR passe meme si son titre ne dit rien —
-  // la, on SAIT, on ne suppose pas.
-  if (f.frOnly && !porteDuFrancais(c)) return false;
+  // C'est la regle qui gouverne tout ce fichier, appliquee ici aussi : on ne coupe pas
+  // sur une information qu'on n'a pas. Couper sur l'ignorance faisait disparaitre des
+  // releases parfaitement francaises — constate sur « Pursuit of Jade », ou le meme
+  // fichier passait chez DarkPeers, qui publie son MediaInfo, et disparaissait chez
+  // DigitalCore, qui n'en publie pas.
+  //
+  // Ce qu'on ECARTE, c'est ce qui est etabli sans francais : un fichier dont on a lu
+  // les pistes, ou une release dont le MediaInfo est publie. Le reste passe, quitte a
+  // decevoir parfois — mieux vaut un flux de trop qu'un flux manquant qu'on ne saura
+  // jamais avoir perdu.
+  if (f.frOnly && sansFrancaisAvere(c)) return false;
 
   if (f.minSource) {
     const plancher = RANG_SOURCE[f.minSource];
@@ -205,6 +211,21 @@ export function tailleJugee(c: Candidate, episodesSaison?: number): number {
  * une declaration — d'ou l'importance de ne pas sur-interpreter « Multi Subs », cf.
  * `languageOf`.
  */
+/**
+ * Sait-on avec CERTITUDE que cette entree n'a pas de francais ?
+ *
+ * Trois cas, et un seul justifie d'ecarter :
+ *   - les pistes du fichier ont ete lues, ou le tracker a publie son MediaInfo, et le
+ *     francais n'y est pas -> on sait, on ecarte ;
+ *   - la source a enumere ses sous-titres et le francais n'y est pas -> on sait aussi ;
+ *   - on n'a que le titre -> on ne sait rien, et un titre muet ne prouve rien. On garde.
+ */
+export function sansFrancaisAvere(c: Candidate): boolean {
+  if (c.languesIntegrees) return !c.languesIntegrees.includes('fre');
+  if (c.subs && c.subs.length > 0) return !c.subs.some((t) => t.lang === 'fre');
+  return false;
+}
+
 export function porteDuFrancais(c: Candidate): boolean {
   // 1. Les pistes enumerees par la source : on SAIT.
   if (c.subs?.some((t) => t.lang === 'fre')) return true;

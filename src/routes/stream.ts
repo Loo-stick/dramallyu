@@ -15,7 +15,7 @@ import { toStremioStream, type StremioStream, type PisteFlux } from '../core/dis
 import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
 import { cacheParService, resolve, type NomDebrid } from '../debrid/resolver';
-import { languesDuFichier } from '../core/pistes-fichier';
+import { languesDuFichier, languesDejaConnues } from '../core/pistes-fichier';
 import { marquerMort } from '../debrid/deadlinks';
 import { cached } from '../core/cache';
 import { isRedirector, infosLiens, type InfoLien } from '../debrid/alldebrid';
@@ -124,6 +124,16 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     const episodesSaison =
       parsed.season !== undefined ? work.episodesParSaison?.[parsed.season] : undefined;
     const deduplique = dedupe(candidates);
+
+    // Ce qu'on a appris des fichiers lors des recherches precedentes. Lecture pure, sans
+    // reseau : elle doit avoir lieu AVANT le filtrage, sinon le filtre « ecarter ce qui
+    // n'a pas de francais » ignorerait tout ce qu'on sait deja.
+    for (const c of deduplique) {
+      if (!c.languesIntegrees) {
+        const su = languesDejaConnues(c.infoHash);
+        if (su) c.languesIntegrees = su;
+      }
+    }
 
 
     // ETAT DU CACHE, avant le tri.

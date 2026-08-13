@@ -17,7 +17,7 @@
 // La mesure n'allonge donc pas la reponse a la longue : au bout de quelques recherches
 // sur un titre, tout ce qui compte est deja connu.
 
-import { cached } from './cache';
+import { cached, get } from './cache';
 import { languesSousTitres, estMatroska } from './mkv';
 import { BROWSER_HEADERS } from './http';
 
@@ -33,6 +33,20 @@ export interface MesurePistes {
   langues: string[];
   /** Faux quand on n'a pas su lire — a distinguer de « aucun sous-titre ». */
   lisible: boolean;
+}
+
+/**
+ * Ce qu'on a DEJA mesure pour ce hash, sans le moindre appel reseau.
+ *
+ * Indispensable avant le filtrage : la mesure, elle, n'a lieu qu'apres le tri, sur les
+ * premiers de la liste. Sans cette lecture prealable, un fichier dont on connait
+ * pourtant les pistes serait filtre comme s'il etait inconnu — et le filtre
+ * n'appliquerait jamais ce qu'on a appris.
+ */
+export function languesDejaConnues(infoHash?: string): string[] | undefined {
+  if (!infoHash) return undefined;
+  const v = get<MesurePistes>(`pistes:${infoHash.toLowerCase()}`);
+  return v && v.lisible && v.langues.length > 0 ? v.langues : undefined;
 }
 
 async function lireEntete(url: string, signal?: AbortSignal): Promise<Buffer | null> {

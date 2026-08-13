@@ -215,11 +215,14 @@ test('« Multi Subs » n est PAS une promesse de francais', () => {
   assert.equal(porteDuFrancais(scene.candidate), true);
 });
 
-test('« uniquement le francais » garde ce qui l annonce', () => {
+test('« ecarter ce qui n a pas de francais » laisse passer l inconnu', () => {
+  // L'etiquette du titre ne suffit ni a garder ni a ecarter : elle ne dit rien des
+  // pistes reellement presentes. Un « VO » peut porter du francais integre, et c'est
+  // arrive. On ne coupe donc que sur du connu.
   const f = { ...NEUTRE, frOnly: true };
   assert.equal(passeFiltres(flux({ language: 'VOSTFR' }), f), true);
   assert.equal(passeFiltres(flux({ language: 'VF' }), f), true);
-  assert.equal(passeFiltres(flux({ language: 'VO', title: 'Drama.S01E01.1080p.WEB-DL' }), f), false);
+  assert.equal(passeFiltres(flux({ language: 'VO', title: 'Drama.S01E01.1080p.WEB-DL' }), f), true);
 });
 
 test('une source directe qui PORTE une piste FR passe, meme titre muet', () => {
@@ -230,4 +233,20 @@ test('une source directe qui PORTE une piste FR passe, meme titre muet', () => {
     language: 'VO', subs: [{ lang: 'fre', url: 'http://x/1.vtt' }, { lang: 'eng', url: 'http://x/2.vtt' }],
   } as never);
   assert.equal(passeFiltres(direct, { ...NEUTRE, frOnly: true }), true);
+});
+
+test('« ecarter ce qui n a pas de francais » n ecarte que le CERTAIN', () => {
+  // Vecu sur « Pursuit of Jade » : le meme fichier passait chez DarkPeers, qui publie
+  // son MediaInfo, et disparaissait chez DigitalCore, qui n'en publie pas. Couper sur
+  // l'ignorance faisait perdre une release parfaitement francaise.
+  const f = { ...NEUTRE, frOnly: true };
+
+  const lu = flux({ languesIntegrees: ['chi', 'eng'] } as never);
+  assert.equal(passeFiltres(lu, f), false, 'pistes lues, pas de FR -> on sait');
+
+  const luAvecFr = flux({ languesIntegrees: ['fre', 'eng'] } as never);
+  assert.equal(passeFiltres(luAvecFr, f), true);
+
+  const inconnu = flux({ title: 'Pursuit.of.Jade.S01.1080p.IQIYI.WEB-DL-ANDY', language: 'VO' });
+  assert.equal(passeFiltres(inconnu, f), true, 'rien de connu -> on garde');
 });

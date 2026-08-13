@@ -444,14 +444,13 @@
 
         <label class="pastille" data-bascule="frOnly" style="margin:10px 0 0">
           <input type="checkbox" id="frOnly">
-          <span class="signe">+</span><span>Uniquement les releases annoncant du francais</span>
+          <span class="signe">+</span><span>Ecarter ce qui n'a pas de francais</span>
         </label>
         <p class="indice">
-          Fonde sur ce que la release DECLARE (VOSTFR, VF, MULTi) et sur les pistes des
-          sources directes, que l'on connait reellement. Les sous-titres integres a un
-          .mkv ne sont lisibles qu'apres ouverture du fichier chez le debrideur, donc
-          trop tard pour filtrer : une release muette sur sa langue sera ecartee meme si
-          elle porte du francais.
+          N'ecarte que ce dont l'ABSENCE de francais est etablie : pistes lues dans le
+          fichier, MediaInfo publie par le tracker, ou sous-titres enumeres par la
+          source. Une release sur laquelle on ne sait rien est conservee — mieux vaut un
+          flux de trop qu'un flux francais perdu sans qu'on puisse le savoir.
         </p>
 
         <label for="maxResults">Nombre maximum de flux affiches</label>
