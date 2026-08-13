@@ -67,9 +67,15 @@ export interface FanoutResult {
   timedOut: string[];
 }
 
-export async function searchAll(query: Query, config: UserConfig): Promise<FanoutResult> {
+export async function searchAll(
+  query: Query,
+  config: UserConfig,
+  budgetMs?: number,
+): Promise<FanoutResult> {
   const settings = getSettings();
-  const deadline = new Deadline(settings.fanoutBudgetMs);
+  // Le fan-out ne prend jamais plus que ce que l'appelant lui accorde : c'est ainsi que
+  // le plafond de reponse reste tenable, meme quand une source traine.
+  const deadline = new Deadline(Math.min(budgetMs ?? settings.fanoutBudgetMs, settings.fanoutBudgetMs));
   const ctx: SearchContext = { config, deadline };
 
   const active = planSources(config).filter((p) => !p.skip);

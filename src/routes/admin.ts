@@ -312,6 +312,15 @@ export function handleEnregistrerReglages(req: Request, res: Response): void {
     patch.fanoutBudgetMs = Math.round(v);
   }
 
+  if (corps.reponseMaxMs !== undefined) {
+    const v = Number(corps.reponseMaxMs);
+    if (!Number.isFinite(v) || v < 2000 || v > 30000) {
+      res.status(400).json({ erreur: 'plafond de reponse hors bornes (2000 a 30000 ms)' });
+      return;
+    }
+    patch.reponseMaxMs = Math.round(v);
+  }
+
   if (corps.maxStreams !== undefined) {
     const v = Number(corps.maxStreams);
     if (!Number.isFinite(v) || v < 5 || v > 300) {

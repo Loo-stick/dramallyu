@@ -22,6 +22,7 @@ import { estChiffre, dechiffrerVtt } from '../sources/direct/kisskh/subdecrypt';
 import { getBaseUrl } from '../core/url';
 import { encodeToken, decodeToken } from '../debrid/token';
 import { httpGet } from '../core/http';
+import { get, set } from '../core/cache';
 import type { MediaType, SubTrack } from '../sources/types';
 
 /** Un jeton signe par piste : l'endpoint /sub ne doit pas devenir un proxy ouvert. */
@@ -143,6 +144,19 @@ export async function handleServeSub(req: Request, res: Response): Promise<void>
     return;
   }
 
+  // Piste DEJA convertie ? On la ressert telle quelle.
+  //
+  // Le lecteur redemande le fichier a chaque selection, et a chaque relecture de
+  // l'episode. Sans cache, chacune coutait un aller-retour vers l'hebergeur plus la
+  // conversion : mesure a 646-930 ms par piste, ressentie comme une latence a
+  // l'affichage des sous-titres. Le contenu d'une piste ne change jamais.
+  const cleVtt = `vtt:${payload.v}`;
+  const memorise = get<string>(cleVtt);
+  if (memorise) {
+    servirVtt(res, memorise);
+    return;
+  }
+
   // En binaire : OpenSubtitles sert des .srt.gz, qu'un decodage texte detruirait
   // avant meme qu'on puisse les decompresser.
   const response = await httpGet<ArrayBuffer>(payload.v, {
@@ -179,7 +193,17 @@ export async function handleServeSub(req: Request, res: Response): Promise<void>
     corps = clair;
   }
 
+  // Une piste ne change jamais : douze heures de memorisation, et la selection
+  // suivante est instantanee. On borne la taille memorisee — un fichier aberrant n'a
+  // pas a occuper le cache partage par tout le reste.
+  if (corps.length < 512 * 1024) set(cleVtt, corps, 12 * 60 * 60 * 1000, 'vtt');
+
+  servirVtt(res, corps);
+}
+
+/** En-tetes communs aux deux chemins, pour qu'ils ne divergent jamais. */
+function servirVtt(res: Response, corps: string): void {
   res.set('Content-Type', 'text/vtt; charset=utf-8');
-  res.set('Cache-Control', 'public, max-age=3600');
+  res.set('Cache-Control', 'public, max-age=86400');
   res.send(corps);
 }

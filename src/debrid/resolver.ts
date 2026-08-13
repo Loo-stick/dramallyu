@@ -158,19 +158,29 @@ export async function cacheParService(
   signal?: AbortSignal,
 ): Promise<Map<string, NomDebrid[]>> {
   const parHash = new Map<string, NomDebrid[]>();
+  const services = servicesFor(config).filter((s) => s.supportsCacheCheck);
 
-  for (const service of servicesFor(config)) {
-    if (!service.supportsCacheCheck) continue;
-    try {
-      for (const [hash, cached] of await service.checkCached(hashes, signal)) {
-        if (!cached) continue;
-        const liste = parHash.get(hash) ?? [];
-        liste.push(service.name);
-        parHash.set(hash, liste);
-      }
-    } catch {
-      // Un check-cache en echec ne doit pas empecher d'afficher les flux.
+  // EN PARALLELE. Les deux debrideurs etaient interroges l'un apres l'autre, ce qui
+  // ajoutait leurs delais au lieu de les superposer — chacun repond en une a deux
+  // secondes sur un lot de quarante hashes.
+  //
+  // L'ORDRE DU RESULTAT EST PRESERVE : `servicesFor` classe les services selon la
+  // preference de l'utilisateur, et l'etiquette affichee nomme le PREMIER detenteur.
+  // Collecter dans le desordre ferait mentir cette etiquette une fois sur deux.
+  const reponses = await Promise.all(
+    services.map((service) =>
+      service.checkCached(hashes, signal).catch(() => new Map<string, boolean>()),
+    ),
+  );
+
+  services.forEach((service, i) => {
+    for (const [hash, cached] of reponses[i]) {
+      if (!cached) continue;
+      const liste = parHash.get(hash) ?? [];
+      liste.push(service.name);
+      parHash.set(hash, liste);
     }
-  }
+  });
+
   return parHash;
 }

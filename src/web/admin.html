@@ -279,6 +279,14 @@
       </p>
       <label class="champ" for="r-budget">Budget de fan-out (ms, 2000 a 20000)</label>
       <input type="number" id="r-budget" min="2000" max="20000" step="500" style="max-width:160px">
+      <label class="champ" for="r-reponse">Plafond DUR de la reponse (ms, 2000 a 30000)</label>
+      <input type="number" id="r-reponse" min="2000" max="30000" step="500" style="max-width:160px">
+      <p class="aide" style="margin:.3rem 0 0">
+        Gouverne la reponse ENTIERE, enrichissements compris — la ou le budget de fan-out ne bornait
+        que l'interrogation des sources. Ce qui n'a pas le temps de se faire est omis : une etiquette
+        « pret » manquante vaut mieux qu'une reponse qui n'arrive pas.
+      </p>
+
       <label class="champ" for="r-max">Plafond de flux renvoyes (5 a 300)</label>
       <input type="number" id="r-max" min="5" max="300" step="5" style="max-width:160px">
       <div class="actions"><button class="act" id="btn-reglages">Enregistrer</button></div>
@@ -631,6 +639,7 @@ function chargerReglages() {
     reglagesCourants = d.settings;
     $('r-budget').value = d.settings.fanoutBudgetMs;
     $('r-max').value = d.settings.maxStreams;
+    $('r-reponse').value = d.settings.reponseMaxMs;
 
     var html = '';
     [['torznab', 'Torznab'], ['unit3d', 'UNIT3D']].forEach(function (f) {
@@ -655,6 +664,7 @@ function ligneIndexeur(famille, id, conf) {
 $('btn-reglages').addEventListener('click', function () {
   jsonPost('/api/admin/reglages', {
     fanoutBudgetMs: Number($('r-budget').value),
+    reponseMaxMs: Number($('r-reponse').value),
     maxStreams: Number($('r-max').value)
   }).then(function (d) {
     ecrire('msg-reglages', d.ok ? 'Enregistre. Applique immediatement.' : (d.erreur || 'echec'), d.ok ? 'ok' : 'ko');

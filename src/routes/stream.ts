@@ -114,9 +114,29 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     }
 
     const query = buildQuery(type, parsed, work);
-    const { candidates, timings, apports, timedOut } = await searchAll(query, config);
+    // Chronometrage par PHASE. Le detail par source ne disait qu'une partie de
+    // l'histoire : sur une mesure a 14,9 s, le fan-out n'en representait que 5,6 —
+    // les deux tiers se depensaient APRES, sans que rien ne le montre.
+    const phases: Record<string, number> = {};
+    const chrono = async <T>(nom: string, f: () => Promise<T>): Promise<T> => {
+      const t = Date.now();
+      try {
+        return await f();
+      } finally {
+        phases[nom] = Date.now() - t;
+      }
+    };
 
     const settings = getSettings();
+    /** Millisecondes restantes avant le plafond dur de la reponse. */
+    const restant = (): number => settings.reponseMaxMs - (Date.now() - started);
+
+    // Le fan-out ne peut pas manger tout le budget : il faut qu'il reste de quoi
+    // enrichir. Deux tiers pour chercher, un tiers pour qualifier — la repartition
+    // vient de la mesure, ou l'enrichissement coutait autant que la recherche.
+    const { candidates, timings, apports, timedOut } = await chrono('fanout', () =>
+      searchAll(query, config, Math.max(1500, Math.round(restant() * 0.66))),
+    );
     const langOrder = langOrderFromSubs(config.subLangs);
 
     // Episodes de la saison demandee. Sert AU FILTRE (juger un pack a l'episode) comme
@@ -147,8 +167,6 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // budget. AllDebrid n'expose plus rien d'equivalent — ses entrees restent donc
     // marquees « a debrider », sans jamais affirmer une disponibilite inconnue.
     const hashes = deduplique.map((c) => c.infoHash).filter((h): h is string => Boolean(h));
-    const enCache =
-      hashes.length > 0 ? await cacheParService(hashes, config) : new Map<string, NomDebrid[]>();
 
     // ETAT DES LIENS DDL, en UNE requete pour tous.
     //
@@ -167,23 +185,45 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // Le cache serialise en JSON : une Map y perd son type et revient en objet nu.
     // On memorise donc des PAIRES, et on reconstruit la Map a la sortie. Le defaut ne
     // se voyait pas au premier appel — seulement au second, quand le cache repondait.
-    const paires =
-      config.ad && liensAVerifier.length > 0
-        ? await cached<[string, InfoLien][]>(
-            // Cle VERSIONNEE. Une entree ecrite par une version anterieure du code peut
-            // avoir une tout autre forme — ici une Map serialisee, devenue « {} », que
-            // le code suivant ne sait pas parcourir. Changer de version a chaque
-            // changement de forme evite de servir un objet qu'on ne comprend plus.
-            `ddlinfos:v2:${[...new Set(liensAVerifier)].sort().join('|').slice(0, 300)}:${liensAVerifier.length}`,
-            2 * 60 * 60 * 1000,
-            async () => [...(await infosLiens(liensAVerifier, config.ad as string, AbortSignal.timeout(6000)))],
-            { scope: 'ddlinfos', shouldCache: (v) => v.length > 0, negativeTtlMs: 10 * 60 * 1000 },
-          )
-        : [];
+    // LES DEUX ENRICHISSEMENTS EN PARALLELE, sous ce qui reste du plafond.
+    //
+    // Ils s'executaient l'un APRES l'autre, alors qu'ils sont totalement independants :
+    // l'un interroge les debrideurs sur des hashes, l'autre sur des liens d'hebergeur.
+    // Mesure avant correction : 3659 ms puis 3219 ms, soit 6,9 s ajoutees a un fan-out
+    // qui en avait deja pris 5,9.
+    //
+    // Ce qui n'a pas le temps de se faire est OMIS, pas attendu. Une etiquette
+    // manquante degrade la liste ; une reponse qui n'arrive pas la supprime.
+    const budgetEnrichissement = Math.max(0, restant() - 400);
 
-    // Ceinture ET bretelles : meme avec une cle versionnee, une entree inattendue ne
-    // doit pas faire echouer toute la reponse. Ne rien savoir sur les liens rend juste
-    // la liste moins fine, ce qui est sans commune mesure avec une liste vide.
+    const [enCache, paires] = await chrono('enrichissement', () =>
+      Promise.all([
+        hashes.length > 0 && budgetEnrichissement > 500
+          ? cacheParService(hashes, config, AbortSignal.timeout(budgetEnrichissement)).catch(
+              () => new Map<string, NomDebrid[]>(),
+            )
+          : Promise.resolve(new Map<string, NomDebrid[]>()),
+
+        config.ad && liensAVerifier.length > 0 && budgetEnrichissement > 500
+          ? cached<[string, InfoLien][]>(
+              // Cle VERSIONNEE. Une entree ecrite par une version anterieure du code peut
+              // avoir une tout autre forme — ici une Map serialisee, devenue « {} », que
+              // le code suivant ne sait pas parcourir.
+              `ddlinfos:v2:${[...new Set(liensAVerifier)].sort().join('|').slice(0, 300)}:${liensAVerifier.length}`,
+              2 * 60 * 60 * 1000,
+              async () => [
+                ...(await infosLiens(
+                  liensAVerifier,
+                  config.ad as string,
+                  AbortSignal.timeout(budgetEnrichissement),
+                )),
+              ],
+              { scope: 'ddlinfos', shouldCache: (v) => v.length > 0, negativeTtlMs: 10 * 60 * 1000 },
+            ).catch(() => [] as [string, InfoLien][])
+          : Promise.resolve([] as [string, InfoLien][]),
+      ]),
+    );
+
     const etatLiens = new Map<string, InfoLien>(Array.isArray(paires) ? paires : []);
 
     /** Le debrideur qui servira REELLEMENT ce flux, et s'il l'a deja. */
@@ -287,19 +327,37 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       .filter((e) => e.cached === true && e.candidate.infoHash && !e.candidate.languesIntegrees)
       .slice(0, MAX_MESURES);
 
-    if (aMesurer.length > 0 && Date.now() - started < settings.fanoutBudgetMs) {
-      await Promise.all(
-        aMesurer.map(async (e) => {
-          const c = e.candidate;
-          const mesure = await languesDuFichier(c.infoHash as string, () =>
+    // LA MESURE NE BLOQUE PLUS LA REPONSE.
+    //
+    // Elle coute une resolution chez le debrideur plus une requete Range par fichier :
+    // du temps qu'aucun lecteur n'attend. Comme le resultat est memorise sur le HASH
+    // pendant trois mois, le faire APRES avoir repondu ne perd rien — la recherche
+    // suivante sur le meme titre en profitera, et c'est la que ca compte.
+    //
+    // Cela change une chose, qu'il faut assumer : sur un titre jamais consulte, la
+    // premiere reponse ne connait pas encore les langues integrees. Le filtre
+    // « ecarter ce qui n'a pas de francais » ne coupe donc rien qu'il ignore, ce qui
+    // est deja sa regle.
+    if (aMesurer.length > 0) {
+      void Promise.all(
+        aMesurer.map((e) =>
+          languesDuFichier(e.candidate.infoHash as string, () =>
             resolve(
-              { kind: 'torrent', value: c.infoHash as string, fileHint: c.fileHint, ad: config.ad, tb: config.tb, pref: config.debrid },
+              {
+                kind: 'torrent',
+                value: e.candidate.infoHash as string,
+                fileHint: e.candidate.fileHint,
+                ad: config.ad,
+                tb: config.tb,
+                pref: config.debrid,
+              },
               AbortSignal.timeout(8000),
             ),
-          );
-          if (mesure?.lisible) c.languesIntegrees = mesure.langues;
-        }),
-      );
+          ).catch(() => null),
+        ),
+      ).then(() => {
+        console.log(`[Pistes] ${aMesurer.length} fichier(s) mesure(s) en tache de fond`);
+      });
     }
 
     // SANS le segment de config, volontairement : le jeton /resolve porte deja les
@@ -400,7 +458,8 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     console.log(
       `[Stream] ${req.params.type}/${req.params.id} -> ${streams.length} flux en ${elapsed}ms` +
         (detail ? ` (${detail})` : '') +
-        (timedOut.length ? ` [abandon: ${timedOut.join(',')}]` : ''),
+        (timedOut.length ? ` [abandon: ${timedOut.join(',')}]` : '') +
+        ` | phases: ${Object.entries(phases).map(([k, v]) => `${k}=${v}ms`).join(' ')}`,
     );
 
     // Quand on ne trouve RIEN, la question suivante est toujours la meme : a-t-on

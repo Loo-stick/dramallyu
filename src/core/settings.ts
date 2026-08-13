@@ -23,6 +23,17 @@ export interface Settings {
   sources: Record<string, boolean>;
   /** Budget dur du fan-out. Au-dela, les sources en retard sont abandonnees. */
   fanoutBudgetMs: number;
+  /**
+   * Plafond DUR de la reponse /stream, enrichissements compris.
+   *
+   * Le budget de fan-out ne bornait que l'interrogation des sources. Tout ce qui vient
+   * apres — verification du cache debrid, etat des liens DDL — s'y ajoutait sans
+   * limite : mesure a 12,8 s dont 6,9 d'enrichissement. Un lecteur n'attend pas, et
+   * AIOStreams coupe. Ce plafond-ci gouverne le tout, et ce qui n'a pas le temps de se
+   * faire est simplement omis — une etiquette manquante vaut mieux qu'une reponse
+   * qui n'arrive pas.
+   */
+  reponseMaxMs: number;
   /** Nombre maximum de flux renvoyes, toutes sources confondues. */
   maxStreams: number;
   torznab: Record<string, TorznabIndexerSettings>;
@@ -51,6 +62,7 @@ const DEFAULTS: Settings = {
   },
   // 8 s : au-dela, AIOStreams coupe la source et l'utilisateur voit un ecran vide.
   fanoutBudgetMs: 8000,
+  reponseMaxMs: 5000,
   maxStreams: 60,
   torznab: {
     c411: { enabled: true, url: 'https://c411.org/api', categories: [2000, 5000] },
@@ -89,6 +101,7 @@ export function getSettings(): Settings {
   return {
     sources: { ...DEFAULTS.sources, ...(raw.sources || {}) },
     fanoutBudgetMs: clamp(Number(raw.fanoutBudgetMs) || DEFAULTS.fanoutBudgetMs, 2000, 20000),
+    reponseMaxMs: clamp(Number(raw.reponseMaxMs) || DEFAULTS.reponseMaxMs, 2000, 30000),
     maxStreams: clamp(Number(raw.maxStreams) || DEFAULTS.maxStreams, 5, 300),
     torznab: { ...DEFAULTS.torznab, ...(raw.torznab || {}) },
     unit3d: { ...DEFAULTS.unit3d, ...(raw.unit3d || {}) },
