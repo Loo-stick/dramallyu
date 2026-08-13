@@ -36,21 +36,10 @@ const DEFAULTS: Settings = {
     c411: true,
     tr4ker: true,
     zonetelechargement: true,
-    // DESACTIVEE le 2026-08-13, apres verification en production.
-    //
-    // Wawacity place TOUS ses liens derriere `dl-protect`, dont la page de sortie est
-    // protegee par un captcha Cloudflare Turnstile. AllDebrid refuse ces liens
-    // (LINK_HOST_NOT_SUPPORTED) et son endpoint /link/redirector n'en extrait rien.
-    // Nous ne pouvons pas davantage les resoudre : un captcha ne se contourne pas.
-    //
-    // La source fonctionne donc parfaitement pour TROUVER des fichiers — 21 resultats
-    // sur un episode — mais aucun n'est jouable. Les afficher etait pire que de ne
-    // rien afficher : ils occupaient la liste, repoussaient des flux valides hors du
-    // plafond, et chaque clic menait a une erreur.
-    //
-    // A reactiver si dl-protect abandonne le captcha, ou si un debrideur apprend a le
-    // traverser. Le code du scraper reste entier et teste.
-    wawacity: false,
+    // Wawacity publie beaucoup sur des hebergeurs qu'AllDebrid ne prend pas (Uploady,
+    // DailyUploads, Nitroflare) mais que TorBox prend. Le tri se fait desormais sur la
+    // liste que chaque service publie, et non sur une liste ecrite a la main.
+    wawacity: true,
   },
   // 8 s : au-dela, AIOStreams coupe la source et l'utilisateur voit un ecran vide.
   fanoutBudgetMs: 8000,

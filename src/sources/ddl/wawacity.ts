@@ -22,6 +22,7 @@ import { cached } from '../../core/cache';
 import { makeEndpointConfig } from '../../core/endpoint-config';
 import { matchesTitle } from '../../core/matching';
 import { qualityOf, languageOf } from '../torrent/release';
+import { hotesSupportes, hoteExploitable } from '../../debrid/hosts';
 import type { Candidate, Query, SearchContext, Source } from '../types';
 
 const TTL_MS = 60 * 60 * 1000;
@@ -109,28 +110,21 @@ export interface WawaLink {
 }
 
 /**
- * Hebergeurs de TELECHARGEMENT que les debrideurs savent debloquer.
+ * Lecteurs de STREAMING, a distinguer des hebergeurs de telechargement.
  *
- * C'est le discriminant central de cette source : la fiche melange une section
- * « Regarder » (lecteurs de streaming : Vidlox, Dood...) et une section
- * « Telecharger » (1fichier, Uptobox...), toutes deux derriere le meme protecteur
- * dl-protect. Envoyer un lecteur de streaming a un debrideur ne produit rien —
- * filtrer sur le nom d'hebergeur est ce qui separe proprement les deux.
+ * La fiche melange les deux sections derriere le MEME protecteur dl-protect : rien
+ * dans l'URL ne les separe, seul le nom porte par la cellule voisine le fait.
+ *
+ * On liste ici ce qu'on ECARTE, et non ce qu'on garde. La liste de ce qu'on garde
+ * n'est pas la notre a ecrire : c'est celle que publient AllDebrid et TorBox, et elle
+ * depend des cles de chaque utilisateur (cf. debrid/hosts.ts). L'avoir devinee a la
+ * main affichait des flux injouables ET en jetait de parfaitement valables.
  */
-const HEBERGEURS_DEBRIDABLES = [
-  '1fichier',
-  'uptobox',
-  'rapidgator',
-  'turbobit',
-  'nitroflare',
-  'uploady',
-  'dailyuploads',
-  'darkibox',
-];
+const LECTEURS_STREAMING = ['vidlox', 'dood', 'anonyme', 'vidmoly', 'uqload', 'voe'];
 
-export function estDebridable(hebergeur: string): boolean {
+export function estLecteurStreaming(hebergeur: string): boolean {
   const h = hebergeur.toLowerCase().replace(/[\s._-]/g, '');
-  return HEBERGEURS_DEBRIDABLES.some((x) => h.includes(x));
+  return LECTEURS_STREAMING.some((x) => h.includes(x));
 }
 
 /** « 2 Go » / « 1.4 GB » -> octets. */
@@ -250,6 +244,8 @@ async function searchWawacity(q: Query, ctx: SearchContext): Promise<Candidate[]
   const title = q.titles[0];
   if (!title) return [];
 
+  // Les hebergeurs que CET utilisateur peut reellement debloquer.
+  const supportes = await hotesSupportes(ctx.config);
   const section = q.type === 'series' ? 'series' : 'films';
   const searchUrl = `${BASE()}/?p=${section}&search=${encodeURIComponent(title)}`;
 
@@ -283,7 +279,8 @@ async function searchWawacity(q: Query, ctx: SearchContext): Promise<Candidate[]
     const links = parseFicheLinks(html).filter((l) => {
       // Ecarte les lecteurs de streaming : seuls les hebergeurs de telechargement
       // que le debrideur sait debloquer nous interessent.
-      if (!estDebridable(l.hebergeur)) return false;
+      if (estLecteurStreaming(l.hebergeur)) return false;
+      if (!hoteExploitable(l.hebergeur, supportes)) return false;
       if (q.type === 'movie' || q.episode === undefined) return true;
       // Un lien sans numero d'episode sur une fiche de serie est ambigu : on l'ecarte
       // plutot que de risquer de servir le mauvais episode.

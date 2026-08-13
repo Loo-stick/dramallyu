@@ -6,7 +6,7 @@ import {
   parseSearchResults,
   parseFicheLinks,
   looksParked,
-  estDebridable,
+  estLecteurStreaming,
   parseTaille,
   gateTarget,
 } from './wawacity';
@@ -94,14 +94,14 @@ test('les lignes commentees ne comptent pas', () => {
   assert.equal(liens[0].hebergeur, 'Uptobox');
 });
 
-test('un lecteur de streaming n est pas debridable', () => {
-  // C'est LE discriminant : Vidlox et 1fichier ont la meme forme d'URL protegee.
-  assert.equal(estDebridable('Vidlox'), false);
-  assert.equal(estDebridable('Dood'), false);
-  assert.equal(estDebridable('Anonyme'), false);
-  assert.equal(estDebridable('1fichier'), true);
-  assert.equal(estDebridable('DailyUploads'), true);
-  assert.equal(estDebridable('Rapidgator'), true);
+test('les lecteurs de streaming sont reconnus comme tels', () => {
+  // On ECARTE ces noms-la ; la liste de ce qu'on GARDE vient des debrideurs
+  // eux-memes (debrid/hosts.ts), pas d'une liste ecrite a la main.
+  assert.equal(estLecteurStreaming('Vidlox'), true);
+  assert.equal(estLecteurStreaming('Dood'), true);
+  assert.equal(estLecteurStreaming('Anonyme'), true);
+  assert.equal(estLecteurStreaming('1fichier'), false);
+  assert.equal(estLecteurStreaming('Rapidgator'), false);
 });
 
 test('taille lue en unites francaises et anglaises', () => {

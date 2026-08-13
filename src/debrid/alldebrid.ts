@@ -319,20 +319,7 @@ export function allDebrid(apiKey: string): DebridService {
     },
 
     async resolveDdl(link, signal) {
-      // Les sites DDL francais ne publient jamais le lien d'hebergeur en clair : il
-      // est derriere un REDIRECTEUR (dl-protect pour Wawacity, zoneurs pour
-      // Zone-Telechargement). Passer ce lien directement a /link/unlock echoue —
-      // AllDebrid a un endpoint dedie pour ca, qu'il faut appeler d'abord.
-      let cible = link;
-      if (isRedirector(link)) {
-        const redir = await call<{ links?: string[] }>('/link/redirector', apiKey, { link }, signal);
-        const premier = redir?.links?.find((l) => typeof l === 'string' && /^https?:\/\//.test(l));
-        if (!premier) return null;
-        cible = premier;
-      }
-
-      const data = await call<{ link?: string }>('/link/unlock', apiKey, { link: cible }, signal);
-      return data?.link ?? null;
+      return resoudreDdl(link, apiKey, signal);
     },
 
     async listFiles(magnetOrHash, signal) {
@@ -342,3 +329,91 @@ export function allDebrid(apiKey: string): DebridService {
 }
 
 export { extractHash };
+
+/**
+ * Erreurs TRANSITOIRES d'AllDebrid : elles meritent une nouvelle tentative.
+ *
+ * Liste reprise de wastream, ou elle est le fruit de l'usage. `REDIRECTOR_ERROR` en
+ * fait partie, et c'est ce qui m'avait echappe : j'abandonnais au premier echec et
+ * j'en avais conclu que dl-protect etait infranchissable. Il ne l'est que par
+ * intermittence — la meme requete rejouee aboutit.
+ *
+ * `LINK_DOWN` n'y figure pas, volontairement : le fichier n'est plus chez
+ * l'hebergeur, rejouer ne le ressuscitera pas.
+ */
+const ERREURS_A_REESSAYER = new Set([
+  'REDIRECTOR_ERROR',
+  'LINK_HOST_UNAVAILABLE',
+  'LINK_TEMPORARY_UNAVAILABLE',
+  'LINK_TOO_MANY_DOWNLOADS',
+  'LINK_HOST_FULL',
+  'LINK_HOST_LIMIT_REACHED',
+]);
+
+const DDL_TENTATIVES = 4;
+const DDL_ATTENTE_MS = 3000;
+
+/** Comme `call`, mais rend AUSSI le code d'erreur — indispensable pour decider d'un retry. */
+async function callDetaille<T>(
+  path: string,
+  apiKey: string,
+  params: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<{ data: T | null; code?: string }> {
+  const qs = new URLSearchParams({ agent: AGENT, ...params }).toString();
+  try {
+    const res = await axios.get<AdResponse<T>>(`${BASE}${path}?${qs}`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: 25000,
+      validateStatus: () => true,
+      signal,
+    });
+    const body = res.data;
+    if (!body || body.status === 'error') {
+      const code = body?.error?.code;
+      if (code) console.log(`[AllDebrid] ${path}: ${code}`);
+      return { data: null, code };
+    }
+    return { data: (body.data ?? null) as T | null };
+  } catch (e) {
+    console.log(`[AllDebrid] ${path}: ${(e as Error).message.slice(0, 80)}`);
+    return { data: null };
+  }
+}
+
+async function resoudreDdl(
+  link: string,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  for (let essai = 0; essai < DDL_TENTATIVES; essai++) {
+    if (signal?.aborted) return null;
+
+    // Les sites DDL francais ne publient jamais le lien d'hebergeur en clair : il est
+    // derriere un REDIRECTEUR (dl-protect, zoneurs). /link/unlock echoue dessus —
+    // AllDebrid a un endpoint dedie, qu'il faut appeler d'abord.
+    let cible = link;
+    if (isRedirector(link)) {
+      const redir = await callDetaille<{ links?: string[] }>('/link/redirector', apiKey, { link }, signal);
+      const premier = redir.data?.links?.find((l) => typeof l === 'string' && /^https?:\/\//.test(l));
+      if (!premier) {
+        if (redir.code && ERREURS_A_REESSAYER.has(redir.code) && essai < DDL_TENTATIVES - 1) {
+          await sleep(DDL_ATTENTE_MS);
+          continue;
+        }
+        return null;
+      }
+      cible = premier;
+    }
+
+    const deblocage = await callDetaille<{ link?: string }>('/link/unlock', apiKey, { link: cible }, signal);
+    if (deblocage.data?.link) return deblocage.data.link;
+
+    if (deblocage.code && ERREURS_A_REESSAYER.has(deblocage.code) && essai < DDL_TENTATIVES - 1) {
+      await sleep(DDL_ATTENTE_MS);
+      continue;
+    }
+    return null;
+  }
+  return null;
+}
