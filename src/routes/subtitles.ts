@@ -12,7 +12,7 @@
 //     vers l'hebergeur d'origine ne s'affiche pas (CORS, format, en-tetes).
 
 import type { Request, Response } from 'express';
-import { parseConfig } from '../core/config';
+import { parseConfig, nomLangue } from '../core/config';
 import { parseStremioId } from '../core/ids';
 import { resolveWork, estAsiatique } from '../core/meta';
 import { subtitlesAll } from '../core/registry';
@@ -100,6 +100,13 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
         id: `dramallyu-${i}`,
         url: subUrl(base, t),
         lang: t.lang,
+        // Meme raison que pour les pistes attachees : Nuvio lit un NOM de langue.
+        language: nomLangue(t.lang),
+        // La liste est deja triee sur les preferences : la premiere est donc la langue
+        // la plus demandee. Le drapeau la fait selectionner d'emblee chez les lecteurs
+        // qui l'honorent, ce qui vaut mieux que d'esperer un bon rang d'affichage quand
+        // plusieurs addons de sous-titres repondent en meme temps.
+        ...(i === 0 ? { default: true } : {}),
       }));
 
     res.json({ subtitles });

@@ -13,8 +13,24 @@
 // sont des SYMBOLES et chaque symbole est double d'un texte.
 
 import type { Candidate } from '../sources/types';
+
 import { normalizeLanguage, normalizeQuality, isUnknownQuality } from './prefs';
 import { releaseDetails } from '../sources/torrent/release';
+
+/**
+ * Une piste attachee a un flux.
+ *
+ * `lang` est le code ISO 639-2 attendu par Stremio ; `language` le libelle lisible
+ * qu'attendent les providers de Nuvio. On emet les deux : un champ vide suffit a
+ * faire ignorer ou reléguer la piste.
+ */
+export interface PisteFlux {
+  id: string;
+  url: string;
+  lang: string;
+  language: string;
+  default?: boolean;
+}
 
 export interface StremioStream {
   name: string;
@@ -28,7 +44,7 @@ export interface StremioStream {
    * accompagnent LE flux qu'on sert — et sont donc proposees avec lui plutot que
    * reléguees derriere les autres addons de sous-titres.
    */
-  subtitles?: { id: string; url: string; lang: string }[];
+  subtitles?: PisteFlux[];
   infoHash?: string;
   fileIdx?: number;
   behaviorHints?: {
@@ -83,7 +99,7 @@ export interface FormatOptions {
   /** Debrideur qui servira reellement ce flux. */
   debrid?: 'alldebrid' | 'torbox';
   /** Pistes a attacher au flux, deja converties en URL servies par nous. */
-  sousTitres?: { id: string; url: string; lang: string }[];
+  sousTitres?: PisteFlux[];
   /**
    * Etat du cache : vrai = pret a lire, faux = a telecharger,
    * `undefined` = ON NE SAIT PAS (typiquement un lien DDL, dont la disponibilite ne

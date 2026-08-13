@@ -229,6 +229,23 @@ const ISO_639_1_TO_2: Record<string, string> = {
   id: 'ind', vi: 'vie', tr: 'tur', nl: 'dut', pl: 'pol',
 };
 
+/**
+ * Nom lisible d'une langue, pour les lecteurs qui affichent un libelle plutot qu'un
+ * code. Nuvio en fait partie : ses propres providers renvoient
+ * `{ url, language: 'English' }`, un NOM et non un code ISO.
+ */
+const NOMS_LANGUES: Record<string, string> = {
+  fre: 'Français', eng: 'English', kor: '한국어 (Coréen)', jpn: '日本語 (Japonais)',
+  chi: '中文 (Chinois)', tha: 'ไทย (Thaï)', spa: 'Español', por: 'Português',
+  ger: 'Deutsch', ita: 'Italiano', ara: 'العربية (Arabe)', rus: 'Русский',
+  ind: 'Indonesia', vie: 'Tiếng Việt', tur: 'Türkçe', dut: 'Nederlands',
+  pol: 'Polski', km: 'ភាសាខ្មែរ (Khmer)', ms: 'Melayu',
+};
+
+export function nomLangue(code: string): string {
+  return NOMS_LANGUES[code] || code.toUpperCase();
+}
+
 export function normalizeLangCode(code: string): string {
   const c = code.trim().toLowerCase();
   if (c.length === 2 && ISO_639_1_TO_2[c]) return ISO_639_1_TO_2[c];

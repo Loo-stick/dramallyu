@@ -4,14 +4,14 @@
 // Aucun debridage ici (cf. debrid/token.ts pour le pourquoi).
 
 import type { Request, Response } from 'express';
-import { parseConfig } from '../core/config';
+import { parseConfig, nomLangue } from '../core/config';
 import { parseStremioId } from '../core/ids';
 import { resolveWork, estAsiatique } from '../core/meta';
 import { searchAll } from '../core/registry';
 import { getSettings } from '../core/settings';
 import { langOrderFromSubs } from '../core/prefs';
 import { comparer, passeFiltres, type EtatFlux } from '../core/filters';
-import { toStremioStream, type StremioStream } from '../core/display';
+import { toStremioStream, type StremioStream, type PisteFlux } from '../core/display';
 import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
 import { cacheParService, type NomDebrid } from '../debrid/resolver';
@@ -177,7 +177,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
      * Seules les sources qui portent leurs propres pistes en fournissent : KissKH sait
      * lesquelles vont avec SON flux, ce qu'aucun addon generique ne peut deviner.
      */
-    const pistesDe = (c: Candidate): { id: string; url: string; lang: string }[] | undefined => {
+    const pistesDe = (c: Candidate): PisteFlux[] | undefined => {
       if (!config.subsSurFlux || !c.subs || c.subs.length === 0) return undefined;
       const rang = (lang: string): number => {
         const i = config.subLangs.indexOf(lang);
@@ -188,7 +188,16 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         .map((t, i) => ({
           id: `dramallyu-flux-${i}`,
           url: `${base}/sub/${encodeToken({ k: 'ddl', v: t.url })}.vtt`,
+          // DEUX formes, volontairement. Stremio lit `lang` (code ISO 639-2) ; les
+          // providers de Nuvio, eux, produisent `{ url, language: 'English' }` — un
+          // NOM, pas un code. Emettre les deux evite qu'un lecteur reçoive un champ
+          // vide et relegue la piste en fin de liste, ou l'ignore.
           lang: t.lang,
+          language: nomLangue(t.lang),
+          // La premiere est celle de la langue demandee en tete : la marquer par
+          // defaut la fait selectionner d'emblee chez les lecteurs qui honorent ce
+          // drapeau, ce qui vaut mieux que d'esperer un bon ordre d'affichage.
+          ...(i === 0 ? { default: true } : {}),
         }));
     };
 

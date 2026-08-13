@@ -13,6 +13,7 @@ import {
   hasDebrid,
   estSentinelle,
   DEFAULT_CONFIG,
+  nomLangue,
 } from './config';
 
 test('aller-retour encode/parse', () => {
@@ -162,4 +163,15 @@ test('une valeur d affichage n est jamais prise pour une cle', () => {
   assert.equal(estSentinelle('aBc123XyZ456'), false);
   assert.equal(estSentinelle(''), false);
   assert.equal(estSentinelle(undefined), false);
+});
+
+test('chaque langue proposee a un libelle lisible', () => {
+  // Les lecteurs qui affichent un NOM de langue plutot qu'un code (Nuvio en est un :
+  // ses providers produisent `{ url, language: 'English' }`) reçoivent sinon un champ
+  // vide, et reléguent ou ignorent la piste. Le repli en majuscules garantit qu'il n'y
+  // a jamais de libelle vide, meme pour un code qu'on n'a pas prevu.
+  assert.equal(nomLangue('fre'), 'Français');
+  assert.equal(nomLangue('eng'), 'English');
+  assert.equal(nomLangue('xyz'), 'XYZ');
+  assert.notEqual(nomLangue(''), undefined);
 });
