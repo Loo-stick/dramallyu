@@ -41,6 +41,7 @@ import {
 } from './routes/admin';
 import { register, planSources } from './core/registry';
 import { brancherJournal } from './core/journal';
+import { compression } from './core/compression';
 import {
   parseConfig,
   encodeConfig,
@@ -85,6 +86,10 @@ register(
   zoneTelechargementSource,
   wawacitySource,
 );
+
+// Compression AVANT tout le reste : elle enveloppe `res.send`, et doit donc etre en
+// place avant que la moindre route ne reponde.
+app.use(compression);
 
 // --- Garde-fous --------------------------------------------------------------
 app.use((_req, res, next) => {
