@@ -171,6 +171,17 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // etait enregistree — donc 404 au moindre appui sur Play.
     const base = getBaseUrl(req);
 
+    // Identite de l'oeuvre, transmise au formateur pour qu'il puisse fabriquer un
+    // `behaviorHints.filename` analysable quand la source ne fournit qu'un titre nu.
+    // Elle ne change RIEN a l'affichage : ni le nom, ni la description, ni les
+    // behaviorHints existants.
+    const identite = {
+      annee: work.year,
+      saison: parsed.season,
+      episode: parsed.episode,
+      titreOeuvre: work.titles[0],
+    };
+
     /**
      * Pistes a attacher au flux, servies par NOS endpoints comme celles de la
      * ressource — un lien direct vers l'hebergeur ne s'affiche pas (CORS, format).
@@ -216,7 +227,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         // quelle — l'addon reste fonctionnel, avec les proxyHeaders pour seul recours.
         const needsHeaders = c.headers && Object.keys(c.headers).length > 0;
         const playUrl = needsHeaders ? throughMediaflow(c.directUrl, c.headers) : c.directUrl;
-        return toStremioStream(c, { playUrl, sousTitres: pistesDe(c) });
+        return toStremioStream(c, { playUrl, sousTitres: pistesDe(c), ...identite });
       }
       // Torrent ou DDL : on differe la resolution au moment du Play.
       const token = encodeToken({
@@ -233,6 +244,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         debrid: service,
         cached: pret,
         sousTitres: pistesDe(c),
+        ...identite,
       });
     });
 

@@ -151,3 +151,79 @@ test('le ⚡ n apparait QU UNE fois, dans l etiquette', () => {
   const s = toStremioStream(torrent(), { cached: true, debrid: 'torbox' });
   assert.equal((s.name + s.description).split('⚡').length - 1, 1);
 });
+
+// --- behaviorHints.filename : ce que lit AIOStreams ---------------------------
+//
+// Il analyse ce champ avec un parseur de noms de release et ne regarde la description
+// QUE s'il est absent. Un titre nu lui fait sortir « Unknown Year », et son filtre
+// « Year Matching » supprime le flux. Verifie dans ses journaux en production.
+
+const OEUVRE = { annee: 2017, titreOeuvre: 'Sex Plate 17' };
+
+test('un film sans nom de release recoit une annee entre parentheses', () => {
+  const f = toStremioStream(
+    { sourceId: 'kisskh', kind: 'direct', title: 'Sex Plate 17', quality: '1080p', language: 'VOSTFR' },
+    { playUrl: 'http://x/y.m3u8', ...OEUVRE },
+  ).behaviorHints!.filename!;
+  assert.match(f, /\(2017\)/);
+  assert.match(f, /1080p/);
+  assert.match(f, /VOSTFR/);
+});
+
+test('une serie recoit SxxExx, pas la mention « Season N »', () => {
+  const f = toStremioStream(
+    { sourceId: 'kisskh', kind: 'direct', title: 'Squid Game Season 1', quality: '720p', language: 'VOSTFR' },
+    { playUrl: 'http://x/y.m3u8', annee: 2021, saison: 1, episode: 9, titreOeuvre: 'Squid Game Season 1' },
+  ).behaviorHints!.filename!;
+  assert.match(f, /^Squid Game S01E09\b/);
+  assert.doesNotMatch(f, /season/i, 'sinon on obtiendrait « Squid Game Season 1 S01E09 »');
+});
+
+test('un VRAI nom de release est laisse intact', () => {
+  // Le reecrire ferait perdre le codec, la team et la provenance, que notre version
+  // fabriquee n'a pas.
+  const vrai = 'Squid Game S01 MULTi 1080p WEB x264 E-AC-3 -Tsundere-Raws';
+  const f = toStremioStream(
+    { sourceId: 'c411', kind: 'torrent', title: vrai, quality: '1080p', language: 'MULTI', infoHash: 'a'.repeat(40) },
+    { playUrl: 'http://x/r', saison: 1, episode: 1, annee: 2021, titreOeuvre: 'Squid Game' },
+  ).behaviorHints!.filename!;
+  assert.equal(f, vrai);
+});
+
+test('le nom fabrique ne contient ni emoji ni puce', () => {
+  // Le parseur ne les gere pas. Ce champ n'est pas de l'affichage.
+  const f = toStremioStream(
+    { sourceId: 'voirdrama', kind: 'direct', title: 'VoirDrama - voe', quality: 'HD', language: 'VOSTFR' },
+    { playUrl: 'http://x/y', ...OEUVRE },
+  ).behaviorHints!.filename!;
+  assert.doesNotMatch(f, /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}•]/u);
+  assert.match(f, /^Sex Plate 17 \(2017\)/, 'meme un libelle fabrique par la source recoit un nom');
+});
+
+test('une resolution non mesuree est OMISE, jamais inventee', () => {
+  // Ecrire « 1080p » de complaisance ferait trier AIOStreams sur une valeur fausse.
+  const f = toStremioStream(
+    { sourceId: 'kisskh', kind: 'direct', title: 'Sex Plate 17', quality: 'HD', language: 'VOSTFR' },
+    { playUrl: 'http://x/y', ...OEUVRE },
+  ).behaviorHints!.filename!;
+  assert.doesNotMatch(f, /\d{3,4}p/);
+  assert.match(f, /\(2017\)/, 'l annee reste, elle');
+});
+
+test('sans annee connue, on ecrit le nom sans annee plutot qu une annee fausse', () => {
+  const f = toStremioStream(
+    { sourceId: 'kisskh', kind: 'direct', title: 'Drama Inconnu', quality: '1080p', language: 'VOSTFR' },
+    { playUrl: 'http://x/y' },
+  ).behaviorHints!.filename!;
+  assert.equal(f, 'Drama Inconnu 1080p VOSTFR');
+});
+
+test('l affichage n est pas touche par la fabrication du filename', () => {
+  const s = toStremioStream(
+    { sourceId: 'kisskh', kind: 'direct', title: 'Sex Plate 17', quality: '1080p', language: 'VOSTFR' },
+    { playUrl: 'http://x/y', ...OEUVRE },
+  );
+  assert.equal(s.name, '[▶ ⚡] Dramallyu');
+  assert.match(s.description, /🎞️ 1080p/);
+  assert.match(s.behaviorHints!.bingeGroup!, /^dramallyu-kisskh-1080p-VOSTFR$/);
+});

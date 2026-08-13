@@ -101,6 +101,15 @@ export interface FormatOptions {
   /** Pistes a attacher au flux, deja converties en URL servies par nous. */
   sousTitres?: PisteFlux[];
   /**
+   * Identite de l'oeuvre, telle que /stream l'a resolue. Sert UNIQUEMENT a fabriquer
+   * un `behaviorHints.filename` analysable ; l'affichage n'en depend pas.
+   */
+  annee?: number;
+  saison?: number;
+  episode?: number;
+  /** Titre canonique, sans mention de saison. */
+  titreOeuvre?: string;
+  /**
    * Etat du cache : vrai = pret a lire, faux = a telecharger,
    * `undefined` = ON NE SAIT PAS (typiquement un lien DDL, dont la disponibilite ne
    * se verifie pas a l'avance). Les trois cas restent distincts : promettre une
@@ -147,6 +156,61 @@ const NOMS_SOURCES: Record<string, string> = {
   zonetelechargement: 'Zone-Telechargement',
   wawacity: 'Wawacity',
 };
+
+/**
+ * Ce titre est-il DEJA un nom de release ?
+ *
+ * Question decisive : un nom de release porte la resolution, le codec, la team, la
+ * provenance. Le reecrire ferait PERDRE tout ça. On ne fabrique donc un nom que
+ * lorsqu'on n'en a pas — typiquement les sources directes, dont le titre est nu.
+ */
+function estNomDeRelease(titre: string): boolean {
+  const d = releaseDetails(titre);
+  if (d.source || d.video || d.audio || d.team) return true;
+  return /\b\d{3,4}p\b/i.test(titre) || /\bs\d{1,2}(e\d{1,3})?\b/i.test(titre) || /\b(19|20)\d{2}\b/.test(titre);
+}
+
+const deuxChiffres = (n: number): string => String(n).padStart(2, '0');
+
+/**
+ * Nom de release FABRIQUE, pour les flux qui n'en ont pas.
+ *
+ * AIOStreams analyse `behaviorHints.filename` avec un parseur de noms de release, et
+ * ne regarde la description que si ce champ est absent. Un titre nu — « Sex Plate 17 »
+ * — ne lui livre donc ni annee ni resolution, et son filtre « Year Matching » supprime
+ * le flux. Verifie dans ses journaux : « Year Matching (3) → 1x Sex Plate 17 -
+ * Unknown Year ».
+ *
+ * Aucun emoji ni puce ici, le parseur ne les gere pas : ce champ n'est PAS de
+ * l'affichage, la mise en forme lisible vit dans `description`.
+ *
+ * Regle constante du projet : on n'ecrit que ce qu'on sait. Une resolution non mesuree
+ * ou une provenance inconnue sont OMISES plutot qu'inventees — un « 1080p » de
+ * complaisance ferait trier AIOStreams sur une valeur fausse, ce qui est pire que de
+ * le laisser sans.
+ */
+function nomDeReleaseFabrique(c: Candidate, opts: FormatOptions, resolution: string): string {
+  const brut = opts.titreOeuvre || c.title;
+  // « Squid Game Season 1 » -> « Squid Game » : la saison est reecrite en SxxExx juste
+  // apres, la garder donnerait « Squid Game Season 1 S01E01 ».
+  const titre = brut.replace(/\s*[-–—]?\s*(saison|season)\s*\d{1,2}\s*$/i, '').trim();
+
+  const morceaux: string[] = [titre];
+
+  if (opts.saison !== undefined) {
+    morceaux.push(`S${deuxChiffres(opts.saison)}E${deuxChiffres(opts.episode ?? 1)}`);
+  } else if (opts.annee) {
+    morceaux.push(`(${opts.annee})`);
+  }
+
+  if (!isUnknownQuality(c.quality)) morceaux.push(resolution);
+  morceaux.push(normalizeLanguage(c.language));
+
+  const details = releaseDetails(c.title);
+  if (details.source) morceaux.push(details.source);
+
+  return morceaux.join(' ');
+}
 
 export function toStremioStream(candidate: Candidate, opts: FormatOptions): StremioStream {
   // On affiche la qualite BRUTE quand elle n'a pas ete mesuree.
@@ -212,10 +276,18 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
     },
   };
 
-  // AIOStreams parse ce champ pour en extraire resolution/codec/langue : on lui donne
-  // le nom de release, jamais `fileHint` (un motif d'episode) ni un libelle fabrique
-  // par la source — il en deduirait n'importe quoi.
-  if (!estLibelleFabrique) stream.behaviorHints!.filename = candidate.title;
+  // AIOStreams parse ce champ pour en extraire annee/resolution/langue/episode, et ne
+  // regarde la description QUE si ce champ est absent. Il doit donc toujours etre
+  // rempli, et toujours ressembler a un nom de release.
+  //
+  // On garde le titre tel quel quand c'en est deja un — il porte le codec, la team et
+  // la provenance, que notre version fabriquee n'aurait pas. Sinon on en fabrique un a
+  // partir de l'identite deja resolue par /stream. `fileHint` n'entre jamais ici : ce
+  // n'est pas un nom de fichier mais un motif d'episode (« s01e09 »).
+  stream.behaviorHints!.filename =
+    !estLibelleFabrique && estNomDeRelease(candidate.title)
+      ? candidate.title
+      : nomDeReleaseFabrique(candidate, opts, quality);
   if (candidate.sizeBytes) stream.behaviorHints!.videoSize = candidate.sizeBytes;
 
   if (opts.sousTitres && opts.sousTitres.length > 0) stream.subtitles = opts.sousTitres;
