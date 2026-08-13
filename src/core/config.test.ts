@@ -228,3 +228,11 @@ test('AUCUN reglage ne peut etre oublie a la generation du lien', () => {
   assert.equal(complet.priorite, 'direct');
   assert.equal(complet.maxSizeGb, 7);
 });
+
+test('l envoi du .torrent est actif par defaut et se desactive', () => {
+  // Actif par defaut parce que sans lui les trackers prives ne demarrent jamais. Mais
+  // il engage le compte de l'utilisateur (sa passkey voyage dans le .torrent), donc il
+  // doit pouvoir etre coupe — et ce refus doit survivre au lien.
+  assert.equal(parseConfig(encodeConfig({})).envoyerTorrent, true);
+  assert.equal(parseConfig(encodeConfig({ envoyerTorrent: false })).envoyerTorrent, false);
+});

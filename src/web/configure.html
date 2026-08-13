@@ -454,6 +454,19 @@
           <span class="signe">+</span><span>Exclure les captations en salle (CAM, TS)</span>
         </label>
 
+        <label class="pastille" data-bascule="envoyerTorrent" style="margin:10px 0 0">
+          <input type="checkbox" id="envoyerTorrent" checked>
+          <span class="signe">+</span><span>Envoyer le fichier .torrent au debrideur</span>
+        </label>
+        <p class="indice">
+          NECESSAIRE sur les trackers prives : sans lui, un flux « a debrider » ne
+          demarre jamais, faute d'annonceur. MAIS le .torrent contient votre passkey :
+          le debrideur annonce sous votre nom, et le tracker compte le telechargement a
+          votre credit — donc soumis a sa regle de partage (ratio 1:1 ou 144 h de seed).
+          Decochez si vous preferez ne rien engager : vous garderez tous les flux deja
+          prets.
+        </p>
+
         <label class="pastille" data-bascule="frOnly" style="margin:10px 0 0">
           <input type="checkbox" id="frOnly">
           <span class="signe">+</span><span>Ecarter ce qui n'a pas de francais</span>
@@ -663,6 +676,8 @@ function configActuelle(){
   if ($('cachedOnly').checked) cfg.cachedOnly = true;
   if ($('excludeCam').checked) cfg.excludeCam = true;
   if ($('frOnly').checked) cfg.frOnly = true;
+  // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
+  if (!$('envoyerTorrent').checked) cfg.envoyerTorrent = false;
   if ($('bonusHdr').checked) cfg.bonusHdr = true;
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
   if (!$('subsSurFlux').checked) cfg.subsSurFlux = false;
@@ -836,7 +851,7 @@ $('copier').addEventListener('click', function(){
 });
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
-['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','frOnly','debrid','sortBy','maxResults','cachedOnly','priorite',
+['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','frOnly','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
  'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);

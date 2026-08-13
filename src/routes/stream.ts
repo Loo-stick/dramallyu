@@ -374,7 +374,9 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         k: c.kind === 'torrent' ? 'torrent' : 'ddl',
         v: c.kind === 'torrent' ? (c.infoHash || c.magnet || '') : (c.ddlUrl || ''),
         f: c.fileHint,
-        t: c.torrentUrl,
+        // N'est transmis que si l'utilisateur l'accepte : ce lien engage son compte
+        // de tracker (cf. `envoyerTorrent`).
+        t: config.envoyerTorrent ? c.torrentUrl : undefined,
         ad: config.ad,
         tb: config.tb,
         pref: config.debrid,

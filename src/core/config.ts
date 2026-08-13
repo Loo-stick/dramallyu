@@ -71,6 +71,22 @@ export interface UserConfig {
   /** Retirer les captations en salle. */
   excludeCam: boolean;
   /**
+   * Autoriser l'envoi du fichier .torrent au debrideur.
+   *
+   * CE REGLAGE ENGAGE VOTRE COMPTE DE TRACKER. Un .torrent contient votre passkey :
+   * le debrideur annonce donc SOUS VOTRE NOM, et le tracker enregistre un
+   * telechargement a votre credit — soumis a ses regles de partage (ratio 1:1 ou
+   * 144 h de seed, sous peine de « hit and run »).
+   *
+   * Un magnet ou un hash nu, lui, ne porte aucune passkey : le debrideur telecharge
+   * par ses propres moyens et le tracker ne voit rien. Mais sur un tracker PRIVE,
+   * absent du DHT, un hash nu ne demarre jamais — le depot reste inerte.
+   *
+   * Le choix est donc entre « ca fonctionne » et « mon compte n'est pas engage », et
+   * il n'appartient qu'a l'utilisateur.
+   */
+  envoyerTorrent: boolean;
+  /**
    * Ne garder que ce qui annonce du francais.
    *
    * Fonde sur ce que la RELEASE declare (VOSTFR, VF, MULTi...), pas sur le contenu du
@@ -109,6 +125,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   excludeFormats: [],
   excludeCam: false,
   frOnly: false,
+  envoyerTorrent: true,
   bonusHdr: false,
   subsSurFlux: true,
 };
@@ -219,6 +236,8 @@ export function parseConfig(raw?: string | null): UserConfig {
   cfg.subsSurFlux = o.subsSurFlux !== false;
   cfg.excludeCam = o.excludeCam === true;
   cfg.frOnly = o.frOnly === true;
+  // Actif par defaut : on ne le desactive que si le champ dit explicitement false.
+  cfg.envoyerTorrent = o.envoyerTorrent !== false;
   cfg.bonusHdr = o.bonusHdr === true;
 
   if (o.priorite === 'direct' || o.priorite === 'torrent') cfg.priorite = o.priorite;
