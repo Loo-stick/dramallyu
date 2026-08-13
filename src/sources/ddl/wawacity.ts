@@ -241,6 +241,32 @@ function absolute(u: string): string {
   return `${BASE()}/${u.replace(/^[./]+/, '')}`;
 }
 
+/**
+ * Liens d'une fiche, MIS EN CACHE — meme correction que sur Zone-Telechargement.
+ *
+ * La page etait re-telechargee a chaque requete, et `fetchPage` en coute DEUX (le
+ * site impose un premier appel avant de servir le contenu). Mesure en production sur
+ * « Squid Game » : 4728 ms a froid, 3092 ms sur une requete ou tout le reste etait
+ * deja en cache — Wawacity devenait a elle seule le temps de reponse de l'addon.
+ *
+ * On memorise les liens ANALYSES, pas le HTML : la page pese jusqu'a plusieurs Mo,
+ * la liste qu'on en tire quelques centaines d'octets. Le filtrage (hebergeurs du
+ * debrideur, liens morts, episode demande) reste EN DEHORS du cache : il depend de
+ * l'utilisateur et de sa requete, le memoriser servirait la mauvaise reponse au
+ * voisin.
+ */
+async function liensDeFiche(url: string, signal?: AbortSignal): Promise<WawaLink[]> {
+  return cached<WawaLink[]>(
+    `wc:fiche:${url}`,
+    TTL_MS,
+    async () => {
+      const html = await fetchPage(url, signal);
+      return html ? parseFicheLinks(html) : [];
+    },
+    { scope: 'wawacity', shouldCache: (v) => v.length > 0, negativeTtlMs: EMPTY_TTL_MS },
+  );
+}
+
 async function searchWawacity(q: Query, ctx: SearchContext): Promise<Candidate[]> {
   const title = q.titles[0];
   if (!title) return [];
@@ -270,50 +296,52 @@ async function searchWawacity(q: Query, ctx: SearchContext): Promise<Candidate[]
     return !s || Number(s[1]) === q.season;
   });
 
-  const out: Candidate[] = [];
-  for (const fiche of pertinentes.slice(0, MAX_FICHES)) {
-    if (ctx.deadline.remainingMs() < 2500) break;
+  if (pertinentes.length === 0 || ctx.deadline.remainingMs() < 2500) return [];
 
-    const html = await fetchPage(absolute(fiche), ctx.deadline.signal);
-    if (!html) continue;
-
-    const links = parseFicheLinks(html).filter((l) => {
-      // Ecarte les lecteurs de streaming : seuls les hebergeurs de telechargement
-      // que le debrideur sait debloquer nous interessent.
-      if (estLecteurStreaming(l.hebergeur)) return false;
-      if (!hoteExploitable(l.hebergeur, supportes)) return false;
-      // Constate mort lors d'un Play precedent : on ne le repropose pas.
-      if (estMort(l.url)) return false;
-      if (q.type === 'movie' || q.episode === undefined) return true;
-      // Un lien sans numero d'episode sur une fiche de serie est ambigu : on l'ecarte
-      // plutot que de risquer de servir le mauvais episode.
-      if (l.episode === null) return false;
-      if (l.season !== null && q.season !== undefined && l.season !== q.season) return false;
-      return l.episode === q.episode;
-    });
-
-    // Un seul lien par hebergeur : au-dela c'est de la redondance que l'utilisateur
-    // ne peut pas distinguer (le protecteur masque la destination).
-    const parHebergeur = new Map<string, (typeof links)[number]>();
-    for (const l of links) {
-      const cle = l.hebergeur.toLowerCase();
-      if (!parHebergeur.has(cle)) parHebergeur.set(cle, l);
-    }
-
-    for (const link of [...parHebergeur.values()].slice(0, MAX_LINKS)) {
-      out.push({
-        sourceId: 'wawacity',
-        kind: 'ddl',
-        title: `${link.filename} — ${link.hebergeur}`,
-        quality: qualityOf(link.filename),
-        language: languageOf(link.filename),
-        sizeBytes: link.sizeBytes,
-        ddlUrl: link.url,
-        ddlHost: link.hebergeur,
-        fileHint: link.filename,
+  // Les fiches retenues sont ouvertes EN PARALLELE. C'etait sequentiel, et chaque
+  // fiche coute deux allers-retours : quatre fiches faisaient huit appels a la file.
+  const parFiche = await Promise.all(
+    pertinentes.slice(0, MAX_FICHES).map(async (fiche) => {
+      const links = (await liensDeFiche(absolute(fiche), ctx.deadline.signal)).filter((l) => {
+        // Ecarte les lecteurs de streaming : seuls les hebergeurs de telechargement
+        // que le debrideur sait debloquer nous interessent.
+        if (estLecteurStreaming(l.hebergeur)) return false;
+        if (!hoteExploitable(l.hebergeur, supportes)) return false;
+        // Constate mort lors d'un Play precedent : on ne le repropose pas.
+        if (estMort(l.url)) return false;
+        if (q.type === 'movie' || q.episode === undefined) return true;
+        // Un lien sans numero d'episode sur une fiche de serie est ambigu : on
+        // l'ecarte plutot que de risquer de servir le mauvais episode.
+        if (l.episode === null) return false;
+        if (l.season !== null && q.season !== undefined && l.season !== q.season) return false;
+        return l.episode === q.episode;
       });
-    }
-  }
+
+      // Un seul lien par hebergeur : au-dela c'est de la redondance que l'utilisateur
+      // ne peut pas distinguer (le protecteur masque la destination).
+      const parHebergeur = new Map<string, (typeof links)[number]>();
+      for (const l of links) {
+        const cle = l.hebergeur.toLowerCase();
+        if (!parHebergeur.has(cle)) parHebergeur.set(cle, l);
+      }
+
+      return [...parHebergeur.values()].slice(0, MAX_LINKS).map(
+        (link): Candidate => ({
+          sourceId: 'wawacity',
+          kind: 'ddl',
+          title: `${link.filename} — ${link.hebergeur}`,
+          quality: qualityOf(link.filename),
+          language: languageOf(link.filename),
+          sizeBytes: link.sizeBytes,
+          ddlUrl: link.url,
+          ddlHost: link.hebergeur,
+          fileHint: link.filename,
+        }),
+      );
+    }),
+  );
+
+  const out = parFiche.flat();
   return out;
 }
 
