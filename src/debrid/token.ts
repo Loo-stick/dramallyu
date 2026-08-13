@@ -1,4 +1,4 @@
-// Jetons de lecture signes.
+// Jetons de lecture CHIFFRES.
 //
 // La reponse /stream ne debride RIEN : chaque entree pointe vers /resolve/<jeton>,
 // et le debridage n'a lieu qu'au moment ou l'utilisateur appuie sur Play. C'est ce
@@ -7,9 +7,11 @@
 //
 // Le jeton porte donc tout ce qu'il faut pour resoudre plus tard, y compris la CLE
 // DEBRID de l'utilisateur — puisque l'addon ne stocke aucun etat par utilisateur.
-// Il est signe en HMAC pour qu'on ne puisse pas le fabriquer, et il expire.
+// Il est donc chiffre (AES-256-GCM), et pas seulement signe : ces URL sont remises au
+// lecteur, elles finissent dans les journaux et les captures d ecran.
 
 import * as crypto from 'node:crypto';
+import { chiffrer, dechiffrer } from '../core/crypto';
 
 export interface ResolvePayload {
   /** 'torrent' ou 'ddl'. */
@@ -48,13 +50,43 @@ function sign(data: string): string {
   return crypto.createHmac('sha256', secret()).update(data).digest('base64url').slice(0, 32);
 }
 
+/**
+ * Le jeton est CHIFFRE, pas seulement signe.
+ *
+ * Il l'etait auparavant : base64 du contenu, suivi d'un HMAC. La signature empechait
+ * de le fabriquer, mais absolument pas de le LIRE — et ce contenu porte les cles
+ * debrid. Or ces URL sont remises au lecteur : elles atterrissent dans les journaux
+ * d'un proxy, dans une capture d'ecran, dans AIOStreams. Quiconque en voyait une
+ * recuperait les cles en decodant du base64.
+ *
+ * AES-256-GCM regle les deux a la fois : illisible, et authentifie — donc toujours
+ * infalsifiable, la signature separee n'a plus lieu d'etre.
+ *
+ * Consequence assumee : les jetons emis avant ce changement ne sont plus valides.
+ * Ils vivaient douze heures ; rouvrir la fiche suffit a en obtenir de nouveaux.
+ */
 export function encodeToken(payload: Omit<ResolvePayload, 'exp'>): string {
   const full: ResolvePayload = { ...payload, exp: Date.now() + TTL_MS };
-  const body = Buffer.from(JSON.stringify(full), 'utf-8').toString('base64url');
+  const chiffre = chiffrer(full);
+  if (chiffre) return chiffre;
+
+  // Sans TOKEN_SECRET, le chiffrement est impossible. On signe alors un contenu SANS
+  // aucune cle : le flux devient injouable, mais rien ne fuit. Mieux vaut un lien
+  // mort qu'un lien qui distribue les cles de l'utilisateur.
+  const sansCles: ResolvePayload = { ...full, ad: undefined, tb: undefined };
+  const body = Buffer.from(JSON.stringify(sansCles), 'utf-8').toString('base64url');
   return `${body}.${sign(body)}`;
 }
 
 export function decodeToken(token: string): ResolvePayload | null {
+  const clair = dechiffrer(token) as ResolvePayload | null;
+  if (clair) {
+    if (typeof clair.v !== 'string') return null;
+    if (typeof clair.exp !== 'number' || clair.exp < Date.now()) return null;
+    return clair;
+  }
+
+  // Repli signe (instance sans TOKEN_SECRET). Il ne transporte jamais de cle.
   const dot = token.lastIndexOf('.');
   if (dot <= 0) return null;
   const body = token.slice(0, dot);
