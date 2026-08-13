@@ -20,6 +20,7 @@ import axios from 'axios';
 import type { DebridFile, DebridService } from './types';
 import { extractHash, pickFile, toMagnet } from './types';
 import { get as cacheGet, set as cacheSet } from '../core/cache';
+import { marquerMort } from './deadlinks';
 
 const BASE = 'https://api.alldebrid.com/v4';
 // `/magnet/status` a ete SUPPRIME de la v4 : elle repond desormais
@@ -408,6 +409,11 @@ async function resoudreDdl(
 
     const deblocage = await callDetaille<{ link?: string }>('/link/unlock', apiKey, { link: cible }, signal);
     if (deblocage.data?.link) return deblocage.data.link;
+
+    // Le fichier n'existe plus chez l'hebergeur. On le retient : le site DDL, lui, le
+    // publiera encore pendant des semaines, et rien ne sert de le reproposer.
+    // On memorise le lien D'ORIGINE — celui que la source rendra a nouveau.
+    if (deblocage.code === 'LINK_DOWN') marquerMort(link);
 
     if (deblocage.code && ERREURS_A_REESSAYER.has(deblocage.code) && essai < DDL_TENTATIVES - 1) {
       await sleep(DDL_ATTENTE_MS);

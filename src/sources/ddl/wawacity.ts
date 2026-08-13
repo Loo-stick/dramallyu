@@ -23,6 +23,7 @@ import { makeEndpointConfig } from '../../core/endpoint-config';
 import { matchesTitle } from '../../core/matching';
 import { qualityOf, languageOf } from '../torrent/release';
 import { hotesSupportes, hoteExploitable } from '../../debrid/hosts';
+import { estMort } from '../../debrid/deadlinks';
 import type { Candidate, Query, SearchContext, Source } from '../types';
 
 const TTL_MS = 60 * 60 * 1000;
@@ -281,6 +282,8 @@ async function searchWawacity(q: Query, ctx: SearchContext): Promise<Candidate[]
       // que le debrideur sait debloquer nous interessent.
       if (estLecteurStreaming(l.hebergeur)) return false;
       if (!hoteExploitable(l.hebergeur, supportes)) return false;
+      // Constate mort lors d'un Play precedent : on ne le repropose pas.
+      if (estMort(l.url)) return false;
       if (q.type === 'movie' || q.episode === undefined) return true;
       // Un lien sans numero d'episode sur une fiche de serie est ambigu : on l'ecarte
       // plutot que de risquer de servir le mauvais episode.

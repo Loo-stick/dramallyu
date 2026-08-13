@@ -18,6 +18,8 @@ import { cached } from '../../core/cache';
 import { makeEndpointConfig } from '../../core/endpoint-config';
 import { matchesTitle } from '../../core/matching';
 import { parseRelease } from '../torrent/release';
+import { hotesSupportes, hoteExploitable } from '../../debrid/hosts';
+import { estMort } from '../../debrid/deadlinks';
 import type { Candidate, Query, SearchContext, Source } from '../types';
 
 const TTL_MS = 60 * 60 * 1000;
@@ -35,8 +37,20 @@ export const reloadZtEndpoints = endpoints.reload;
 
 const BASE = (): string => String(endpoints.get().base).replace(/\/+$/, '');
 
-/** Hebergeurs qu'AllDebrid et TorBox savent debloquer. */
-const SUPPORTED_HOSTS = ['1fichier', 'uptobox', 'rapidgator', 'turbobit', 'nitroflare', 'uploady'];
+/**
+ * Noms d'hebergeurs PLAUSIBLES, servant seulement a reconnaitre une image de section
+ * et une URL dans la page du protecteur.
+ *
+ * Ce n'est PAS une liste de ce qui est debridable — cette liste-la n'est pas la notre
+ * a ecrire. Celle que j'avais mise ici retenait Uptobox, que ni AllDebrid ni TorBox ne
+ * prennent, et Nitroflare, inactif chez les deux : des flux affiches pour rien. Le
+ * verdict vient desormais des debrideurs eux-memes (debrid/hosts.ts), pour les cles de
+ * chaque utilisateur.
+ */
+const NOMS_HEBERGEURS = [
+  '1fichier', 'uptobox', 'rapidgator', 'turbobit', 'nitroflare', 'uploady',
+  'dailyuploads', 'darkibox', '1dl', 'fikper', 'katfile', 'mixdrop',
+];
 
 export interface ZtLink {
   host: string;
@@ -68,7 +82,7 @@ export function parseFicheLinks(html: string): ZtLink[] {
       const end = html.indexOf('.png', imgAt);
       if (end !== -1 && end - imgAt < 40) {
         const name = html.slice(imgAt + 5, end).toLowerCase();
-        if (SUPPORTED_HOSTS.some((h) => name.includes(h))) currentHost = name;
+        if (NOMS_HEBERGEURS.some((h) => name.includes(h))) currentHost = name;
       }
       i = imgAt + 5;
       continue;
@@ -148,7 +162,7 @@ async function resolveProtected(url: string, signal?: AbortSignal): Promise<stri
       if (!html) return null;
       for (const m of html.matchAll(/https?:\/\/[a-z0-9.-]+\/[^\s"'<>]+/gi)) {
         const candidate = m[0];
-        if (SUPPORTED_HOSTS.some((h) => candidate.toLowerCase().includes(h))) return candidate;
+        if (NOMS_HEBERGEURS.some((h) => candidate.toLowerCase().includes(h))) return candidate;
       }
       return null;
     },
@@ -167,6 +181,9 @@ function hostOf(url: string): string {
 async function searchZt(q: Query, ctx: SearchContext): Promise<Candidate[]> {
   const title = q.titles[0];
   if (!title) return [];
+
+  // Ce que les debrideurs de CET utilisateur savent reellement debloquer.
+  const supportes = await hotesSupportes(ctx.config);
 
   const fiches = await searchFiches(title, ctx.deadline.signal);
   const out: Candidate[] = [];
@@ -197,8 +214,17 @@ async function searchZt(q: Query, ctx: SearchContext): Promise<Candidate[]> {
 
     for (const link of links.slice(0, MAX_LINKS)) {
       if (ctx.deadline.remainingMs() < 2000) break;
+      // Deja constate mort au moment d'un Play precedent : inutile de resoudre le
+      // protecteur, et surtout inutile de le reproposer.
+      if (estMort(link.protectedUrl)) continue;
       const real = await resolveProtected(link.protectedUrl, ctx.deadline.signal);
       if (!real) continue;
+
+      // Le protecteur resolu, on connait le VRAI hebergeur : on ecarte ici ce
+      // qu'aucun debrideur de l'utilisateur ne prend, plutot que de lui proposer un
+      // flux dont le clic finira en erreur.
+      const hote = hostOf(real);
+      if (!hoteExploitable(hote, supportes)) continue;
 
       out.push({
         sourceId: 'zonetelechargement',
