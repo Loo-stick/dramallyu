@@ -44,6 +44,55 @@ async function tbGet<T>(
   }
 }
 
+/**
+ * Depose un fichier .torrent chez TorBox.
+ *
+ * Meme raison que chez AllDebrid : un magnet construit a partir d'un hash nu ne porte
+ * aucun annonceur, et un torrent de tracker PRIVE ne figure pas dans le DHT. Le depot
+ * restait donc inerte. Le .torrent, lui, porte l'adresse d'annonce — c'est la seule
+ * forme avec laquelle le debrideur peut trouver des pairs.
+ *
+ * C'est nous qui telechargeons le fichier : son lien est signe par la cle de
+ * l'utilisateur, TorBox ne peut pas le recuperer seul.
+ */
+async function deposerFichierTorrent(
+  torrentUrl: string,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<number | null> {
+  try {
+    const res = await axios.get<ArrayBuffer>(torrentUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
+      maxContentLength: 4 * 1024 * 1024,
+      validateStatus: () => true,
+      signal,
+    });
+    if (res.status < 200 || res.status >= 300) return null;
+    const contenu = Buffer.from(res.data);
+    if (contenu.length === 0 || contenu[0] !== 0x64) return null; // doit commencer par 'd'
+
+    const form = new FormData();
+    form.append('file', new Blob([contenu]), 'release.torrent');
+    form.append('seed', '3');
+    form.append('allow_zip', 'false');
+
+    const envoi = await axios.post<TbResponse<{ torrent_id?: number }>>(
+      `${BASE}/torrents/createtorrent`,
+      form,
+      { headers: headers(apiKey), timeout: 30000, validateStatus: () => true, signal },
+    );
+    if (envoi.status < 200 || envoi.status >= 300 || !envoi.data?.success) {
+      console.log(`[TorBox] depot du .torrent refuse: HTTP ${envoi.status}`);
+      return null;
+    }
+    return envoi.data.data?.torrent_id ?? null;
+  } catch (e) {
+    console.log(`[TorBox] depot du .torrent: ${(e as Error).message.slice(0, 80)}`);
+    return null;
+  }
+}
+
 async function tbPost<T>(
   path: string,
   apiKey: string,
@@ -96,6 +145,7 @@ async function addAndWait(
   magnetOrHash: string,
   apiKey: string,
   signal?: AbortSignal,
+  torrentUrl?: string,
 ): Promise<TbTorrent | null> {
   const hash = extractHash(magnetOrHash);
   if (!hash) return null;
@@ -104,6 +154,21 @@ async function addAndWait(
   // de polluer son compte a chaque lecture.
   const existing = await findExisting(hash, apiKey, signal);
   if (existing?.download_finished || existing?.download_present) return existing;
+
+  // Le FICHIER d'abord quand on l'a : lui seul porte l'annonceur, et sans annonceur un
+  // torrent de tracker prive ne demarre jamais. Le magnet reste le repli, valable pour
+  // les trackers publics ou le DHT suffit.
+  if (torrentUrl) {
+    const id = await deposerFichierTorrent(torrentUrl, apiKey, signal);
+    if (id !== null) {
+      // ON NE RETOMBE PAS SUR LE MAGNET. Le depot a ete accepte : le torrent est en
+      // route, il n'est simplement pas encore lisible. Ajouter le magnet par-dessus
+      // creait un DOUBLON inutilisable — une entree nommee par son hash, sans
+      // annonceur, qui restait bloquee a « checking 0% » dans le compte de
+      // l'utilisateur. Constate : deux entrees de ce genre pour une seule lecture.
+      return attendrePret(id, apiKey, signal);
+    }
+  }
 
   const created = await tbPost<{ torrent_id?: number }>(
     '/torrents/createtorrent',
@@ -114,7 +179,15 @@ async function addAndWait(
   );
   const id = created?.torrent_id ?? existing?.id;
   if (id === undefined) return null;
+  return attendrePret(id, apiKey, signal);
+}
 
+/** Attend qu'un torrent depose devienne exploitable, sans s'eterniser. */
+async function attendrePret(
+  id: number,
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<TbTorrent | null> {
   for (let i = 0; i < POLL_ATTEMPTS; i++) {
     const info = await tbGet<TbTorrent | TbTorrent[]>(
       `/torrents/mylist?bypass_cache=true&id=${id}`,
@@ -170,8 +243,8 @@ export function torbox(apiKey: string): DebridService {
       return out;
     },
 
-    async resolveTorrent(magnetOrHash, fileHint, signal) {
-      const t = await addAndWait(magnetOrHash, apiKey, signal);
+    async resolveTorrent(magnetOrHash, fileHint, signal, torrentUrl) {
+      const t = await addAndWait(magnetOrHash, apiKey, signal, torrentUrl);
       if (!t) return null;
       const picked = pickFile(toFiles(t), fileHint);
       if (!picked || picked.id === undefined) return null;
