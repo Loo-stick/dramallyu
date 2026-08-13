@@ -11,7 +11,7 @@ import { searchAll } from '../core/registry';
 import { getSettings } from '../core/settings';
 import { compareStreams, langOrderFromSubs, passesPreferences } from '../core/prefs';
 import { toStremioStream, type StremioStream } from '../core/display';
-import { getBaseUrl, configSegment } from '../core/url';
+import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
 import { throughMediaflow } from '../core/mediaflow';
 import type { Candidate, MediaType, Query } from '../sources/types';
@@ -94,7 +94,14 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       .sort((a, b) => compareStreams(a, b, { langOrder, sortBy: config.sortBy }))
       .slice(0, Math.min(config.maxResults, settings.maxStreams));
 
-    const base = getBaseUrl(req) + configSegment(req);
+    // SANS le segment de config, volontairement : le jeton /resolve porte deja les
+    // cles debrid dont la resolution a besoin. L'y ajouter n'apportait rien et
+    // repandait la config dans une URL de plus.
+    //
+    // C'est ce qui a casse toute la lecture torrent et DDL en production : les liens
+    // etaient bien emis en /<config>/resolve/<jeton>, mais seule la route /resolve
+    // etait enregistree — donc 404 au moindre appui sur Play.
+    const base = getBaseUrl(req);
     const streams: StremioStream[] = kept.map((c) => {
       if (c.kind === 'direct' && c.directUrl) {
         // Un flux qui exige un Referer casse chez plusieurs lecteurs : Stremio

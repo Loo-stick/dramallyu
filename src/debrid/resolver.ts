@@ -5,6 +5,7 @@
 // termine ici.
 
 import type { DebridService } from './types';
+import { extractHash } from './types';
 import { allDebrid } from './alldebrid';
 import { torbox } from './torbox';
 import { episodeHint } from './types';
@@ -41,9 +42,54 @@ export interface ResolveRequest {
  * MediaFlow (compte partage, protection multi-IP), ce qui vient de TorBox part en
  * direct.
  */
+/**
+ * Ordonne les services pour un torrent donne, en interrogeant d'abord ceux qui savent
+ * repondre sur le cache.
+ *
+ * MESURE QUI A MOTIVE CE CODE : avec les deux debrideurs configures, TorBox passait en
+ * premier ; quand il n'avait pas le torrent, on l'attendait ~9 s avant de basculer sur
+ * AllDebrid, qui repondait ensuite en 0,7 s. Soit 14,8 s au clic sur Play pour un
+ * resultat obtenable en une seconde.
+ *
+ * L'ordre devient : ceux qui ONT le fichier en cache, puis ceux qui ne savent pas le
+ * dire (AllDebrid), puis en dernier ceux qui ont repondu « non » — car pour eux il
+ * faudrait attendre un telechargement.
+ */
+async function ordonnerPourTorrent(
+  services: DebridService[],
+  hash: string,
+  signal?: AbortSignal,
+): Promise<DebridService[]> {
+  if (services.length < 2) return services;
+
+  const enCache: DebridService[] = [];
+  const inconnu: DebridService[] = [];
+  const absent: DebridService[] = [];
+
+  for (const service of services) {
+    if (!service.supportsCacheCheck) {
+      inconnu.push(service);
+      continue;
+    }
+    try {
+      const carte = await service.checkCached([hash], signal);
+      (carte.get(hash.toLowerCase()) ? enCache : absent).push(service);
+    } catch {
+      // Un check-cache en echec ne disqualifie pas le service : on l'essaie quand meme.
+      inconnu.push(service);
+    }
+  }
+  return [...enCache, ...inconnu, ...absent];
+}
+
 export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promise<string | null> {
-  const services = servicesFor({ ad: req.ad, tb: req.tb } as UserConfig);
+  let services = servicesFor({ ad: req.ad, tb: req.tb } as UserConfig);
   if (services.length === 0) return null;
+
+  if (req.kind === 'torrent') {
+    const hash = extractHash(req.value);
+    if (hash) services = await ordonnerPourTorrent(services, hash, signal);
+  }
 
   for (const service of services) {
     try {

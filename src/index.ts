@@ -106,6 +106,10 @@ app.get('/:config/meta/:type/:id.json', handleMeta);
 // --- Lecture -----------------------------------------------------------------
 app.get('/resolve/:token', handleResolve);
 app.get('/sub/:token', handleServeSub);
+// Variantes prefixees par la config : les jetons sont autonomes, mais des liens
+// deja distribues peuvent porter le segment. Les ignorer donnerait un 404 au Play.
+app.get('/:config/resolve/:token', handleResolve);
+app.get('/:config/sub/:token', handleServeSub);
 
 // --- Pages -------------------------------------------------------------------
 const WEB_DIR = path.join(__dirname, 'web');

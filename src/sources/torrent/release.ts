@@ -93,6 +93,90 @@ export function isPackRelease(name: string, episode: number | null): boolean {
   return /\b(complete|integrale|int[ée]grale|saison|season|pack|s\d{1,2})\b/i.test(name);
 }
 
+/**
+ * Details techniques lus dans un nom de release, pour l'affichage.
+ *
+ * Chaque champ vaut null quand on ne sait pas — et c'est important : la ligne
+ * affichee omet alors le segment plutot que d'ecrire « inconnu ». Une ligne courte
+ * mais vraie vaut mieux qu'une ligne remplie de trous.
+ */
+export interface ReleaseDetails {
+  /** BluRay, REMUX, WEB-DL, WEBRip, HDTV, DVDRip... */
+  source: string | null;
+  /** HDR10, Dolby Vision, HDR. */
+  hdr: string | null;
+  /** HEVC, AVC, AV1, XviD. */
+  video: string | null;
+  /** TrueHD Atmos, DTS-HD, EAC3, AC3, AAC, FLAC... */
+  audio: string | null;
+  /** Team de release : le suffixe -GROUPE. */
+  team: string | null;
+}
+
+function premier(nom: string, table: [RegExp, string][]): string | null {
+  for (const [motif, libelle] of table) if (motif.test(nom)) return libelle;
+  return null;
+}
+
+const SOURCES: [RegExp, string][] = [
+  [/\bremux\b/i, 'REMUX'],
+  [/\b(bluray|blu-ray|bdrip|brrip)\b/i, 'BluRay'],
+  [/\bweb[-. ]?dl\b/i, 'WEB-DL'],
+  [/\bweb[-. ]?rip\b/i, 'WEBRip'],
+  [/\bhdtv\b/i, 'HDTV'],
+  [/\b(dvdrip|dvd)\b/i, 'DVDRip'],
+  [/\bhdlight\b/i, 'HDLight'],
+  [/\bweb\b/i, 'WEB'],
+];
+
+const HDR: [RegExp, string][] = [
+  [/\bdv\b|\bdolby[-. ]?vision\b/i, 'Dolby Vision'],
+  [/\bhdr10\+/i, 'HDR10+'],
+  [/\bhdr10\b/i, 'HDR10'],
+  [/\bhdr\b/i, 'HDR'],
+];
+
+const VIDEO: [RegExp, string][] = [
+  [/\b(hevc|x265|h\.?265)\b/i, 'HEVC'],
+  [/\bav1\b/i, 'AV1'],
+  [/\b(avc|x264|h\.?264)\b/i, 'AVC'],
+  [/\bxvid\b/i, 'XviD'],
+];
+
+const AUDIO: [RegExp, string][] = [
+  [/\btruehd\b.*\batmos\b|\batmos\b.*\btruehd\b/i, 'TrueHD Atmos'],
+  [/\btruehd\b/i, 'TrueHD'],
+  [/\bdts[-. ]?hd\b/i, 'DTS-HD'],
+  [/\bdts\b/i, 'DTS'],
+  [/\batmos\b/i, 'Atmos'],
+  [/\b(eac3|e-ac3|ddp|dd\+)\b/i, 'EAC3'],
+  [/\b(ac3|dd5)\b/i, 'AC3'],
+  [/\bflac\b/i, 'FLAC'],
+  [/\baac\b/i, 'AAC'],
+  [/\bopus\b/i, 'Opus'],
+];
+
+/** Team de release : le suffixe apres le dernier tiret, hors extension. */
+export function teamOf(name: string): string | null {
+  const sansExt = name.replace(/\.(mkv|mp4|avi|ts)$/i, '');
+  const m = sansExt.match(/-([A-Za-z0-9]{2,20})$/);
+  if (!m) return null;
+  const candidat = m[1];
+  // Un suffixe purement numerique est un numero d'episode, pas une team.
+  if (/^\d+$/.test(candidat)) return null;
+  return candidat;
+}
+
+export function releaseDetails(name: string): ReleaseDetails {
+  return {
+    source: premier(name, SOURCES),
+    hdr: premier(name, HDR),
+    video: premier(name, VIDEO),
+    audio: premier(name, AUDIO),
+    team: teamOf(name),
+  };
+}
+
 export function parseRelease(name: string): ParsedRelease {
   const { season, episode } = seasonEpisodeOf(name);
   return {

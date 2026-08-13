@@ -15,6 +15,11 @@ import type { DebridFile, DebridService } from './types';
 import { extractHash, pickFile, toMagnet } from './types';
 
 const BASE = 'https://api.alldebrid.com/v4';
+// `/magnet/status` a ete SUPPRIME de la v4 : elle repond desormais
+// `{"status":"error","error":{"code":"DISCONTINUED"}}`. Constate en production le
+// 2026-08-13 — c'est ce qui rendait tout le pilier torrent injouable. Le reste de la
+// v4 fonctionne toujours ; seul cet appel bascule en v4.1.
+const BASE_STATUS = 'https://api.alldebrid.com/v4.1';
 const AGENT = 'dramallyu';
 const POLL_ATTEMPTS = 6;
 const POLL_DELAY_MS = 1500;
@@ -30,10 +35,11 @@ async function call<T>(
   apiKey: string,
   params: Record<string, string> = {},
   signal?: AbortSignal,
+  base: string = BASE,
 ): Promise<T | null> {
   const qs = new URLSearchParams({ agent: AGENT, ...params }).toString();
   try {
-    const res = await axios.get<AdResponse<T>>(`${BASE}${path}?${qs}`, {
+    const res = await axios.get<AdResponse<T>>(`${base}${path}?${qs}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       timeout: 20000,
       validateStatus: () => true,
@@ -87,10 +93,35 @@ async function uploadMagnet(
   return first?.id ?? null;
 }
 
+/**
+ * Entree de l'arbre de fichiers renvoye par la v4.1.
+ *
+ * Les noms sont abreges chez AllDebrid : `n` le nom, `s` la taille, `l` le lien,
+ * `e` les enfants. Et c'est un ARBRE, pas une liste — un torrent multi-fichiers
+ * expose son dossier, dont les fichiers sont des enfants.
+ */
+interface AdEntry {
+  n?: string;
+  s?: number;
+  l?: string;
+  e?: AdEntry[];
+}
+
 interface MagnetStatus {
   status?: string;
   statusCode?: number;
-  links?: { link: string; filename: string; size?: number }[];
+  files?: AdEntry[];
+}
+
+/** Aplatit l'arbre. Un dossier n'a pas de `l` : seules les feuilles sont jouables. */
+export function flattenEntries(entries: AdEntry[] | undefined, out: AdEntry[] = []): AdEntry[] {
+  if (!Array.isArray(entries)) return out;
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') continue;
+    out.push(entry);
+    if (Array.isArray(entry.e)) flattenEntries(entry.e, out);
+  }
+  return out;
 }
 
 async function magnetStatus(
@@ -103,6 +134,7 @@ async function magnetStatus(
     apiKey,
     { id: String(id) },
     signal,
+    BASE_STATUS,
   );
   const m = data?.magnets;
   if (!m) return null;
@@ -143,8 +175,13 @@ async function filesOf(
   const id = await uploadMagnet(magnetOrHash, apiKey, signal);
   if (id === null) return [];
   const status = await waitReady(id, apiKey, signal);
-  if (!status?.links) return [];
-  return status.links.map((l) => ({ name: l.filename, sizeBytes: l.size, link: l.link }));
+  if (!status?.files) return [];
+
+  // On ne garde que les entrees porteuses d'un lien : les dossiers de l'arbre n'en
+  // ont pas, et les retenir ferait choisir un « fichier » injouable.
+  return flattenEntries(status.files)
+    .filter((e) => e.l && e.n)
+    .map((e) => ({ name: e.n as string, sizeBytes: e.s, link: e.l }));
 }
 
 export function allDebrid(apiKey: string): DebridService {
