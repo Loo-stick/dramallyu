@@ -86,12 +86,29 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
       return i === -1 ? 100 : i;
     };
 
-    const subtitles = [...fromSources, ...external]
-      .filter((t) => {
-        if (seen.has(t.url)) return false;
-        seen.add(t.url);
-        return true;
-      })
+    const uniques = [...fromSources, ...external].filter((t) => {
+      if (seen.has(t.url)) return false;
+      seen.add(t.url);
+      return true;
+    });
+
+    // ON NE SERT QUE LES LANGUES DEMANDEES.
+    //
+    // KissKH livre parfois sept pistes — khmer, indonesien, malais, thai, arabe —
+    // pour quelqu'un qui n'a demande que le francais. Les renvoyer toutes a deux
+    // couts : elles encombrent le menu du lecteur, et surtout certains lecteurs les
+    // PRECHARGENT. Sur le trajet reel (Cloudflare puis liaison domestique), chaque
+    // piste coute ~200 ms : sept pistes au lieu d'une, c'est une seconde et demie
+    // d'attente pour rien. C'est exactement l'ecart de ressenti avec LooStream, qui
+    // n'interroge OpenSubtitles qu'en francais.
+    //
+    // REPLI INDISPENSABLE : si aucune piste ne correspond, on rend ce qu'on a. Un
+    // sous-titre dans une langue approchante vaut mieux qu'un menu vide, et
+    // l'utilisateur reste libre de l'ignorer.
+    const demandees = uniques.filter((t) => config.subLangs.includes(t.lang));
+    const retenues = demandees.length > 0 ? demandees : uniques;
+
+    const subtitles = retenues
       // TRI FINAL, et il est indispensable : concatener « sources puis OpenSubtitles »
       // renvoie le francais en DERNIER des que la source n'en a pas — alors que c'est
       // justement la langue que l'utilisateur a demandee en premier. Les lecteurs
