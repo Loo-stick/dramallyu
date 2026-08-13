@@ -1,18 +1,25 @@
 // AllDebrid (API v4). Porte depuis wastream et stream-fusion.
 //
-// DEUX PARTICULARITES A NE PAS OUBLIER :
+// TROIS PARTICULARITES A NE PAS OUBLIER :
 //
-//  1. Il n'y a plus d'API d'instant-availability exploitable. `checkCached` rend donc
-//     une carte VIDE — « je ne sais pas » — et l'interface l'affiche honnetement.
-//     La reponse de /magnet/upload porte bien un champ `ready`, mais PAS de
-//     `statusCode` : ce dernier n'existe que dans /magnet/status. Les confondre est
-//     un piege documente dans stream-fusion.
-//  2. C'est AllDebrid qui debloque les liens d'hebergeur (1fichier, uptobox) via
+//  1. LA DISPONIBILITE SE LIT DANS `/magnet/upload`. Il n'y a pas d'endpoint dedie,
+//     et j'en avais conclu a tort qu'AllDebrid ne savait plus repondre. En realite on
+//     depose un LOT (`magnets[]` repete) et chaque magnet revient avec un champ
+//     `ready` — verifie contre `/magnet/status` : les deux concordent exactement.
+//     C'est ainsi que procedent stream-fusion et wastream.
+//     Piege associe : `ready` est le seul champ exploitable de cette reponse ;
+//     `statusCode` n'existe que dans `/magnet/status`.
+//  2. IL FAUT NETTOYER derriere soi. Chaque verification depose reellement les
+//     magnets sur le compte, et ceux qui ne sont pas prets partent en telechargement.
+//     Sans suppression, le compte se remplit en une journee et finit par buter sur la
+//     limite de magnets actifs.
+//  3. C'est AllDebrid qui debloque les liens d'hebergeur (1fichier, uptobox) via
 //     /link/unlock — c'est ce qui fait vivre tout le pilier DDL.
 
 import axios from 'axios';
 import type { DebridFile, DebridService } from './types';
 import { extractHash, pickFile, toMagnet } from './types';
+import { get as cacheGet, set as cacheSet } from '../core/cache';
 
 const BASE = 'https://api.alldebrid.com/v4';
 // `/magnet/status` a ete SUPPRIME de la v4 : elle repond desormais
@@ -184,15 +191,122 @@ async function filesOf(
     .map((e) => ({ name: e.n as string, sizeBytes: e.s, link: e.l }));
 }
 
+const LOT_DISPO = 20;
+// Un « pret » est stable : le fichier restera dans le cache partage d'AllDebrid.
+// Un « pas pret » doit expirer vite — il suffit qu'une personne telecharge le fichier
+// pour qu'il le devienne, et on ne veut pas afficher « a debrider » pendant des heures
+// sur un flux devenu instantane.
+const DISPO_TTL_MS = 6 * 60 * 60 * 1000;
+const DISPO_ABSENT_TTL_MS = 20 * 60 * 1000;
+
+/**
+ * Depose un lot de magnets et rend, pour chacun, le champ `ready`.
+ *
+ * C'EST le controle de disponibilite d'AllDebrid. Il n'y a pas d'endpoint dedie —
+ * j'avais conclu a tort qu'il n'en existait plus. La disponibilite se lit dans la
+ * reponse de `/magnet/upload`, qui accepte plusieurs `magnets[]` d'un coup. Verifie
+ * dans stream-fusion et wastream, qui procedent tous les deux ainsi.
+ *
+ * Piege documente par stream-fusion, reproduit ici : `ready` est le SEUL champ
+ * exploitable de cette reponse. `statusCode` n'existe que dans `/magnet/status` — s'y
+ * fier ici donnerait « non disponible » pour tout le monde.
+ */
+async function uploadLot(
+  hashes: string[],
+  apiKey: string,
+  signal?: AbortSignal,
+): Promise<UploadedMagnet[]> {
+  const corps = new URLSearchParams();
+  for (const h of hashes) corps.append('magnets[]', h);
+
+  try {
+    const res = await axios.post<AdResponse<{ magnets?: UploadedMagnet[] }>>(
+      `${BASE}/magnet/upload?agent=${AGENT}`,
+      corps.toString(),
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        timeout: 20000,
+        validateStatus: () => true,
+        signal,
+      },
+    );
+    const body = res.data;
+    if (!body || body.status === 'error') {
+      // Plafond de magnets actifs atteint : on ne marque RIEN comme indisponible,
+      // ce serait une conclusion fausse tiree d'une limite de compte.
+      console.log(`[AllDebrid] verification de dispo refusee: ${body?.error?.code ?? '?'}`);
+      return [];
+    }
+    return body.data?.magnets ?? [];
+  } catch (e) {
+    console.log(`[AllDebrid] verification de dispo: ${(e as Error).message.slice(0, 80)}`);
+    return [];
+  }
+}
+
+/**
+ * Retire TOUS les magnets deposes pour le seul besoin de la verification.
+ *
+ * J'avais d'abord garde ceux qui etaient prets, en pensant menager une eventuelle
+ * bibliotheque de l'utilisateur. C'etait une erreur, mesuree : chaque requete /stream
+ * depose jusqu'a quarante hashes, et n'en retirer qu'une partie fait gonfler le compte
+ * sans fin — 194 magnets accumules en une seule journee de tests. AllDebrid plafonne
+ * en plus le nombre de magnets actifs, donc la verification finit par echouer.
+ *
+ * Supprimer un magnet PRET ne coute rien : il reste dans le cache partage d'AllDebrid,
+ * et le redeposer plus tard est instantane. C'est aussi ce que fait stream-fusion.
+ */
+function nettoyerEnFond(ids: number[], apiKey: string): void {
+  if (ids.length === 0) return;
+  void (async () => {
+    for (const id of ids) {
+      await call('/magnet/delete', apiKey, { id: String(id) }).catch(() => null);
+    }
+  })();
+}
+
 export function allDebrid(apiKey: string): DebridService {
   return {
     name: 'alldebrid',
-    supportsCacheCheck: false,
+    supportsCacheCheck: true,
 
-    async checkCached(): Promise<Map<string, boolean>> {
-      // Volontairement vide : mieux vaut ne rien affirmer que d'afficher un
-      // « instantane » que le premier clic dementira.
-      return new Map();
+    async checkCached(hashes, signal) {
+      const out = new Map<string, boolean>();
+      const aInterroger: string[] = [];
+
+      // On MEMORISE le verdict par hash. Sans ca, chaque ouverture d'un episode
+      // redeposerait quarante magnets chez AllDebrid : c'est lent, ca frotte contre
+      // leur limite de magnets actifs, et le resultat ne change pas d'une minute a
+      // l'autre. Un « pret » se garde plus longtemps qu'un « pas pret », qui peut
+      // devenir vrai des que quelqu'un aura telecharge le fichier.
+      for (const brut of new Set(hashes.map((h) => h.toLowerCase()))) {
+        if (!/^[a-f0-9]{40}$/.test(brut)) continue;
+        const memorise = cacheGet<boolean>(`ad:dispo:${brut}`);
+        if (memorise === null) aInterroger.push(brut);
+        else out.set(brut, memorise);
+      }
+
+      for (let i = 0; i < aInterroger.length; i += LOT_DISPO) {
+        if (signal?.aborted) break;
+        const lot = aInterroger.slice(i, i + LOT_DISPO);
+        const magnets = await uploadLot(lot, apiKey, signal);
+        if (magnets.length === 0) continue;
+
+        const aRetirer: number[] = [];
+        for (const m of magnets) {
+          const hash = (m.hash || '').toLowerCase();
+          if (!hash) continue;
+          const pret = Boolean(m.ready);
+          out.set(hash, pret);
+          cacheSet(`ad:dispo:${hash}`, pret, pret ? DISPO_TTL_MS : DISPO_ABSENT_TTL_MS, 'alldebrid');
+          if (typeof m.id === 'number') aRetirer.push(m.id);
+        }
+        nettoyerEnFond(aRetirer, apiKey);
+      }
+      return out;
     },
 
     async resolveTorrent(magnetOrHash, fileHint, signal) {
