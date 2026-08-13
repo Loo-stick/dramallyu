@@ -71,6 +71,25 @@ function compterEpisodes(videos?: { season?: number }[]): Record<number, number>
   return Object.keys(parSaison).length > 0 ? parSaison : undefined;
 }
 
+/**
+ * Compte d'episodes par saison, lu dans la fiche TMDB deja recuperee.
+ *
+ * Gratuit : `seasons` accompagne la reponse de details, il n'y a pas d'appel de plus.
+ * La saison 0 (bonus) est ecartee, elle n'a pas de pack et fausserait le compte.
+ */
+function depuisSaisonsTmdb(
+  saisons?: { season_number?: number; episode_count?: number }[],
+): Record<number, number> | undefined {
+  if (!saisons || saisons.length === 0) return undefined;
+  const out: Record<number, number> = {};
+  for (const s of saisons) {
+    if (typeof s.season_number !== 'number' || s.season_number < 1) continue;
+    if (typeof s.episode_count !== 'number' || s.episode_count < 1) continue;
+    out[s.season_number] = s.episode_count;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function yearOf(raw?: string): number | undefined {
   if (!raw) return undefined;
   const m = raw.match(/(19|20)\d{2}/);
@@ -130,6 +149,8 @@ interface TmdbDetails {
   first_air_date?: string;
   release_date?: string;
   poster_path?: string;
+  /** Presente sur les series : le compte d'episodes y est deja, sans appel de plus. */
+  seasons?: { season_number?: number; episode_count?: number }[];
 }
 
 /**
@@ -166,7 +187,10 @@ async function enrichWithTmdb(
   if (!tmdbId) return info;
 
   const details = await cached<TmdbDetails | null>(
-    `tmdb:${path}:${tmdbId}:fr`,
+    // v2 : la forme memorisee porte desormais `seasons` (compte d'episodes). Une
+    // entree ecrite avant ne l'a pas, et ferait juger les packs au dossier pendant
+    // toute la duree du cache sans que rien ne le signale.
+    `tmdb:v2:${path}:${tmdbId}:fr`,
     META_TTL_MS,
     () =>
       getJson<TmdbDetails>(`${TMDB}/${path}/${tmdbId}?api_key=${apiKey}&language=fr-FR`, {
@@ -207,6 +231,7 @@ async function enrichWithTmdb(
     ...info,
     tmdbId,
     titles: [...new Set(titles)],
+    episodesParSaison: depuisSaisonsTmdb(details.seasons) ?? info.episodesParSaison,
     originalLanguage: details.original_language || info.originalLanguage,
     year: info.year ?? yearOf(details.first_air_date || details.release_date),
     description: info.description || details.overview,
@@ -333,9 +358,20 @@ export async function resolveWork(
 
     // Cinemeta apporte le PAYS, que TMDB ne donne pas sous cette forme et dont le
     // garde-fou de perimetre se sert quand la langue d'origine manque.
-    if (info && !info.country && !info.originalLanguage) {
+    // On complete depuis Cinemeta ce que TMDB ne donne pas : le PAYS, dont le
+    // garde-fou de perimetre se sert quand la langue d'origine manque, et le COMPTE
+    // D'EPISODES quand la fiche TMDB ne portait pas ses saisons. L'appel est le meme
+    // et il est mis en cache sept jours, donc au plus un aller-retour.
+    const manqueOrigine = info && !info.country && !info.originalLanguage;
+    const manqueEpisodes = info && type === 'series' && !info.episodesParSaison;
+    if (manqueOrigine || manqueEpisodes) {
       const parCinemeta = await fromCinemeta(parsed.value, type, signal);
-      if (parCinemeta?.country) info.country = parCinemeta.country;
+      if (info && parCinemeta) {
+        if (!info.country && parCinemeta.country) info.country = parCinemeta.country;
+        if (!info.episodesParSaison && parCinemeta.episodesParSaison) {
+          info.episodesParSaison = parCinemeta.episodesParSaison;
+        }
+      }
     }
   }
 
