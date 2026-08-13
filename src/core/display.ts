@@ -20,6 +20,15 @@ export interface StremioStream {
   name: string;
   description: string;
   url?: string;
+  /**
+   * Pistes attachees au flux lui-meme.
+   *
+   * Complementaire de la ressource /subtitles, pas concurrent : la ressource repond
+   * pour n'importe quel flux, y compris ceux d'un autre addon, tandis que celles-ci
+   * accompagnent LE flux qu'on sert — et sont donc proposees avec lui plutot que
+   * reléguees derriere les autres addons de sous-titres.
+   */
+  subtitles?: { id: string; url: string; lang: string }[];
   infoHash?: string;
   fileIdx?: number;
   behaviorHints?: {
@@ -73,6 +82,8 @@ export interface FormatOptions {
   viaDebrid?: boolean;
   /** Debrideur qui servira reellement ce flux. */
   debrid?: 'alldebrid' | 'torbox';
+  /** Pistes a attacher au flux, deja converties en URL servies par nous. */
+  sousTitres?: { id: string; url: string; lang: string }[];
   /**
    * Etat du cache : vrai = pret a lire, faux = a telecharger,
    * `undefined` = ON NE SAIT PAS (typiquement un lien DDL, dont la disponibilite ne
@@ -190,6 +201,8 @@ export function toStremioStream(candidate: Candidate, opts: FormatOptions): Stre
   // par la source — il en deduirait n'importe quoi.
   if (!estLibelleFabrique) stream.behaviorHints!.filename = candidate.title;
   if (candidate.sizeBytes) stream.behaviorHints!.videoSize = candidate.sizeBytes;
+
+  if (opts.sousTitres && opts.sousTitres.length > 0) stream.subtitles = opts.sousTitres;
 
   if (opts.playUrl) {
     stream.url = opts.playUrl;

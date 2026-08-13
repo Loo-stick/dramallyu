@@ -352,6 +352,17 @@
           <input type="checkbox" id="bonusHdr">
           <span class="signe">+</span><span>Remonter le HDR a qualite egale</span>
         </label>
+
+        <label class="pastille" data-bascule="subsSurFlux" style="margin:10px 0 0">
+          <input type="checkbox" id="subsSurFlux" checked>
+          <span class="signe">✓</span><span>Attacher les sous-titres au flux</span>
+        </label>
+        <p class="indice">
+          Nos pistes sont alors proposees AVEC le flux, au lieu d'attendre leur tour
+          derriere vos autres extensions de sous-titres. Elles restent aussi
+          disponibles par la voie habituelle ; selon le lecteur, elles peuvent donc
+          apparaitre en double.
+        </p>
       </section>
 
       <section class="bloc">
@@ -601,6 +612,8 @@ function configActuelle(){
   if ($('cachedOnly').checked) cfg.cachedOnly = true;
   if ($('excludeCam').checked) cfg.excludeCam = true;
   if ($('bonusHdr').checked) cfg.bonusHdr = true;
+  // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
+  if (!$('subsSurFlux').checked) cfg.subsSurFlux = false;
   if ($('priorite').value !== 'aucune') cfg.priorite = $('priorite').value;
   if (valeur('minResolution')) cfg.minResolution = valeur('minResolution');
   if (valeur('maxResolution')) cfg.maxResolution = valeur('maxResolution');
@@ -771,7 +784,7 @@ $('copier').addEventListener('click', function(){
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
 ['ad','tb','c411','tr4ker','tmdb','sortBy','maxResults','cachedOnly','priorite',
- 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','bonusHdr'].forEach(function(id){
+ 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','bonusHdr','subsSurFlux'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);
 });
@@ -807,7 +820,8 @@ function restaurer(){
     $('cachedOnly').checked = !!r.cachedOnly;
     $('excludeCam').checked = !!r.excludeCam;
     $('bonusHdr').checked = !!r.bonusHdr;
-    ['cachedOnly','excludeCam','bonusHdr'].forEach(function(id){ peindreBascule($(id)); });
+    $('subsSurFlux').checked = r.subsSurFlux !== false;
+    ['cachedOnly','excludeCam','bonusHdr','subsSurFlux'].forEach(function(id){ peindreBascule($(id)); });
 
     marquerClesEnregistrees();
     document.getElementById('banniere-restauration').hidden = false;

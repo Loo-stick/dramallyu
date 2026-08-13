@@ -170,6 +170,28 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // etaient bien emis en /<config>/resolve/<jeton>, mais seule la route /resolve
     // etait enregistree — donc 404 au moindre appui sur Play.
     const base = getBaseUrl(req);
+
+    /**
+     * Pistes a attacher au flux, servies par NOS endpoints comme celles de la
+     * ressource — un lien direct vers l'hebergeur ne s'affiche pas (CORS, format).
+     * Seules les sources qui portent leurs propres pistes en fournissent : KissKH sait
+     * lesquelles vont avec SON flux, ce qu'aucun addon generique ne peut deviner.
+     */
+    const pistesDe = (c: Candidate): { id: string; url: string; lang: string }[] | undefined => {
+      if (!config.subsSurFlux || !c.subs || c.subs.length === 0) return undefined;
+      const rang = (lang: string): number => {
+        const i = config.subLangs.indexOf(lang);
+        return i === -1 ? 100 : i;
+      };
+      return [...c.subs]
+        .sort((a, b) => rang(a.lang) - rang(b.lang))
+        .map((t, i) => ({
+          id: `dramallyu-flux-${i}`,
+          url: `${base}/sub/${encodeToken({ k: 'ddl', v: t.url })}.vtt`,
+          lang: t.lang,
+        }));
+    };
+
     const streams: StremioStream[] = kept.map(({ candidate: c }) => {
       if (c.kind === 'direct' && c.directUrl) {
         // Un flux qui exige un Referer casse chez plusieurs lecteurs : Stremio
@@ -183,7 +205,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         // quelle — l'addon reste fonctionnel, avec les proxyHeaders pour seul recours.
         const needsHeaders = c.headers && Object.keys(c.headers).length > 0;
         const playUrl = needsHeaders ? throughMediaflow(c.directUrl, c.headers) : c.directUrl;
-        return toStremioStream(c, { playUrl });
+        return toStremioStream(c, { playUrl, sousTitres: pistesDe(c) });
       }
       // Torrent ou DDL : on differe la resolution au moment du Play.
       const token = encodeToken({
@@ -199,6 +221,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         viaDebrid: true,
         debrid: service,
         cached: pret,
+        sousTitres: pistesDe(c),
       });
     });
 

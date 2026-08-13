@@ -58,6 +58,14 @@ export interface UserConfig {
   excludeCam: boolean;
   /** Remonter les flux HDR a qualite comparable. */
   bonusHdr: boolean;
+  /**
+   * Attacher aussi les sous-titres a l'objet Stream, en plus de la ressource.
+   *
+   * Les lecteurs presentent les pistes d'une ressource /subtitles groupees par addon,
+   * et rien ne garantit que les notres arrivent en tete — alors que ce sont celles qui
+   * correspondent au flux qu'on sert. Attachees au flux, elles sont proposees avec lui.
+   */
+  subsSurFlux: boolean;
 }
 
 export const DEFAULT_CONFIG: UserConfig = {
@@ -77,6 +85,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   excludeFormats: [],
   excludeCam: false,
   bonusHdr: false,
+  subsSurFlux: true,
 };
 
 const KEY_FIELDS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const;
@@ -155,6 +164,8 @@ export function parseConfig(raw?: string | null): UserConfig {
   }
 
   cfg.cachedOnly = o.cachedOnly === true;
+  // Actif par defaut : on ne le desactive que si le champ dit explicitement false.
+  cfg.subsSurFlux = o.subsSurFlux !== false;
   cfg.excludeCam = o.excludeCam === true;
   cfg.bonusHdr = o.bonusHdr === true;
 

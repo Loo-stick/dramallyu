@@ -247,6 +247,7 @@ app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
     'excludeFormats',
     'excludeCam',
     'bonusHdr',
+    'subsSurFlux',
   ] as const) {
     if (aChange(champ)) compact[champ] = propre[champ];
   }
