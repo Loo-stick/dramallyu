@@ -135,11 +135,7 @@ async function fetchItems(
   );
 }
 
-function makeSource(
-  id: string,
-  label: string,
-  userKey: 'c411' | 'tr4ker' | 'ygg',
-): Source {
+function makeSource(id: string, label: string, userKey: 'c411' | 'tr4ker'): Source {
   return {
     id,
     label,
@@ -195,9 +191,5 @@ function makeSource(
 
 /** Les indexeurs Torznab declares dans les reglages operateur. */
 export function torznabSources(): Source[] {
-  return [
-    makeSource('c411', 'C411', 'c411'),
-    makeSource('tr4ker', 'Tr4ker', 'tr4ker'),
-    makeSource('ygg', 'YggTorrent (relais)', 'ygg'),
-  ];
+  return [makeSource('c411', 'C411', 'c411'), makeSource('tr4ker', 'Tr4ker', 'tr4ker')];
 }

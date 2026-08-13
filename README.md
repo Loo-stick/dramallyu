@@ -12,7 +12,7 @@ utilisable **sans aucune cle** : les sources directes suffisent a regarder.
 | Pilier | Sources | Cle requise |
 |---|---|---|
 | Direct | KissKH, VoirDrama | aucune |
-| Torrent | Nyaa, C411, Tr4ker, relais YggTorrent | debrideur (+ cle du tracker) |
+| Torrent | Nyaa, C411, Tr4ker | debrideur (+ cle du tracker, sauf Nyaa) |
 | DDL | Zone-Telechargement, Wawacity | debrideur |
 
 - **Catalogue** de 12 700 fiches, navigable par pays, avec recherche.
@@ -23,6 +23,12 @@ utilisable **sans aucune cle** : les sources directes suffisent a regarder.
 ## Installation par un utilisateur
 
 Ouvrir `/configure`, remplir ce qu'on veut (ou rien), generer le lien.
+
+La page **teste les cles** (AllDebrid, TorBox, TMDB, C411, Tr4ker) avant l'installation
+— le test passe par le serveur, ces API ne repondant pas aux appels d'un navigateur.
+Elle affiche surtout, **en direct, lesquelles des sept sources tourneront reellement**
+pour la configuration en cours : la reponse vient du meme `planSources` que le moteur,
+donc la page ne peut pas promettre une source qui ne s'executerait pas.
 
 - **Stremio** : bouton d'installation, ou coller le lien dans la recherche d'addons.
 - **Nuvio** : « Addons &rarr; Ajouter une extension », coller le lien.
@@ -134,6 +140,13 @@ les fonctions du site avec CryptoJS, meme parti pris que pour le `kkey` — mais
 `.srt`, donc en clair. Le code est defensif : il ne se declenche que sur une extension
 inhabituelle et refuse de servir si le resultat n'est pas plausible.
 
-**Indexeurs Torznab.** C411, Tr4ker et le relais Ygg sont implementes mais non
-verifiables sans un compte sur chacun de ces trackers. Le client Torznab lui-meme est
-couvert par des tests sur du XML reel.
+**Indexeurs Torznab.** C411 et Tr4ker sont implementes mais non verifiables sans un
+compte sur chacun. La page /configure sait en revanche dire si une cle est acceptee :
+le test interroge `t=search`, qui authentifie — et surtout pas `t=caps`, qui repond
+200 a n'importe quelle cle inventee.
+
+**Le relais YggTorrent a ete retire** le 2026-08-13 : `u2p.anhkagi.net` repond 403
+depuis ce serveur (ni cle acceptee, ni IP autorisee), et stream-fusion — d'ou venait
+l'adresse — n'a aucun mecanisme de cle pour lui. Le faire revenir tient en trois
+lignes : une entree dans `settings.torznab`, une ligne dans `torznabSources()`, un
+champ dans la page.

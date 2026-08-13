@@ -28,8 +28,6 @@ export interface UserConfig {
   c411?: string;
   /** Cle Torznab Tr4ker. */
   tr4ker?: string;
-  /** Cle Torznab du relais Ygg. */
-  ygg?: string;
   /** Cle TMDB (optionnelle : enrichit en FR, sinon on sert Cinemeta + KissKH). */
   tmdb?: string;
   /** Langues de sous-titres, ISO 639-2, par ordre de preference. */
@@ -52,7 +50,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   maxResults: 40,
 };
 
-const KEY_FIELDS = ['ad', 'tb', 'c411', 'tr4ker', 'ygg', 'tmdb'] as const;
+const KEY_FIELDS = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const;
 
 function asStringArray(v: unknown): string[] | null {
   if (!Array.isArray(v)) return null;

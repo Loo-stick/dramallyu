@@ -14,6 +14,7 @@ import { handleSubtitles, handleServeSub } from './routes/subtitles';
 import { handleCatalog } from './routes/catalog';
 import { handleMeta } from './routes/meta';
 import { handleResolve } from './routes/resolve';
+import { handleKeyTest } from './routes/keytest';
 import {
   adminEnabled,
   requireAdmin,
@@ -149,7 +150,7 @@ app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
     JSON.stringify(propre[k]) !== JSON.stringify(cfg[k]);
 
   const compact: Record<string, unknown> = {};
-  for (const champ of ['ad', 'tb', 'c411', 'tr4ker', 'ygg', 'tmdb'] as const) {
+  for (const champ of ['ad', 'tb', 'c411', 'tr4ker', 'tmdb'] as const) {
     if (propre[champ]) compact[champ] = propre[champ];
   }
   for (const champ of ['subLangs', 'excludeQualities', 'sources', 'sortBy', 'maxResults'] as const) {
@@ -157,6 +158,34 @@ app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
   }
 
   res.json({ config: encodeConfig(compact), chiffre: chiffrementDisponible() });
+});
+
+app.get('/api/test-cle', handleKeyTest);
+
+/**
+ * Meme reponse que GET /api/sources, mais a partir d'une config BRUTE.
+ *
+ * La page de configuration s'en sert pour montrer en direct quelles sources
+ * tourneront reellement : sans ca, elle devrait d'abord faire chiffrer la config puis
+ * la renvoyer, soit deux allers-retours a chaque frappe. Et surtout, la reponse vient
+ * du MEME `planSources` que le moteur — la page ne peut donc pas mentir sur ce qui
+ * s'executera vraiment.
+ */
+app.post('/api/sources', express.json({ limit: '8kb' }), (req, res) => {
+  const config = parseConfig(
+    Buffer.from(JSON.stringify(req.body ?? {}), 'utf-8').toString('base64url'),
+  );
+  res.json({
+    sources: planSources(config).map(({ source, skip }) => ({
+      id: source.id,
+      label: source.label,
+      kind: source.kind,
+      needsDebrid: source.needsDebrid,
+      requiredUserKey: source.requiredUserKey,
+      active: !skip,
+      skip,
+    })),
+  });
 });
 
 app.get('/api/sources', (req, res) => {

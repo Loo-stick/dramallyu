@@ -92,7 +92,7 @@ export interface Source {
    * Cle utilisateur requise. Si elle manque, la source est ecartee du fan-out :
    * elle n'echoue pas et ne consomme pas de budget.
    */
-  requiredUserKey?: 'ad' | 'tb' | 'c411' | 'tr4ker' | 'ygg' | 'tmdb';
+  requiredUserKey?: 'ad' | 'tb' | 'c411' | 'tr4ker' | 'tmdb';
   search(q: Query, ctx: SearchContext): Promise<Candidate[]>;
   /** Sous-titres propres a la source, quand elle en expose. */
   subtitles?(q: Query, ctx: SearchContext): Promise<SubTrack[]>;

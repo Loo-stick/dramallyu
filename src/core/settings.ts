@@ -35,7 +35,6 @@ const DEFAULTS: Settings = {
     nyaa: true,
     c411: true,
     tr4ker: true,
-    ygg: true,
     zonetelechargement: true,
     wawacity: true,
   },
@@ -45,7 +44,11 @@ const DEFAULTS: Settings = {
   torznab: {
     c411: { enabled: true, url: 'https://c411.org/api', categories: [2000, 5000] },
     tr4ker: { enabled: true, url: 'https://tr4ker.net/torznab', categories: [2000, 5000] },
-    ygg: { enabled: true, url: 'https://u2p.anhkagi.net/torznab', categories: [2000, 5000] },
+    // Le relais YggTorrent a ete RETIRE le 2026-08-13 : `u2p.anhkagi.net` repond 403
+    // depuis ce serveur (ni cle acceptee, ni IP autorisee), et stream-fusion — d'ou
+    // venait l'adresse — n'a aucun mecanisme de cle pour lui. Ajouter un indexeur ici
+    // suffit a le faire revenir : une entree dans cette table, une ligne dans
+    // torznabSources(), un champ dans la page de configuration.
   },
 };
 

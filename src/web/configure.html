@@ -3,303 +3,620 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Dramallyu — configuration</title>
+<title>Dramallyu — installation</title>
 <style>
-  /* Accessibilite : aucune information n'est portee par la couleur seule. Chaque etat
-     est double d'un symbole et d'un texte. */
+  /* ------------------------------------------------------------------
+     ACCESSIBILITE, contrainte de premier ordre sur ce projet :
+     AUCUNE information n'est portee par la couleur seule. Chaque verdict
+     porte un SYMBOLE et un MOT. La couleur ne fait que renforcer.
+     ------------------------------------------------------------------ */
   :root {
-    --fond: #12131a;
-    --carte: #1b1d27;
-    --bord: #2e3140;
-    --texte: #e8e9ee;
-    --doux: #9aa0b4;
-    --accent: #c9a227;
-    --accent-texte: #12131a;
+    --nuit:#141019; --surface:#1c1724; --relief:#242030; --relief2:#2c2738;
+    --trait:#332d42; --trait-doux:#272232;
+    --texte:#ece8f2; --doux:#9b93ab; --pale:#645c76;
+    --or:#d4a05a; --or-clair:#e8bc7e; --or-voile:rgba(212,160,90,.13);
+    --jade:#5fae8c; --jade-voile:rgba(95,174,140,.13);
+    --brique:#c4626a; --brique-voile:rgba(196,98,106,.13);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; padding: 2rem 1rem 4rem;
-    background: var(--fond); color: var(--texte);
-    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--nuit); color:var(--texte); font-family:var(--sans);
+    font-size:14px; line-height:1.55; -webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(1000px 480px at 50% -12%, rgba(212,160,90,.09), transparent 60%);
+    padding:32px 16px 72px;
   }
-  .page { max-width: 780px; margin: 0 auto; }
-  h1 { font-size: 1.9rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
-  .sous-titre { color: var(--doux); margin: 0 0 2rem; }
-  fieldset {
-    border: 1px solid var(--bord); border-radius: 10px;
-    margin: 0 0 1.25rem; padding: 1.25rem;
-    background: var(--carte);
+  a{color:var(--or-clair)}
+
+  .page{max-width:1080px;margin:0 auto}
+  .enseigne{text-align:center;margin-bottom:26px}
+  .enseigne h1{
+    font-size:clamp(30px,6vw,44px); font-weight:800; letter-spacing:-.035em; line-height:1;
+    background:linear-gradient(94deg,var(--or-clair),var(--or) 55%,#a87c3e);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
   }
-  legend { padding: 0 .5rem; font-weight: 600; letter-spacing: .01em; }
-  label { display: block; margin: .9rem 0 .3rem; font-size: .92rem; }
-  .aide { color: var(--doux); font-size: .84rem; margin: .2rem 0 0; }
-  input[type=text], input[type=password], select {
-    width: 100%; padding: .6rem .7rem;
-    background: #0e0f15; color: var(--texte);
-    border: 1px solid var(--bord); border-radius: 6px;
-    font: inherit; font-size: .95rem;
+  .enseigne p{color:var(--doux);margin-top:9px;font-size:14.5px}
+
+  .colonnes{display:grid;grid-template-columns:1fr 316px;gap:22px;align-items:start}
+  @media (max-width:900px){.colonnes{grid-template-columns:1fr}}
+
+  .bloc{
+    background:var(--surface); border:1px solid var(--trait); border-radius:16px;
+    padding:22px 24px; margin-bottom:16px;
+    box-shadow:0 22px 60px -40px rgba(0,0,0,.9);
   }
-  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .grille { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0 1rem; }
-  .case { display: flex; align-items: flex-start; gap: .55rem; margin: .5rem 0; }
-  .case input { margin-top: .35rem; }
-  .case span { font-size: .93rem; }
-  .case .marque { color: var(--doux); font-size: .8rem; display: block; }
-  button {
-    background: var(--accent); color: var(--accent-texte);
-    border: 0; border-radius: 7px; padding: .7rem 1.3rem;
-    font: inherit; font-weight: 650; cursor: pointer;
+  .bloc > header{display:flex;align-items:baseline;gap:10px;margin-bottom:4px}
+  .bloc h2{font-size:16.5px;letter-spacing:-.015em}
+  .rang{
+    font-family:var(--mono); font-size:11px; font-weight:700; color:var(--pale);
+    font-variant-numeric:tabular-nums; flex:none;
   }
-  button.secondaire { background: transparent; color: var(--texte); border: 1px solid var(--bord); }
-  .sortie {
-    margin-top: 1.5rem; padding: 1.1rem;
-    border: 1px solid var(--bord); border-radius: 10px; background: var(--carte);
+  .chapeau{color:var(--doux);font-size:13px;margin-bottom:16px}
+  .facultatif{
+    font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--or-clair);background:var(--or-voile);padding:2px 8px;border-radius:999px;
+    margin-left:auto;flex:none;
   }
-  code {
-    display: block; word-break: break-all; background: #0e0f15;
-    padding: .7rem; border-radius: 6px; font-size: .82rem; color: var(--doux);
-    border: 1px solid var(--bord);
+
+  label{display:block;font-size:12.5px;font-weight:650;margin:14px 0 6px}
+  label:first-of-type{margin-top:0}
+  .indice{color:var(--pale);font-size:12px;margin-top:6px;font-weight:400}
+  input[type=text],input[type=password],select{
+    width:100%;font:inherit;color:var(--texte);background:var(--nuit);
+    border:1px solid var(--trait);border-radius:10px;padding:10px 12px;outline:none;
+    transition:border-color .15s,box-shadow .15s;
   }
-  .avertissement {
-    border: 1px solid var(--bord); border-left: 4px solid var(--accent);
-    border-radius: 6px; padding: .85rem 1rem; margin: 0 0 1.5rem;
-    background: #191a22; font-size: .9rem;
+  input.mono{font-family:var(--mono);font-size:12.5px}
+  input:focus,select:focus{border-color:var(--or);box-shadow:0 0 0 3px var(--or-voile)}
+  input::placeholder{color:var(--pale)}
+
+  .avec-test{display:flex;gap:8px}
+  .avec-test input{flex:1;min-width:0}
+
+  .btn{
+    font:inherit;font-weight:650;cursor:pointer;border-radius:10px;padding:10px 15px;
+    border:1px solid var(--trait);background:var(--relief2);color:var(--texte);
+    transition:border-color .15s,background .15s,transform .1s;white-space:nowrap;
   }
-  .avertissement strong { display: block; margin-bottom: .25rem; }
-  .actions { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: 1rem; }
-  a { color: var(--accent); }
+  .btn:hover{border-color:#413a54}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.principal{
+    background:linear-gradient(150deg,var(--or-clair),#b8853f);
+    border-color:transparent;color:#1a1410;
+    box-shadow:0 12px 26px -14px rgba(212,160,90,.85);
+  }
+  .btn.large{width:100%;padding:13px;font-size:15px}
+
+  /* Verdict d'un test : symbole + mot, jamais la couleur seule. */
+  .verdict{display:none;gap:8px;margin-top:9px;font-size:12.5px;align-items:flex-start}
+  .verdict.visible{display:flex}
+  .verdict .marque{font-weight:800;flex:none;font-size:13px;line-height:1.4}
+  .verdict.ok{color:var(--jade)}
+  .verdict.ko{color:var(--brique)}
+  .verdict.attente{color:var(--doux)}
+  .verdict .detail{display:block;color:var(--doux);font-weight:400}
+
+  /* Langues : on ajoute par liste deroulante, on ordonne dans la liste. */
+  .ajout-langue{display:flex;gap:8px}
+  .ajout-langue select{flex:1}
+  .langues{list-style:none;margin-top:12px;display:flex;flex-direction:column;gap:7px}
+  .langue{
+    display:flex;align-items:center;gap:11px;padding:9px 12px;
+    border:1px solid var(--trait);border-radius:10px;background:var(--relief);
+  }
+  .langue .place{
+    width:22px;height:22px;border-radius:7px;background:var(--relief2);flex:none;
+    display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:700;
+    color:var(--or-clair);font-variant-numeric:tabular-nums;
+  }
+  .langue .nom{font-weight:600;flex:1}
+  .langue .code{font-family:var(--mono);font-size:11.5px;color:var(--pale)}
+  .langue button{
+    background:none;border:0;color:var(--doux);cursor:pointer;font:inherit;
+    font-size:15px;line-height:1;padding:3px 6px;border-radius:6px;
+  }
+  .langue button:hover{color:var(--texte);background:var(--relief2)}
+  .langue button:disabled{opacity:.28;cursor:default}
+  .vide{color:var(--pale);font-size:12.5px;padding:12px;text-align:center;
+        border:1px dashed var(--trait);border-radius:10px;margin-top:12px}
+
+  .pastilles{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+  .pastille{
+    display:inline-flex;align-items:center;gap:7px;padding:7px 13px;
+    border:1px solid var(--trait);border-radius:999px;background:var(--relief);
+    cursor:pointer;font-weight:600;font-size:13px;color:var(--doux);
+    transition:all .13s;user-select:none;
+  }
+  .pastille input{position:absolute;opacity:0;pointer-events:none}
+  .pastille .signe{font-weight:800;font-size:12px;width:11px;text-align:center}
+  .pastille.exclue{border-color:var(--brique);background:var(--brique-voile);color:var(--texte);text-decoration:line-through}
+
+  /* --- Panneau lateral : la piece maitresse de cette page --- */
+  .rail{position:sticky;top:24px}
+  .rail .bloc{padding:20px}
+  .rail h2{font-size:14.5px}
+  .source{
+    display:flex;align-items:flex-start;gap:10px;padding:9px 0;
+    border-bottom:1px solid var(--trait-doux);
+  }
+  .source:last-of-type{border-bottom:0}
+  .source .etat{font-weight:800;flex:none;width:14px;text-align:center;font-size:13px;line-height:1.5}
+  .source.on .etat{color:var(--jade)}
+  .source.off .etat{color:var(--pale)}
+  .source .nom{font-weight:600;font-size:13px}
+  .source.off .nom{color:var(--doux)}
+  .source .motif{display:block;color:var(--pale);font-size:11.5px;font-weight:400}
+  .compte{
+    font-family:var(--mono);font-size:12px;color:var(--doux);
+    padding-top:12px;margin-top:4px;border-top:1px solid var(--trait);
+    font-variant-numeric:tabular-nums;
+  }
+  .compte b{color:var(--or-clair)}
+
+  .lien-sortie{display:none}
+  .lien-sortie.visible{display:block}
+  .lien-sortie code{
+    display:block;word-break:break-all;background:var(--nuit);border:1px solid var(--trait);
+    border-radius:9px;padding:11px;font-family:var(--mono);font-size:11.5px;
+    color:var(--or-clair);margin-bottom:11px;max-height:120px;overflow:auto;
+  }
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .actions .btn{flex:1;min-width:130px;text-align:center;text-decoration:none}
+
+  .note{
+    border:1px solid var(--trait);border-left:3px solid var(--or);
+    border-radius:9px;padding:12px 14px;font-size:12.7px;background:var(--relief);
+    margin-bottom:20px;
+  }
+  .note strong{display:block;margin-bottom:3px}
+  .note.sobre{border-left-color:var(--trait);color:var(--doux)}
+
+  :focus-visible{outline:2px solid var(--or);outline-offset:2px}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <div class="page">
 
-  <h1>Dramallyu</h1>
-  <p class="sous-titre">
-    Dramas asiatiques et films, sous-titres francais en priorite.
-    Tout fonctionne sans aucune cle : les champs ci-dessous ne font qu'ajouter des sources.
-  </p>
-
-  <div class="avertissement">
-    <strong>&#9888; Ne partagez jamais votre lien d'installation</strong>
-    Vos cles sont <em>chiffrees</em> dans le lien : personne ne peut les en extraire pour
-    s'en servir ailleurs. Mais le lien reste un <em>laissez-passer</em> — qui le detient
-    peut lire des flux a travers votre compte debrid, car c'est le serveur qui dechiffre.
-    Pour faire connaitre l'addon, donnez l'adresse de <em>cette page</em>, pas votre lien.
+  <div class="enseigne">
+    <h1>Dramallyu</h1>
+    <p>Dramas asiatiques et films, sous-titres francais en priorite.</p>
   </div>
 
-  <form id="formulaire">
+  <div class="colonnes">
 
-    <fieldset>
-      <legend>Debrideurs</legend>
-      <p class="aide">
-        Necessaires pour les sources torrent et DDL uniquement. Sans eux, KissKH et
-        VoirDrama fonctionnent normalement.
-      </p>
-      <label for="ad">Cle API AllDebrid</label>
-      <input type="password" id="ad" autocomplete="off" placeholder="laisser vide si vous n'en avez pas">
-      <label for="tb">Cle API TorBox</label>
-      <input type="password" id="tb" autocomplete="off" placeholder="laisser vide si vous n'en avez pas">
-      <p class="aide">
-        Si les deux sont renseignes, TorBox est essaye en premier : lui seul sait dire
-        a l'avance si un torrent est deja en cache.
-      </p>
-    </fieldset>
+    <main>
+      <div class="note">
+        <strong>Vous pouvez installer sans rien remplir.</strong>
+        KissKH et VoirDrama fonctionnent sans aucune cle. Tout ce qui suit ajoute des
+        sources — a vous de voir jusqu'ou vous allez.
+      </div>
 
-    <fieldset>
-      <legend>Indexeurs torrent</legend>
-      <p class="aide">
-        Chacun demande un compte personnel sur le tracker concerne. Sans cle, l'indexeur
-        est simplement ignore — il ne ralentit rien.
-      </p>
-      <div class="grille">
-        <div>
-          <label for="c411">Cle C411</label>
-          <input type="password" id="c411" autocomplete="off">
+      <section class="bloc">
+        <header>
+          <span class="rang">01</span>
+          <h2>Debrideur</h2>
+          <span class="facultatif">Facultatif</span>
+        </header>
+        <p class="chapeau">
+          Ouvre les torrents et le telechargement direct. Sans debrideur, ces sources
+          sont ignorees — elles ne ralentissent rien.
+        </p>
+
+        <label for="ad">Cle API AllDebrid</label>
+        <div class="avec-test">
+          <input type="password" id="ad" class="mono" autocomplete="off" placeholder="laissez vide si vous n'en avez pas">
+          <button type="button" class="btn" data-teste="alldebrid" data-champ="ad">Tester</button>
         </div>
-        <div>
-          <label for="tr4ker">Cle Tr4ker</label>
-          <input type="password" id="tr4ker" autocomplete="off">
+        <div class="verdict" id="v-ad"></div>
+
+        <label for="tb">Cle API TorBox</label>
+        <div class="avec-test">
+          <input type="password" id="tb" class="mono" autocomplete="off" placeholder="laissez vide si vous n'en avez pas">
+          <button type="button" class="btn" data-teste="torbox" data-champ="tb">Tester</button>
         </div>
-        <div>
-          <label for="ygg">Cle relais YggTorrent</label>
-          <input type="password" id="ygg" autocomplete="off">
+        <div class="verdict" id="v-tb"></div>
+
+        <p class="indice">
+          Si vous avez les deux, TorBox passe en premier : lui seul sait dire a l'avance
+          si un torrent est deja en cache.
+        </p>
+      </section>
+
+      <section class="bloc">
+        <header>
+          <span class="rang">02</span>
+          <h2>Indexeurs de torrents</h2>
+          <span class="facultatif">Facultatif</span>
+        </header>
+        <p class="chapeau">
+          Chacun demande un compte personnel sur le tracker concerne. Nyaa, lui,
+          fonctionne sans compte et couvre deja l'essentiel des dramas.
+        </p>
+
+        <label for="c411">Cle C411</label>
+        <div class="avec-test">
+          <input type="password" id="c411" class="mono" autocomplete="off" placeholder="cle Torznab de votre compte">
+          <button type="button" class="btn" data-teste="c411" data-champ="c411">Tester</button>
+        </div>
+        <div class="verdict" id="v-c411"></div>
+
+        <label for="tr4ker">Cle Tr4ker</label>
+        <div class="avec-test">
+          <input type="password" id="tr4ker" class="mono" autocomplete="off" placeholder="cle Torznab de votre compte">
+          <button type="button" class="btn" data-teste="tr4ker" data-champ="tr4ker">Tester</button>
+        </div>
+        <div class="verdict" id="v-tr4ker"></div>
+      </section>
+
+      <section class="bloc">
+        <header>
+          <span class="rang">03</span>
+          <h2>TMDB</h2>
+          <span class="facultatif">Facultatif</span>
+        </header>
+        <p class="chapeau">
+          Sans cle, les fiches viennent de Cinemeta et de KissKH. Avec la votre, les
+          titres et synopsis passent en francais, et les titres alternatifs aident a
+          retrouver les dramas dont le nom circule en plusieurs romanisations —
+          « Squid Game », « Ojingeo geim », « Round Six ».
+        </p>
+
+        <label for="tmdb">Cle TMDB <span class="indice" style="display:inline">(v3 ou jeton v4)</span></label>
+        <div class="avec-test">
+          <input type="password" id="tmdb" class="mono" autocomplete="off" placeholder="gratuite sur themoviedb.org">
+          <button type="button" class="btn" data-teste="tmdb" data-champ="tmdb">Tester</button>
+        </div>
+        <div class="verdict" id="v-tmdb"></div>
+      </section>
+
+      <section class="bloc">
+        <header>
+          <span class="rang">04</span>
+          <h2>Langues de sous-titres</h2>
+        </header>
+        <p class="chapeau">
+          Par ordre de preference. La premiere sert aussi a classer les flux : mettre le
+          francais en tete remonte les VOSTFR et les VF.
+        </p>
+
+        <div class="ajout-langue">
+          <select id="choix-langue" aria-label="Langue a ajouter"></select>
+          <button type="button" class="btn" id="ajouter-langue">Ajouter</button>
+        </div>
+        <ul class="langues" id="langues"></ul>
+        <div class="vide" id="langues-vides" hidden>Aucune langue choisie : le francais sera utilise.</div>
+      </section>
+
+      <section class="bloc">
+        <header>
+          <span class="rang">05</span>
+          <h2>Affichage des flux</h2>
+        </header>
+
+        <label for="sortBy">Ce qui prime dans le classement</label>
+        <select id="sortBy">
+          <option value="language">La langue, puis la qualite</option>
+          <option value="quality">La qualite, puis la langue</option>
+        </select>
+
+        <label>Qualites a masquer</label>
+        <div class="pastilles" id="qualites"></div>
+        <p class="indice">
+          Rien de masque par defaut, et c'est voulu : un filtre de qualite fait
+          disparaitre des flux valides — typiquement la seule VF disponible, en 480p.
+        </p>
+
+        <label for="maxResults">Nombre maximum de flux affiches</label>
+        <input type="text" id="maxResults" value="40" inputmode="numeric" style="max-width:120px">
+      </section>
+
+      <section class="bloc">
+        <header>
+          <span class="rang">06</span>
+          <h2>Sources</h2>
+        </header>
+        <p class="chapeau">Tout decocher revient a tout activer.</p>
+        <div class="pastilles" id="sources-choix"></div>
+      </section>
+    </main>
+
+    <aside class="rail">
+      <div class="bloc">
+        <header><h2>Ce qui tournera pour vous</h2></header>
+        <p class="chapeau" style="margin-bottom:10px">
+          Mis a jour pendant que vous remplissez.
+        </p>
+        <div id="apercu"></div>
+        <div class="compte" id="compte"></div>
+      </div>
+
+      <div class="bloc">
+        <button type="button" class="btn principal large" id="generer">Generer mon lien</button>
+
+        <div class="lien-sortie" id="sortie" style="margin-top:16px">
+          <code id="lien"></code>
+          <div class="actions">
+            <button type="button" class="btn" id="copier">Copier</button>
+            <a class="btn" id="vers-stremio" href="#">Installer dans Stremio</a>
+          </div>
+          <p class="indice" id="etat-chiffrement" style="margin-top:11px"></p>
         </div>
       </div>
-    </fieldset>
 
-    <fieldset>
-      <legend>Sous-titres et affichage</legend>
+      <div class="note sobre">
+        <strong>Ne partagez jamais ce lien</strong>
+        Vos cles y sont chiffrees, donc personne ne peut les en extraire. Mais le lien
+        reste un laissez-passer vers votre compte debrid. Pour faire connaitre l'addon,
+        donnez l'adresse de cette page.
+      </div>
 
-      <label for="subLangs">Langues de sous-titres, par ordre de preference</label>
-      <input type="text" id="subLangs" value="fre, eng" placeholder="fre, eng, kor">
-      <p class="aide">
-        Codes a trois lettres (fre, eng, kor, jpn, tha, chi). Les codes a deux lettres
-        sont convertis automatiquement. La premiere langue determine aussi l'ordre
-        d'affichage des flux : mettre <code style="display:inline;padding:.1rem .3rem">fre</code>
-        en tete remonte les VOSTFR et les VF.
-      </p>
+      <div class="note sobre">
+        <strong>Nuvio</strong>
+        Ajoutez le lien dans « Addons &rarr; Ajouter une extension ». Si Dramallyu y est
+        deja, desinstallez-le d'abord : Nuvio garde en cache la liste des ressources et
+        ne verrait pas les sous-titres autrement.
+      </div>
+    </aside>
 
-      <label for="sortBy">Ce qui prime dans le classement</label>
-      <select id="sortBy">
-        <option value="language">La langue, puis la qualite</option>
-        <option value="quality">La qualite, puis la langue</option>
-      </select>
-
-      <label>Qualites a masquer</label>
-      <p class="aide">
-        Vide par defaut, et c'est volontaire : filtrer sur la qualite fait disparaitre
-        des flux parfaitement valides. A n'utiliser que si une qualite vous gene vraiment.
-      </p>
-      <div class="grille" id="qualites"></div>
-
-      <label for="maxResults">Nombre maximum de flux affiches</label>
-      <input type="text" id="maxResults" value="40" inputmode="numeric">
-    </fieldset>
-
-    <fieldset>
-      <legend>Sources</legend>
-      <p class="aide">Tout decocher revient a tout activer.</p>
-      <div class="grille" id="sources"></div>
-    </fieldset>
-
-    <div class="actions">
-      <button type="submit">Generer mon lien d'installation</button>
-      <button type="button" class="secondaire" id="reinit">Tout reinitialiser</button>
-    </div>
-  </form>
-
-  <div class="sortie" id="sortie" hidden>
-    <p><strong>Votre lien d'installation</strong></p>
-    <code id="lien"></code>
-    <p class="aide" id="etat-chiffrement" style="margin-top:.6rem"></p>
-    <div class="actions">
-      <button type="button" id="copier">Copier le lien</button>
-      <a id="stremio" class="secondaire" style="text-decoration:none"><button type="button" class="secondaire">Installer dans Stremio</button></a>
-    </div>
-    <p class="aide" style="margin-top:1rem">
-      <strong>Stremio</strong> : le bouton ci-dessus, ou collez le lien dans la barre de recherche des addons.<br>
-      <strong>Nuvio</strong> : ajoutez le lien dans « Addons &rarr; Ajouter une extension ».
-      Si vous aviez deja Dramallyu, desinstallez-le d'abord : Nuvio garde en cache la
-      liste des ressources d'un addon, et ne verrait pas les sous-titres autrement.
-    </p>
   </div>
-
 </div>
 
 <script>
-const QUALITES = [
-  ['4K', '4K / 2160p'], ['1080p', '1080p'], ['720p', '720p'],
-  ['480p', '480p'], ['360p', '360p'], ['unknown', 'Resolution inconnue'],
+'use strict';
+
+/* Codes ISO 639-2 : ce que Stremio et Nuvio attendent sur la ressource subtitles. */
+var LANGUES = [
+  ['fre','Francais'], ['eng','Anglais'], ['kor','Coreen'], ['jpn','Japonais'],
+  ['chi','Chinois'], ['tha','Thai'], ['spa','Espagnol'], ['por','Portugais'],
+  ['ger','Allemand'], ['ita','Italien'], ['ara','Arabe'], ['rus','Russe'],
+  ['ind','Indonesien'], ['vie','Vietnamien'], ['tur','Turc'], ['dut','Neerlandais'],
+  ['pol','Polonais']
+];
+var QUALITES = [
+  ['4K','4K / 2160p'], ['1080p','1080p'], ['720p','720p'],
+  ['480p','480p'], ['360p','360p'], ['unknown','Resolution inconnue']
 ];
 
-function creerCases(conteneur, entrees, prefixe) {
-  conteneur.innerHTML = entrees.map(function (e) {
-    return '<label class="case"><input type="checkbox" id="' + prefixe + e.id + '" value="' + e.id + '">' +
-           '<span>' + e.nom + (e.marque ? '<span class="marque">' + e.marque + '</span>' : '') + '</span></label>';
+var choisies = ['fre','eng'];
+var sourcesExclues = [];
+
+function $(id){ return document.getElementById(id); }
+function valeur(id){ return $(id).value.trim(); }
+
+/* ---------- Langues ---------- */
+function nomLangue(code){
+  for (var i=0;i<LANGUES.length;i++) if (LANGUES[i][0]===code) return LANGUES[i][1];
+  return code;
+}
+
+function rendreLangues(){
+  var liste = $('langues');
+  liste.innerHTML = choisies.map(function(code, i){
+    return '<li class="langue">' +
+      '<span class="place">' + (i+1) + '</span>' +
+      '<span class="nom">' + nomLangue(code) + '</span>' +
+      '<span class="code">' + code + '</span>' +
+      '<button type="button" data-monte="' + i + '" title="Monter" aria-label="Monter ' + nomLangue(code) + '"' + (i===0?' disabled':'') + '>&#9650;</button>' +
+      '<button type="button" data-descend="' + i + '" title="Descendre" aria-label="Descendre ' + nomLangue(code) + '"' + (i===choisies.length-1?' disabled':'') + '>&#9660;</button>' +
+      '<button type="button" data-retire="' + i + '" title="Retirer" aria-label="Retirer ' + nomLangue(code) + '">&times;</button>' +
+      '</li>';
   }).join('');
-}
+  $('langues-vides').hidden = choisies.length > 0;
 
-creerCases(
-  document.getElementById('qualites'),
-  QUALITES.map(function (q) { return { id: q[0], nom: q[1] }; }),
-  'q_'
-);
+  var select = $('choix-langue');
+  var restantes = LANGUES.filter(function(l){ return choisies.indexOf(l[0]) === -1; });
+  select.innerHTML = restantes.map(function(l){
+    return '<option value="' + l[0] + '">' + l[1] + ' (' + l[0] + ')</option>';
+  }).join('');
+  select.disabled = restantes.length === 0;
+  $('ajouter-langue').disabled = restantes.length === 0;
 
-// Les sources sont lues sur le serveur : la page reste juste meme si l'operateur en
-// ajoute ou en desactive une.
-fetch('/api/sources')
-  .then(function (r) { return r.json(); })
-  .then(function (data) {
-    var entrees = data.sources.map(function (s) {
-      var marque = s.kind === 'direct' ? 'Directe, aucune cle requise'
-        : s.needsDebrid ? 'Necessite un debrideur' + (s.requiredUserKey ? ' et une cle ' + s.requiredUserKey : '')
-        : '';
-      return { id: s.id, nom: s.label, marque: marque };
+  liste.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){
+      var i;
+      if (b.dataset.monte !== undefined) {
+        i = +b.dataset.monte;
+        var h = choisies[i-1]; choisies[i-1] = choisies[i]; choisies[i] = h;
+      } else if (b.dataset.descend !== undefined) {
+        i = +b.dataset.descend;
+        var h2 = choisies[i+1]; choisies[i+1] = choisies[i]; choisies[i] = h2;
+      } else {
+        choisies.splice(+b.dataset.retire, 1);
+      }
+      rendreLangues();
+      rafraichirApercu();
     });
-    creerCases(document.getElementById('sources'), entrees, 's_');
-  })
-  .catch(function () {
-    document.getElementById('sources').innerHTML =
-      '<p class="aide">Liste des sources indisponible — toutes seront activees.</p>';
   });
+}
 
-function cochees(prefixe) {
+$('ajouter-langue').addEventListener('click', function(){
+  var code = $('choix-langue').value;
+  if (code && choisies.indexOf(code) === -1) { choisies.push(code); rendreLangues(); }
+});
+
+/* ---------- Pastilles de qualite ---------- */
+function rendreQualites(){
+  $('qualites').innerHTML = QUALITES.map(function(q){
+    return '<label class="pastille" data-q="' + q[0] + '">' +
+      '<input type="checkbox" value="' + q[0] + '">' +
+      '<span class="signe">+</span><span>' + q[1] + '</span></label>';
+  }).join('');
+
+  $('qualites').querySelectorAll('input').forEach(function(input){
+    input.addEventListener('change', function(){
+      var pastille = input.closest('.pastille');
+      pastille.classList.toggle('exclue', input.checked);
+      // Symbole ET texte : le sens ne repose jamais sur la couleur.
+      pastille.querySelector('.signe').textContent = input.checked ? '✕' : '+';
+    });
+  });
+}
+
+function qualitesExclues(){
   return Array.prototype.slice
-    .call(document.querySelectorAll('input[id^="' + prefixe + '"]:checked'))
-    .map(function (i) { return i.value; });
+    .call($('qualites').querySelectorAll('input:checked'))
+    .map(function(i){ return i.value; });
 }
 
-function texte(id) {
-  return document.getElementById(id).value.trim();
+/* ---------- Config courante ---------- */
+function configActuelle(){
+  var cfg = {};
+  ['ad','tb','c411','tr4ker','tmdb'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
+  if (choisies.length) cfg.subLangs = choisies;
+  var ex = qualitesExclues(); if (ex.length) cfg.excludeQualities = ex;
+  if (sourcesExclues.length) {
+    cfg.sources = TOUTES_SOURCES.filter(function(id){ return sourcesExclues.indexOf(id) === -1; });
+  }
+  cfg.sortBy = $('sortBy').value;
+  var max = parseInt(valeur('maxResults'), 10);
+  if (max > 0) cfg.maxResults = max;
+  return cfg;
 }
 
-document.getElementById('formulaire').addEventListener('submit', function (e) {
-  e.preventDefault();
+/* ---------- Apercu en direct : la piece maitresse ----------
+   Il interroge le MEME planSources que le moteur. La page ne peut donc pas
+   promettre une source qui, en realite, ne s'executerait pas.               */
+var TOUTES_SOURCES = [];
+var MOTIFS = {
+  'cle-absente': 'cle manquante',
+  'operateur': 'desactivee par l operateur',
+  'utilisateur': 'decochee plus bas'
+};
+var minuteur = null;
 
-  var config = {};
-  ['ad', 'tb', 'c411', 'tr4ker', 'ygg'].forEach(function (k) {
-    if (texte(k)) config[k] = texte(k);
+function rafraichirApercu(){
+  clearTimeout(minuteur);
+  minuteur = setTimeout(function(){
+    fetch('/api/sources', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(configActuelle())
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      if (!TOUTES_SOURCES.length) {
+        TOUTES_SOURCES = data.sources.map(function(s){ return s.id; });
+        rendreChoixSources(data.sources);
+      }
+      var actives = 0;
+      $('apercu').innerHTML = data.sources.map(function(s){
+        if (s.active) actives++;
+        return '<div class="source ' + (s.active ? 'on' : 'off') + '">' +
+          '<span class="etat" aria-hidden="true">' + (s.active ? '✓' : '—') + '</span>' +
+          '<span><span class="nom">' + s.label + '</span>' +
+          '<span class="motif">' + (s.active ? 'active' : (MOTIFS[s.skip] || 'inactive')) + '</span></span>' +
+          '</div>';
+      }).join('');
+      $('compte').innerHTML = '<b>' + actives + '</b> source' + (actives > 1 ? 's' : '') +
+        ' sur ' + data.sources.length + ' tourneront pour vous.';
+    })
+    .catch(function(){
+      $('compte').textContent = 'Apercu indisponible pour le moment.';
+    });
+  }, 350);
+}
+
+function rendreChoixSources(sources){
+  $('sources-choix').innerHTML = sources.map(function(s){
+    return '<label class="pastille" data-s="' + s.id + '">' +
+      '<input type="checkbox" value="' + s.id + '" checked>' +
+      '<span class="signe">✓</span><span>' + s.label + '</span></label>';
+  }).join('');
+
+  $('sources-choix').querySelectorAll('input').forEach(function(input){
+    input.addEventListener('change', function(){
+      var pastille = input.closest('.pastille');
+      pastille.classList.toggle('exclue', !input.checked);
+      pastille.querySelector('.signe').textContent = input.checked ? '✓' : '✕';
+      sourcesExclues = Array.prototype.slice
+        .call($('sources-choix').querySelectorAll('input:not(:checked)'))
+        .map(function(i){ return i.value; });
+      rafraichirApercu();
+    });
   });
+}
 
-  var langues = texte('subLangs').split(/[,\s]+/).filter(Boolean);
-  if (langues.length) config.subLangs = langues;
+/* ---------- Test des cles ---------- */
+document.querySelectorAll('button[data-teste]').forEach(function(bouton){
+  bouton.addEventListener('click', function(){
+    var champ = bouton.dataset.champ;
+    var zone = $('v-' + champ);
+    var cle = valeur(champ);
 
-  var exclues = cochees('q_');
-  if (exclues.length) config.excludeQualities = exclues;
+    if (!cle) { afficherVerdict(zone, 'attente', '—', 'Renseignez une cle avant de tester.'); return; }
 
-  var sources = cochees('s_');
-  if (sources.length) config.sources = sources;
+    afficherVerdict(zone, 'attente', '…', 'Verification en cours');
+    bouton.disabled = true;
 
-  config.sortBy = document.getElementById('sortBy').value;
+    fetch('/api/test-cle?service=' + bouton.dataset.teste + '&key=' + encodeURIComponent(cle))
+      .then(function(r){ return r.json(); })
+      .then(function(v){
+        afficherVerdict(zone, v.ok ? 'ok' : 'ko', v.ok ? '✓' : '✕', v.message, v.detail);
+        rafraichirApercu();
+      })
+      .catch(function(){
+        afficherVerdict(zone, 'ko', '✕', 'Le test n a pas abouti. Reessayez.');
+      })
+      .finally(function(){ bouton.disabled = false; });
+  });
+});
 
-  var max = parseInt(texte('maxResults'), 10);
-  if (max > 0) config.maxResults = max;
+function afficherVerdict(zone, etat, marque, message, detail){
+  zone.className = 'verdict visible ' + etat;
+  zone.innerHTML = '<span class="marque" aria-hidden="true">' + marque + '</span>' +
+    '<span>' + message + (detail ? '<span class="detail">' + detail + '</span>' : '') + '</span>';
+}
 
-  // Le chiffrement se fait cote SERVEUR : la cle y est, et elle doit y rester. La
-  // page envoie donc la configuration et recoit le segment chiffre en retour.
-  var bouton = e.target.querySelector('button[type=submit]');
+/* ---------- Generation du lien ---------- */
+$('generer').addEventListener('click', function(){
+  var bouton = this;
   var libelle = bouton.textContent;
   bouton.textContent = 'Generation...';
   bouton.disabled = true;
 
+  // Le chiffrement se fait cote serveur : la cle y est, et elle doit y rester.
   fetch('/api/config/encoder', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config),
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(configActuelle())
   })
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      var lien = location.origin + '/' + data.config + '/manifest.json';
-      document.getElementById('lien').textContent = lien;
-      document.getElementById('stremio').href = lien.replace(/^https?:/, 'stremio:');
-      document.getElementById('etat-chiffrement').textContent = data.chiffre
-        ? 'Vos cles sont chiffrees dans ce lien.'
-        : "Attention : cette instance n'a pas de secret configure, vos cles sont seulement encodees.";
-      document.getElementById('sortie').hidden = false;
-      document.getElementById('sortie').scrollIntoView({ behavior: 'smooth' });
-    })
-    .catch(function () {
-      alert("La generation a echoue. Verifiez votre connexion et reessayez.");
-    })
-    .finally(function () {
-      bouton.textContent = libelle;
-      bouton.disabled = false;
-    });
+  .then(function(r){ return r.json(); })
+  .then(function(data){
+    var lien = location.origin + '/' + data.config + '/manifest.json';
+    $('lien').textContent = lien;
+    $('vers-stremio').href = lien.replace(/^https?:/, 'stremio:');
+    $('etat-chiffrement').textContent = data.chiffre
+      ? 'Vos cles sont chiffrees dans ce lien.'
+      : 'Cette instance n a pas de secret configure : vos cles sont seulement encodees.';
+    $('sortie').classList.add('visible');
+  })
+  .catch(function(){
+    $('etat-chiffrement').textContent = 'La generation a echoue. Reessayez.';
+    $('sortie').classList.add('visible');
+  })
+  .finally(function(){ bouton.textContent = libelle; bouton.disabled = false; });
 });
 
-document.getElementById('copier').addEventListener('click', function () {
-  var lien = document.getElementById('lien').textContent;
+$('copier').addEventListener('click', function(){
   var bouton = this;
-  navigator.clipboard.writeText(lien).then(function () {
+  navigator.clipboard.writeText($('lien').textContent).then(function(){
     bouton.textContent = '✓ Copie';
-    setTimeout(function () { bouton.textContent = 'Copier le lien'; }, 2000);
+    setTimeout(function(){ bouton.textContent = 'Copier'; }, 2000);
   });
 });
 
-document.getElementById('reinit').addEventListener('click', function () {
-  document.getElementById('formulaire').reset();
-  document.getElementById('sortie').hidden = true;
+/* Toute saisie de cle change ce qui tournera : l'apercu suit. */
+['ad','tb','c411','tr4ker','tmdb','sortBy','maxResults'].forEach(function(id){
+  $(id).addEventListener('input', rafraichirApercu);
+  $(id).addEventListener('change', rafraichirApercu);
 });
+
+rendreLangues();
+rendreQualites();
+rafraichirApercu();
 </script>
 </body>
 </html>
