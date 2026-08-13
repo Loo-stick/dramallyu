@@ -14,6 +14,7 @@ import type { Candidate, Query, SearchContext, Source, SubTrack } from '../sourc
 import type { UserConfig } from './config';
 import { sourceEnabledForUser } from './config';
 import { Deadline } from './http';
+import { noterSource } from './metrics';
 import { getSettings, sourceEnabledByOperator } from './settings';
 
 const registry = new Map<string, Source>();
@@ -59,6 +60,9 @@ export interface FanoutResult {
   candidates: Candidate[];
   /** Duree par source, pour l'admin et le diagnostic. */
   timings: Record<string, number>;
+  /** Candidats rapportes par chaque source, AVANT dedup et filtres. C'est la seule
+   *  mesure qui dise si une source SERT a quelque chose. */
+  apports: Record<string, number>;
   /** Sources abandonnees faute de budget. */
   timedOut: string[];
 }
@@ -70,6 +74,7 @@ export async function searchAll(query: Query, config: UserConfig): Promise<Fanou
 
   const active = planSources(config).filter((p) => !p.skip);
   const timings: Record<string, number> = {};
+  const apports: Record<string, number> = {};
   const timedOut: string[] = [];
 
   const results = await Promise.all(
@@ -77,21 +82,30 @@ export async function searchAll(query: Query, config: UserConfig): Promise<Fanou
       const started = Date.now();
       try {
         const found = await source.search(query, ctx);
-        timings[source.id] = Date.now() - started;
+        const ms = Date.now() - started;
+        timings[source.id] = ms;
+        apports[source.id] = found.length;
+        noterSource(source.id, ms, found.length);
         return found;
       } catch (e) {
-        timings[source.id] = Date.now() - started;
+        const ms = Date.now() - started;
+        timings[source.id] = ms;
+        apports[source.id] = 0;
+        const message = (e as Error).message.slice(0, 120);
+        // Un abandon de budget n'est PAS un echec de la source : le compter comme tel
+        // ferait passer pour defaillante une source simplement arrivee apres l'heure.
+        noterSource(source.id, ms, 0, deadline.expired() ? undefined : message);
         if (deadline.expired()) {
           timedOut.push(source.id);
         } else {
-          console.log(`[Fanout] ${source.id}: ${(e as Error).message.slice(0, 120)}`);
+          console.log(`[Fanout] ${source.id}: ${message}`);
         }
         return [] as Candidate[];
       }
     }),
   );
 
-  return { candidates: results.flat(), timings, timedOut };
+  return { candidates: results.flat(), timings, apports, timedOut };
 }
 
 /** Meme discipline pour les sous-titres : budget partage, aucune source bloquante. */

@@ -16,6 +16,7 @@ import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
 import { cacheParService, resolve, type NomDebrid } from '../debrid/resolver';
 import { languesDuFichier, languesDejaConnues } from '../core/pistes-fichier';
+import { noterRequete } from '../core/metrics';
 import { marquerMort } from '../debrid/deadlinks';
 import { cached } from '../core/cache';
 import { isRedirector, infosLiens, type InfoLien } from '../debrid/alldebrid';
@@ -113,7 +114,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     }
 
     const query = buildQuery(type, parsed, work);
-    const { candidates, timings, timedOut } = await searchAll(query, config);
+    const { candidates, timings, apports, timedOut } = await searchAll(query, config);
 
     const settings = getSettings();
     const langOrder = langOrderFromSubs(config.subLangs);
@@ -410,6 +411,19 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     if (streams.length === 0) {
       console.log(`[Stream] ...titres cherches : ${query.titles.join(' | ') || '(aucun)'}`);
     }
+
+    noterRequete({
+      quand: Date.now(),
+      type,
+      id: req.params.id,
+      titre: work.titles[0],
+      flux: streams.length,
+      ms: elapsed,
+      parSource: timings,
+      apports,
+      abandonnees: timedOut,
+      note: streams.length === 0 ? `titres cherches : ${query.titles.join(' | ')}` : undefined,
+    });
 
     res.json({ streams });
   } catch (e) {

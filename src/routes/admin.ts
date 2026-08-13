@@ -15,6 +15,16 @@ import { getSettings, reloadSettings, settingsPath } from '../core/settings';
 import { clearAll, clearScope, getCacheStats } from '../core/cache';
 import { allSources } from '../core/registry';
 import { kkeyStatus, rediscoverConstants, reloadKkeyConfig } from '../sources/direct/kisskh/kkey';
+import {
+  statsSources,
+  resumeDuJour,
+  historique,
+  requetesRecentes,
+  reinitialiser as reinitialiserMesures,
+} from '../core/metrics';
+import { lire, sourcesConnues, vider as viderJournal } from '../core/journal';
+import { parseConfig, chiffrementDisponible } from '../core/config';
+import { Deadline } from '../core/http';
 
 const COOKIE = 'dramallyu_admin';
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
@@ -202,4 +212,254 @@ export function handleClearCache(req: Request, res: Response): void {
 export async function handleRediscoverKkey(_req: Request, res: Response): Promise<void> {
   const found = await rediscoverConstants();
   res.json({ ok: Boolean(found), constantes: found, etat: kkeyStatus() });
+}
+
+// ---------------------------------------------------------------------------
+// TABLEAU DE BORD
+//
+// Ce qui suit repond aux questions qu'on se pose vraiment en exploitation, et
+// qu'aucune page de reglages ne resout : quelle source rapporte, laquelle est
+// lente, laquelle echoue en silence, pourquoi CETTE recherche n'a rien rendu.
+// ---------------------------------------------------------------------------
+
+/** Vue d'ensemble : le premier ecran, celui qu'on regarde en arrivant. */
+export function handleTableauDeBord(_req: Request, res: Response): void {
+  const settings = getSettings();
+  const stats = statsSources();
+  const parId = new Map(stats.map((s) => [s.id, s]));
+
+  res.json({
+    resume: resumeDuJour(),
+    historique: historique(14),
+    sources: allSources().map((s) => {
+      const m = parId.get(s.id);
+      return {
+        id: s.id,
+        label: s.label,
+        kind: s.kind,
+        needsDebrid: s.needsDebrid,
+        requiredUserKey: s.requiredUserKey,
+        active: settings.sources[s.id] !== false,
+        appels: m?.appels ?? 0,
+        echecs: m?.echecs ?? 0,
+        candidats: m?.candidats ?? 0,
+        rendement: m?.rendement ?? 0,
+        msMoyen: m?.msMoyen ?? 0,
+        msP95: m?.msP95 ?? 0,
+        dernierAppel: m?.dernierAppel,
+        dernierEchec: m?.dernierEchec,
+      };
+    }),
+    cache: getCacheStats(),
+    kkey: kkeyStatus(),
+    systeme: {
+      memoireMo: Math.round(process.memoryUsage().rss / 1024 / 1024),
+      tasMo: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      uptimeSecondes: Math.round(process.uptime()),
+      node: process.version,
+      chiffrement: chiffrementDisponible(),
+    },
+  });
+}
+
+/** Requetes recentes, avec le detail par source. C'est l'outil de diagnostic. */
+export function handleRequetes(req: Request, res: Response): void {
+  const n = Math.min(Math.max(Number(req.query.n) || 50, 1), 200);
+  res.json({ requetes: requetesRecentes(n) });
+}
+
+export function handleJournal(req: Request, res: Response): void {
+  const niveau = String(req.query.niveau || '');
+  res.json({
+    lignes: lire({
+      niveau: niveau === 'info' || niveau === 'alerte' || niveau === 'erreur' ? niveau : undefined,
+      source: String(req.query.source || '') || undefined,
+      contient: String(req.query.contient || '') || undefined,
+      limite: Number(req.query.limite) || 200,
+    }),
+    sources: sourcesConnues(),
+  });
+}
+
+export function handleViderJournal(_req: Request, res: Response): void {
+  viderJournal();
+  res.json({ ok: true });
+}
+
+export function handleReinitialiserMesures(_req: Request, res: Response): void {
+  reinitialiserMesures();
+  res.json({ ok: true });
+}
+
+/**
+ * Reglages operateur modifiables depuis la page.
+ *
+ * Seuls les champs LISTES ici sont acceptes. Ecrire le corps de la requete tel quel
+ * dans le fichier laisserait n'importe qui y injecter des cles inventees, et une
+ * faute de frappe suffirait a rendre les reglages illisibles au demarrage suivant.
+ */
+export function handleEnregistrerReglages(req: Request, res: Response): void {
+  const corps = (req.body ?? {}) as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
+
+  if (corps.fanoutBudgetMs !== undefined) {
+    const v = Number(corps.fanoutBudgetMs);
+    if (!Number.isFinite(v) || v < 2000 || v > 20000) {
+      res.status(400).json({ erreur: 'budget de fan-out hors bornes (2000 a 20000 ms)' });
+      return;
+    }
+    patch.fanoutBudgetMs = Math.round(v);
+  }
+
+  if (corps.maxStreams !== undefined) {
+    const v = Number(corps.maxStreams);
+    if (!Number.isFinite(v) || v < 5 || v > 300) {
+      res.status(400).json({ erreur: 'nombre de flux hors bornes (5 a 300)' });
+      return;
+    }
+    patch.maxStreams = Math.round(v);
+  }
+
+  for (const [famille, cle] of [
+    ['torznab', 'torznab'],
+    ['unit3d', 'unit3d'],
+  ] as const) {
+    const table = corps[famille];
+    if (!table || typeof table !== 'object') continue;
+    const propre: Record<string, unknown> = {};
+    for (const [id, valeur] of Object.entries(table as Record<string, unknown>)) {
+      if (!/^[a-z0-9_-]+$/i.test(id) || !valeur || typeof valeur !== 'object') continue;
+      const v = valeur as Record<string, unknown>;
+      const url = String(v.url ?? '');
+      // Une adresse d'indexeur qui n'est pas une URL rendrait la source muette sans
+      // que rien ne l'explique : on refuse ici plutot que d'echouer a chaque recherche.
+      if (url && !/^https?:\/\/\S+$/i.test(url)) {
+        res.status(400).json({ erreur: `adresse invalide pour « ${id} »` });
+        return;
+      }
+      propre[id] = {
+        enabled: v.enabled !== false,
+        url,
+        ...(Array.isArray(v.categories) ? { categories: v.categories.map(Number).filter(Number.isFinite) } : {}),
+      };
+    }
+    patch[cle] = propre;
+  }
+
+  if (corps.digitalcore && typeof corps.digitalcore === 'object') {
+    const v = corps.digitalcore as Record<string, unknown>;
+    const url = String(v.url ?? '');
+    if (url && !/^https?:\/\/\S+$/i.test(url)) {
+      res.status(400).json({ erreur: 'adresse invalide pour DigitalCore' });
+      return;
+    }
+    patch.digitalcore = { enabled: v.enabled !== false, url };
+  }
+
+  try {
+    const actuel = fs.existsSync(settingsPath)
+      ? (JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as Record<string, unknown>)
+      : {};
+    // Fusion superficielle volontaire : les tables d'indexeurs sont remplacees en
+    // entier, sinon retirer une entree depuis la page serait impossible.
+    fs.writeFileSync(settingsPath, JSON.stringify({ ...actuel, ...patch }, null, 2), 'utf-8');
+    reloadSettings();
+    res.json({ ok: true, settings: getSettings() });
+  } catch (e) {
+    res.status(500).json({ erreur: (e as Error).message });
+  }
+}
+
+/**
+ * Essai reel d'une source, avec un titre au choix.
+ *
+ * C'est le seul moyen honnete de dire si une source fonctionne : la mesure passive ne
+ * dit rien tant que personne n'a cherche. On execute donc la VRAIE recherche, avec les
+ * cles fournies pour l'essai — jamais memorisees.
+ */
+export async function handleTesterSource(req: Request, res: Response): Promise<void> {
+  const id = String(req.params.id || '');
+  const source = allSources().find((s) => s.id === id);
+  if (!source) {
+    res.status(404).json({ erreur: 'source inconnue' });
+    return;
+  }
+
+  const corps = (req.body ?? {}) as Record<string, unknown>;
+  const titre = String(corps.titre || 'Squid Game').slice(0, 120);
+  const config = parseConfig(String(corps.config || '') || null);
+
+  const deadline = new Deadline(15000);
+  const debut = Date.now();
+  try {
+    const trouves = await source.search(
+      {
+        type: 'series',
+        titles: [titre],
+        season: 1,
+        episode: 1,
+        imdbId: String(corps.imdbId || '') || undefined,
+        tmdbId: String(corps.tmdbId || '') || undefined,
+      },
+      { config, deadline },
+    );
+    res.json({
+      ok: true,
+      ms: Date.now() - debut,
+      candidats: trouves.length,
+      exemples: trouves.slice(0, 5).map((c) => ({
+        titre: c.title,
+        qualite: c.quality,
+        langue: c.language,
+        taille: c.sizeBytes,
+        sources: c.seeders,
+      })),
+    });
+  } catch (e) {
+    res.json({ ok: false, ms: Date.now() - debut, erreur: (e as Error).message.slice(0, 200) });
+  }
+}
+
+/**
+ * Sauvegarde complete des reglages OPERATEUR.
+ *
+ * Elle ne contient aucune cle : celles-ci appartiennent aux utilisateurs et vivent
+ * dans leurs liens. Une sauvegarde d'administration qui exfiltrerait des cles serait
+ * un piege — on peut la stocker n'importe ou sans y penser.
+ */
+export function handleExporterSauvegarde(_req: Request, res: Response): void {
+  res.setHeader('Content-Disposition', 'attachment; filename="dramallyu-reglages.json"');
+  res.json({
+    version: 1,
+    exporteLe: new Date().toISOString(),
+    settings: getSettings(),
+    fichiers: listConfigFiles().reduce<Record<string, string>>((acc, f) => {
+      acc[f.name] = f.contenu;
+      return acc;
+    }, {}),
+  });
+}
+
+export function handleImporterSauvegarde(req: Request, res: Response): void {
+  const corps = (req.body ?? {}) as Record<string, unknown>;
+  const fichiers = corps.fichiers;
+  if (!fichiers || typeof fichiers !== 'object') {
+    res.status(400).json({ erreur: 'sauvegarde illisible : « fichiers » manquant' });
+    return;
+  }
+
+  const ecrits: string[] = [];
+  try {
+    for (const [nom, contenu] of Object.entries(fichiers as Record<string, string>)) {
+      if (!/^[a-z0-9._-]+\.json$/i.test(nom) || nom.includes('..')) continue;
+      JSON.parse(contenu); // refus avant ecriture : un JSON casse rendrait l'addon muet
+      fs.writeFileSync(path.join(configDir(), nom), contenu, 'utf-8');
+      ecrits.push(nom);
+    }
+    reloadSettings();
+    reloadKkeyConfig();
+    res.json({ ok: true, ecrits });
+  } catch (e) {
+    res.status(400).json({ erreur: `import interrompu : ${(e as Error).message}`, ecrits });
+  }
 }

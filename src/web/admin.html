@@ -5,214 +5,691 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Dramallyu — administration</title>
 <style>
-  /* Aucune information portee par la couleur seule : chaque etat porte un SYMBOLE
-     et un mot. Les pastilles vertes et rouges seules sont proscrites ici. */
+  /* ------------------------------------------------------------------
+     ACCESSIBILITE, contrainte de premier ordre sur ce projet :
+     AUCUNE information n'est portee par la couleur seule. Chaque etat
+     porte un SYMBOLE et un MOT. La couleur ne fait que renforcer.
+     Meme charte que la page de configuration, pour que l'operateur ne
+     change pas d'univers en passant de l'une a l'autre.
+     ------------------------------------------------------------------ */
   :root {
-    --fond:#12131a; --carte:#1b1d27; --bord:#2e3140;
-    --texte:#e8e9ee; --doux:#9aa0b4; --accent:#c9a227;
+    --nuit:#141019; --surface:#1c1724; --relief:#242030; --relief2:#2c2738;
+    --trait:#332d42; --trait-doux:#272232;
+    --texte:#ece8f2; --doux:#9b93ab; --pale:#645c76;
+    --or:#d4a05a; --or-clair:#e8bc7e; --or-voile:rgba(212,160,90,.13);
+    --jade:#5fae8c; --jade-voile:rgba(95,174,140,.13);
+    --brique:#c4626a; --brique-voile:rgba(196,98,106,.13);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
   }
   * { box-sizing:border-box; }
-  body { margin:0; padding:2rem 1rem 4rem; background:var(--fond); color:var(--texte);
-         font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-  .page { max-width:960px; margin:0 auto; }
-  header { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; }
-  h1 { font-size:1.6rem; margin:0; }
-  h2 { font-size:1.05rem; margin:0 0 .8rem; letter-spacing:.01em; }
-  section { border:1px solid var(--bord); border-radius:10px; background:var(--carte);
-            padding:1.2rem; margin-bottom:1.2rem; }
-  table { width:100%; border-collapse:collapse; font-size:.92rem; }
-  th,td { text-align:left; padding:.5rem .4rem; border-bottom:1px solid var(--bord); vertical-align:top; }
-  th { color:var(--doux); font-weight:600; font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; }
+  body { margin:0; background:var(--nuit); color:var(--texte); font:15px/1.62 var(--sans); }
+  .page { max-width:1120px; margin:0 auto; padding:2rem 1.2rem 5rem; }
+
+  header.tete { display:flex; align-items:center; justify-content:space-between;
+                gap:1rem; flex-wrap:wrap; margin-bottom:.4rem; }
+  h1 { font-size:1.55rem; margin:0; letter-spacing:-.01em; }
+  h1 .sous { display:block; font-size:.82rem; font-weight:400; color:var(--doux); letter-spacing:.02em; }
+
+  nav.onglets { display:flex; gap:.3rem; flex-wrap:wrap; margin:1.4rem 0 1.6rem;
+                border-bottom:1px solid var(--trait); padding-bottom:.7rem; }
+  nav.onglets button { background:transparent; border:1px solid transparent; color:var(--doux);
+                       padding:.42rem .85rem; border-radius:7px; font:inherit; font-size:.88rem;
+                       cursor:pointer; }
+  nav.onglets button:hover { color:var(--texte); background:var(--relief); }
+  nav.onglets button[aria-current="page"] { background:var(--or-voile); border-color:var(--or);
+                                            color:var(--or-clair); font-weight:600; }
+
+  section.vue { display:none; }
+  section.vue.active { display:block; }
+
+  .bloc { border:1px solid var(--trait); border-radius:12px; background:var(--surface);
+          padding:1.2rem 1.3rem; margin-bottom:1.1rem; }
+  .bloc > h2 { font-size:1rem; margin:0 0 .2rem; letter-spacing:.01em; }
+  .bloc > .aide { color:var(--doux); font-size:.85rem; margin:.15rem 0 1rem; }
+
+  .chiffres { display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); gap:.9rem; }
+  .chiffre { background:var(--relief); border:1px solid var(--trait-doux); border-radius:9px; padding:.75rem .85rem; }
+  .chiffre .v { font-size:1.5rem; font-weight:660; line-height:1.15; letter-spacing:-.02em; }
+  .chiffre .n { color:var(--doux); font-size:.78rem; margin-top:.15rem; }
+  .chiffre .d { color:var(--pale); font-size:.72rem; margin-top:.1rem; }
+
+  table { width:100%; border-collapse:collapse; font-size:.89rem; }
+  th,td { text-align:left; padding:.5rem .45rem; border-bottom:1px solid var(--trait-doux); vertical-align:top; }
+  th { color:var(--doux); font-weight:600; font-size:.76rem; text-transform:uppercase; letter-spacing:.05em; }
   tr:last-child td { border-bottom:0; }
-  button { background:var(--accent); color:#12131a; border:0; border-radius:6px;
-           padding:.4rem .8rem; font:inherit; font-size:.86rem; font-weight:650; cursor:pointer; }
-  button.sec { background:transparent; color:var(--texte); border:1px solid var(--bord); }
-  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:1rem; }
-  .stat .valeur { font-size:1.5rem; font-weight:650; }
-  .stat .nom { color:var(--doux); font-size:.8rem; }
-  textarea { width:100%; min-height:120px; background:#0e0f15; color:var(--texte);
-             border:1px solid var(--bord); border-radius:6px; padding:.6rem;
-             font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
-  .fichier { margin-bottom:1rem; }
-  .fichier > summary { cursor:pointer; padding:.4rem 0; font-weight:600; font-size:.92rem; }
-  .etat { font-weight:650; white-space:nowrap; }
-  .msg { margin-top:.6rem; font-size:.86rem; color:var(--doux); min-height:1.2em; }
-  .aide { color:var(--doux); font-size:.85rem; margin:.2rem 0 1rem; }
-  a { color:var(--accent); }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .defile { overflow-x:auto; }
+
+  button.act { background:var(--or); color:#1b1206; border:0; border-radius:7px;
+               padding:.42rem .85rem; font:inherit; font-size:.85rem; font-weight:650; cursor:pointer; }
+  button.act:hover { background:var(--or-clair); }
+  button.sec { background:transparent; color:var(--texte); border:1px solid var(--trait);
+               border-radius:7px; padding:.4rem .8rem; font:inherit; font-size:.85rem; cursor:pointer; }
+  button.sec:hover { background:var(--relief); }
+  button.mini { padding:.22rem .55rem; font-size:.78rem; }
+  .actions { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-top:.9rem; }
+
+  input[type=text], input[type=number], select, textarea {
+    background:var(--nuit); color:var(--texte); border:1px solid var(--trait);
+    border-radius:7px; padding:.45rem .6rem; font:inherit; font-size:.88rem; }
+  input[type=text]:focus, input[type=number]:focus, select:focus, textarea:focus {
+    outline:2px solid var(--or); outline-offset:1px; }
+  textarea { width:100%; min-height:150px; font:12.5px/1.55 var(--mono); }
+  label.champ { display:block; margin:.75rem 0 .25rem; font-size:.85rem; color:var(--doux); }
+
+  /* Etats : SYMBOLE + MOT. La couleur ne fait que doubler l'information. */
+  .etat { display:inline-flex; align-items:center; gap:.3rem; font-size:.82rem;
+          font-weight:600; white-space:nowrap; }
+  .etat.ok { color:var(--jade); }
+  .etat.ko { color:var(--brique); }
+  .etat.neutre { color:var(--doux); }
+
+  .barre { height:6px; border-radius:3px; background:var(--relief2); overflow:hidden; min-width:60px; }
+  .barre > i { display:block; height:100%; background:var(--or); }
+
+  .journal { font:12.5px/1.5 var(--mono); max-height:60vh; overflow:auto;
+             background:var(--nuit); border:1px solid var(--trait); border-radius:8px; padding:.6rem; }
+  .journal .l { display:flex; gap:.55rem; padding:.14rem 0; border-bottom:1px solid var(--trait-doux); }
+  .journal .l:last-child { border-bottom:0; }
+  .journal .h { color:var(--pale); flex:0 0 auto; }
+  .journal .t { white-space:pre-wrap; word-break:break-word; }
+  .journal .l.alerte .t { color:var(--or-clair); }
+  .journal .l.erreur .t { color:var(--brique); }
+
+  details.pli { border:1px solid var(--trait-doux); border-radius:8px; margin-bottom:.6rem; background:var(--relief); }
+  details.pli > summary { cursor:pointer; padding:.55rem .8rem; font-size:.88rem; font-weight:600; }
+  details.pli > div { padding:0 .8rem .8rem; }
+
+  .msg { margin-top:.7rem; font-size:.85rem; color:var(--doux); min-height:1.2em; }
+  .msg.ok { color:var(--jade); }
+  .msg.ko { color:var(--brique); }
+  .filtres { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:.8rem; }
+  a { color:var(--or-clair); }
+  code { font:12.5px var(--mono); background:var(--relief); padding:.08rem .3rem; border-radius:4px; }
 </style>
 </head>
 <body>
 <div class="page">
 
-  <header>
-    <h1>Dramallyu — administration</h1>
+  <header class="tete">
+    <h1>Dramallyu
+      <span class="sous">Administration — l'operateur ne detient aucune cle d'utilisateur</span>
+    </h1>
     <form method="post" action="/admin/logout"><button class="sec" type="submit">Se deconnecter</button></form>
   </header>
 
-  <section>
-    <h2>Etat du service</h2>
-    <div class="stats" id="stats"></div>
+  <nav class="onglets" id="onglets" role="tablist">
+    <button data-vue="bord" aria-current="page">Tableau de bord</button>
+    <button data-vue="sources">Sources</button>
+    <button data-vue="requetes">Requetes</button>
+    <button data-vue="journal">Journal</button>
+    <button data-vue="reglages">Reglages</button>
+    <button data-vue="cache">Cache</button>
+    <button data-vue="fichiers">Fichiers</button>
+  </nav>
+
+  <!-- ============================ TABLEAU DE BORD ============================ -->
+  <section class="vue active" id="vue-bord">
+    <div class="bloc">
+      <h2>Aujourd'hui</h2>
+      <p class="aide">Compteurs remis a zero chaque jour a minuit UTC. Les centiles portent sur les
+        200 dernieres requetes : ils disent ce que vit reellement un utilisateur, la ou une moyenne
+        masque les cas lents.</p>
+      <div class="chiffres" id="chiffres"></div>
+    </div>
+
+    <div class="bloc">
+      <h2>Quatorze derniers jours</h2>
+      <p class="aide">Recherches par jour, et part de celles qui n'ont rien rendu. Une part de vides
+        qui grimpe est le premier signe qu'une source est tombee.</p>
+      <div class="defile"><table id="histo"></table></div>
+    </div>
+
+    <div class="bloc">
+      <h2>Service</h2>
+      <div class="chiffres" id="systeme"></div>
+      <div class="actions">
+        <button class="sec" id="btn-kkey">Re-decouvrir la signature KissKH</button>
+        <button class="sec" id="btn-domaines">Synchroniser les domaines</button>
+        <button class="sec" id="btn-remesurer">Remettre les mesures a zero</button>
+      </div>
+      <div class="msg" id="msg-service"></div>
+    </div>
   </section>
 
-  <section>
-    <h2>Signature KissKH (kkey)</h2>
-    <div id="kkey"></div>
-    <p class="aide">
-      La fonction de signature est retelechargee depuis le site et mise en cache 12 h.
-      Une salve de 403 declenche une re-decouverte automatique ; le bouton la force.
-    </p>
-    <button id="btn-kkey" class="sec" type="button">Forcer la re-decouverte</button>
-    <div class="msg" id="msg-kkey"></div>
+  <!-- ================================ SOURCES ================================ -->
+  <section class="vue" id="vue-sources">
+    <div class="bloc">
+      <h2>Sources</h2>
+      <p class="aide">
+        Le <strong>rendement</strong> est le nombre de candidats rapportes PAR APPEL. C'est la seule
+        mesure qui dise si une source sert a quelque chose : une source rapide qui ne rend jamais rien
+        coute du budget a chaque recherche. Les mesures partent du dernier redemarrage.
+      </p>
+      <div class="defile"><table id="tab-sources"></table></div>
+      <div class="msg" id="msg-sources"></div>
+    </div>
+
+    <div class="bloc">
+      <h2>Essai reel</h2>
+      <p class="aide">
+        Interroge la source pour de vrai, avec un titre de votre choix. La mesure passive ne dit rien
+        tant que personne n'a cherche — c'est le seul moyen honnete de verifier qu'une source repond.
+        Les sources a cle restent muettes ici : leurs cles appartiennent aux utilisateurs.
+        Collez un segment de configuration pour les essayer avec.
+      </p>
+      <label class="champ" for="essai-titre">Titre a chercher</label>
+      <input type="text" id="essai-titre" value="Squid Game" style="max-width:320px">
+      <label class="champ" for="essai-config">Segment de configuration (facultatif)</label>
+      <input type="text" id="essai-config" placeholder="e1...." style="width:100%">
+      <div class="msg" id="msg-essai"></div>
+    </div>
   </section>
 
-  <section>
-    <h2>Sources</h2>
-    <p class="aide">
-      Desactiver une source la retire du fan-out de tous les utilisateurs. Les cles
-      d'acces, elles, restent celles de chaque utilisateur — l'administration n'en detient aucune.
-    </p>
-    <table>
-      <thead><tr><th>Source</th><th>Pilier</th><th>Exigences</th><th>Etat</th><th></th></tr></thead>
-      <tbody id="sources"></tbody>
-    </table>
-    <div class="msg" id="msg-sources"></div>
+  <!-- =============================== REQUETES ================================ -->
+  <section class="vue" id="vue-requetes">
+    <div class="bloc">
+      <h2>Requetes recentes</h2>
+      <p class="aide">
+        Le detail par source de chaque recherche : duree et nombre de candidats rapportes.
+        C'est l'outil de diagnostic — quand un utilisateur signale « je ne vois rien », la reponse
+        est ici, pas dans les agregats.
+      </p>
+      <div class="filtres">
+        <button class="sec mini" id="btn-req-rafraichir">Rafraichir</button>
+        <label style="font-size:.85rem;color:var(--doux)">
+          <input type="checkbox" id="req-vides"> N'afficher que les recherches sans resultat
+        </label>
+      </div>
+      <div id="requetes"></div>
+    </div>
   </section>
 
-  <section>
-    <h2>Domaines et configuration a chaud</h2>
-    <p class="aide">
-      Ces fichiers sont relus sans redemarrage. C'est ici qu'on corrige un domaine qui
-      a tourne (KissKH, VoirDrama, Zone-Telechargement, Wawacity, Nyaa) ou l'adresse
-      d'un indexeur Torznab.
-    </p>
-    <div id="fichiers"></div>
-    <div class="msg" id="msg-fichiers"></div>
+  <!-- ================================ JOURNAL ================================ -->
+  <section class="vue" id="vue-journal">
+    <div class="bloc">
+      <h2>Journal</h2>
+      <p class="aide">Les 500 dernieres lignes. La sortie standard reste intacte : <code>docker logs</code>
+        continue de tout recevoir, y compris ce qui aurait disparu d'ici.</p>
+      <div class="filtres">
+        <select id="j-niveau">
+          <option value="">Tous les niveaux</option>
+          <option value="info">Information</option>
+          <option value="alerte">Alerte</option>
+          <option value="erreur">Erreur</option>
+        </select>
+        <select id="j-source"><option value="">Toutes les origines</option></select>
+        <input type="text" id="j-contient" placeholder="contient..." style="min-width:180px">
+        <button class="sec mini" id="btn-j-rafraichir">Rafraichir</button>
+        <button class="sec mini" id="btn-j-vider">Vider</button>
+      </div>
+      <div class="journal" id="journal"></div>
+    </div>
   </section>
 
-  <section>
-    <h2>Cache</h2>
-    <p class="aide">Vider force les sources a repondre a nouveau. Utile apres un changement de domaine.</p>
-    <button id="btn-cache" class="sec" type="button">Vider tout le cache</button>
-    <div class="msg" id="msg-cache"></div>
+  <!-- =============================== REGLAGES ================================ -->
+  <section class="vue" id="vue-reglages">
+    <div class="bloc">
+      <h2>Fan-out</h2>
+      <p class="aide">
+        Le budget est un plafond DUR : passe ce delai, les sources qui n'ont pas repondu sont
+        abandonnees. Le baisser rend l'addon plus vif et perd des resultats lents ; le monter fait
+        l'inverse, et AIOStreams coupe les addons trop lents.
+      </p>
+      <label class="champ" for="r-budget">Budget de fan-out (ms, 2000 a 20000)</label>
+      <input type="number" id="r-budget" min="2000" max="20000" step="500" style="max-width:160px">
+      <label class="champ" for="r-max">Plafond de flux renvoyes (5 a 300)</label>
+      <input type="number" id="r-max" min="5" max="300" step="5" style="max-width:160px">
+      <div class="actions"><button class="act" id="btn-reglages">Enregistrer</button></div>
+      <div class="msg" id="msg-reglages"></div>
+    </div>
+
+    <div class="bloc">
+      <h2>Indexeurs</h2>
+      <p class="aide">
+        L'ADRESSE est a l'operateur, la CLE reste a l'utilisateur. Modifier une adresse ici suffit a
+        suivre un tracker qui change de domaine, sans redeploiement.
+      </p>
+      <div id="indexeurs"></div>
+      <div class="actions"><button class="act" id="btn-indexeurs">Enregistrer les adresses</button></div>
+      <div class="msg" id="msg-indexeurs"></div>
+    </div>
+
+    <div class="bloc">
+      <h2>Sauvegarde</h2>
+      <p class="aide">
+        Exporte les reglages d'operateur et les fichiers de configuration. <strong>Aucune cle
+        d'utilisateur n'y figure</strong> : elles vivent dans leurs liens, pas ici. Ce fichier peut donc
+        etre stocke sans precaution particuliere.
+      </p>
+      <div class="actions">
+        <button class="sec" id="btn-exporter">Telecharger la sauvegarde</button>
+        <button class="sec" id="btn-importer">Restaurer depuis un fichier</button>
+        <input type="file" id="fichier-import" accept="application/json" hidden>
+      </div>
+      <div class="msg" id="msg-sauvegarde"></div>
+    </div>
+  </section>
+
+  <!-- ================================= CACHE ================================= -->
+  <section class="vue" id="vue-cache">
+    <div class="bloc">
+      <h2>Cache</h2>
+      <p class="aide">
+        Purger un perimetre force sa re-interrogation. Utile apres un changement de cle ou quand une
+        source a repondu vide a tort — un resultat vide est memorise, et il colle.
+      </p>
+      <div class="chiffres" id="cache-chiffres"></div>
+      <div class="defile" style="margin-top:1rem"><table id="tab-cache"></table></div>
+      <div class="actions"><button class="sec" id="btn-cache-tout">Tout purger</button></div>
+      <div class="msg" id="msg-cache"></div>
+    </div>
+  </section>
+
+  <!-- =============================== FICHIERS ================================ -->
+  <section class="vue" id="vue-fichiers">
+    <div class="bloc">
+      <h2>Fichiers de configuration</h2>
+      <p class="aide">
+        Edition a chaud : l'addon recharge sans redemarrer. Un JSON invalide est refuse AVANT
+        ecriture — un fichier casse rendrait la source correspondante muette au prochain demarrage.
+      </p>
+      <div id="fichiers"></div>
+      <div class="msg" id="msg-fichiers"></div>
+    </div>
   </section>
 
 </div>
 
 <script>
-function poser(id, html) { document.getElementById(id).innerHTML = html; }
-function dire(id, texte) { document.getElementById(id).textContent = texte; }
+/* ---------------------------------------------------------------------------
+   Aucune dependance : la page doit fonctionner sur un serveur qui n'expose rien
+   vers l'exterieur, et survivre a une coupure de CDN.
+   --------------------------------------------------------------------------- */
+var $ = function (id) { return document.getElementById(id); };
+var vueActive = 'bord';
 
-function formaterOctets(n) {
-  if (!n) return '0 o';
-  var u = ['o','Ko','Mo','Go'], i = 0, v = n;
+function ecrire(cible, texte, etat) {
+  var el = $(cible);
+  el.textContent = texte || '';
+  el.className = 'msg' + (etat ? ' ' + etat : '');
+}
+
+function nb(v) { return (v === undefined || v === null) ? '—' : String(v); }
+function ms(v) { return v >= 1000 ? (v / 1000).toFixed(1) + ' s' : Math.round(v) + ' ms'; }
+function heure(t) { return t ? new Date(t).toLocaleTimeString('fr-FR') : '—'; }
+function duree(s) {
+  if (s < 60) return s + ' s';
+  if (s < 3600) return Math.floor(s / 60) + ' min';
+  if (s < 86400) return Math.floor(s / 3600) + ' h';
+  return Math.floor(s / 86400) + ' j';
+}
+function octets(o) {
+  if (!o) return '—';
+  var u = ['o', 'Ko', 'Mo', 'Go'], i = 0, v = o;
   while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
   return v.toFixed(i === 0 ? 0 : 1) + ' ' + u[i];
 }
-
-function formaterDuree(s) {
-  if (s < 60) return s + ' s';
-  if (s < 3600) return Math.round(s / 60) + ' min';
-  return (s / 3600).toFixed(1) + ' h';
+function ech(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function charger() {
-  fetch('/api/admin/etat').then(function (r) { return r.json(); }).then(function (d) {
-    poser('stats',
-      stat(formaterDuree(d.uptimeSecondes), 'En service depuis') +
-      stat(d.memoireMo + ' Mo', 'Memoire (plafond 512)') +
-      stat(d.cache.liveEntries, 'Entrees en cache') +
-      stat(Math.round(d.cache.hitRate * 100) + ' %', 'Taux de cache') +
-      stat(formaterOctets(d.cache.fileSizeBytes), 'Taille du cache') +
-      stat(d.settings.fanoutBudgetMs + ' ms', 'Budget de recherche')
-    );
+/* Etat : toujours un SYMBOLE et un MOT, jamais une couleur seule. */
+function pastille(ok, motOk, motKo) {
+  return '<span class="etat ' + (ok ? 'ok' : 'ko') + '">' +
+         (ok ? '✔' : '✘') + ' ' + ech(ok ? motOk : motKo) + '</span>';
+}
 
-    // Symbole + mot : lisible sans distinguer les couleurs.
-    poser('kkey',
-      '<p class="etat">' + (d.kkey.fnLoaded ? '&#10003; Fonction chargee' : '&#9675; Non chargee (elle le sera au premier flux)') + '</p>' +
-      '<table><tbody>' +
-      ligne('Version applicative', d.kkey.constants.appVer) +
-      ligne('Version de plateforme', d.kkey.constants.platformVer) +
-      ligne('GUID video', d.kkey.constants.viGuid) +
-      ligne('GUID sous-titres', d.kkey.constants.subGuid) +
-      ligne('Base', d.kkey.constants.base) +
-      '</tbody></table>');
+function jsonGet(url) { return fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.json(); }); }
+function jsonPost(url, corps) {
+  return fetch(url, {
+    method: 'POST', credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(corps || {})
+  }).then(function (r) { return r.json(); });
+}
 
-    poser('sources', d.sources.map(function (s) {
-      var exigences = [];
-      if (s.needsDebrid) exigences.push('debrideur');
-      if (s.requiredUserKey) exigences.push('cle ' + s.requiredUserKey);
+/* ------------------------------- Onglets -------------------------------- */
+$('onglets').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-vue]');
+  if (!b) return;
+  vueActive = b.dataset.vue;
+  [].forEach.call($('onglets').children, function (x) {
+    if (x.dataset.vue === vueActive) x.setAttribute('aria-current', 'page');
+    else x.removeAttribute('aria-current');
+  });
+  [].forEach.call(document.querySelectorAll('section.vue'), function (s) {
+    s.classList.toggle('active', s.id === 'vue-' + vueActive);
+  });
+  charger(vueActive);
+});
+
+/* ---------------------------- Tableau de bord ---------------------------- */
+function chargerBord() {
+  jsonGet('/api/admin/tableau').then(function (d) {
+    var r = d.resume;
+    $('chiffres').innerHTML = [
+      ['Recherches', r.requetes, 'aujourd hui'],
+      ['Flux servis', r.fluxTotal, r.requetes ? (r.fluxTotal / r.requetes).toFixed(1) + ' par recherche' : ''],
+      ['Sans resultat', r.vides, r.requetes ? Math.round((r.vides / r.requetes) * 100) + ' %' : ''],
+      ['Mediane', ms(r.msP50), 'moitie des requetes sous ce temps'],
+      ['95e centile', ms(r.msP95), 'les plus lentes'],
+      ['Lectures', r.lectures, r.lecturesEchec ? r.lecturesEchec + ' en echec' : '']
+    ].map(function (c) {
+      return '<div class="chiffre"><div class="v">' + ech(c[1]) + '</div>' +
+             '<div class="n">' + ech(c[0]) + '</div>' +
+             (c[2] ? '<div class="d">' + ech(c[2]) + '</div>' : '') + '</div>';
+    }).join('');
+
+    var max = Math.max.apply(null, d.historique.map(function (h) { return h.requetes; }).concat([1]));
+    $('histo').innerHTML =
+      '<tr><th>Jour</th><th class="num">Recherches</th><th class="num">Flux</th>' +
+      '<th class="num">Vides</th><th style="width:34%">Volume</th></tr>' +
+      d.historique.map(function (h) {
+        return '<tr><td>' + ech(h.jour) + '</td><td class="num">' + h.requetes + '</td>' +
+               '<td class="num">' + h.flux + '</td><td class="num">' + h.vides + '</td>' +
+               '<td><span class="barre"><i style="width:' + Math.round((h.requetes / max) * 100) + '%"></i></span></td></tr>';
+      }).join('');
+
+    var s = d.systeme;
+    $('systeme').innerHTML = [
+      ['Memoire', s.memoireMo + ' Mo', 'tas : ' + s.tasMo + ' Mo'],
+      ['En service', duree(s.uptimeSecondes), s.node],
+      ['Signature KissKH', d.kkey && d.kkey.pret ? '✔ active' : '✘ absente',
+        d.kkey && d.kkey.source ? d.kkey.source : ''],
+      ['Chiffrement des liens', s.chiffrement ? '✔ actif' : '✘ inactif',
+        s.chiffrement ? '' : 'TOKEN_SECRET absent'],
+      ['Cache', nb(d.cache.liveEntries) + ' entrees', octets(d.cache.fileSizeBytes)]
+    ].map(function (c) {
+      return '<div class="chiffre"><div class="v" style="font-size:1.1rem">' + ech(c[1]) + '</div>' +
+             '<div class="n">' + ech(c[0]) + '</div>' +
+             (c[2] ? '<div class="d">' + ech(c[2]) + '</div>' : '') + '</div>';
+    }).join('');
+
+    rendreSources(d.sources);
+  });
+}
+
+/* -------------------------------- Sources -------------------------------- */
+function rendreSources(sources) {
+  var maxRend = Math.max.apply(null, sources.map(function (s) { return s.rendement; }).concat([1]));
+  $('tab-sources').innerHTML =
+    '<tr><th>Source</th><th>Type</th><th>Etat</th><th class="num">Appels</th>' +
+    '<th class="num">Candidats</th><th class="num">Rendement</th><th class="num">Moyen</th>' +
+    '<th class="num">p95</th><th>Actions</th></tr>' +
+    sources.map(function (s) {
+      var sante = s.appels === 0
+        ? '<span class="etat neutre">— jamais appelee</span>'
+        : (s.echecs > 0
+            ? '<span class="etat ko">✘ ' + s.echecs + ' echec' + (s.echecs > 1 ? 's' : '') + '</span>'
+            : '<span class="etat ok">✔ saine</span>');
       return '<tr>' +
-        '<td><strong>' + s.label + '</strong><br><span style="color:#9aa0b4;font-size:.8rem">' + s.id + '</span></td>' +
-        '<td>' + s.kind + '</td>' +
-        '<td>' + (exigences.length ? exigences.join(', ') : 'aucune') + '</td>' +
-        '<td class="etat">' + (s.active ? '&#10003; Active' : '&#10007; Desactivee') + '</td>' +
-        '<td><button class="sec" data-source="' + s.id + '" data-actif="' + (!s.active) + '">' +
-          (s.active ? 'Desactiver' : 'Activer') + '</button></td>' +
-        '</tr>';
-    }).join(''));
+        '<td><strong>' + ech(s.label) + '</strong><br><span style="color:var(--pale);font-size:.78rem">' +
+          ech(s.id) + (s.requiredUserKey ? ' · cle ' + ech(s.requiredUserKey) : '') + '</span></td>' +
+        '<td>' + ech(s.kind) + '</td>' +
+        '<td>' + (s.active ? sante : '<span class="etat neutre">⊘ desactivee</span>') + '</td>' +
+        '<td class="num">' + s.appels + '</td>' +
+        '<td class="num">' + s.candidats + '</td>' +
+        '<td class="num">' + s.rendement +
+          '<span class="barre" style="display:block;margin-top:.25rem"><i style="width:' +
+          Math.round((s.rendement / maxRend) * 100) + '%"></i></span></td>' +
+        '<td class="num">' + (s.appels ? ms(s.msMoyen) : '—') + '</td>' +
+        '<td class="num">' + (s.appels ? ms(s.msP95) : '—') + '</td>' +
+        '<td><button class="sec mini" data-bascule="' + ech(s.id) + '" data-actif="' + (s.active ? '0' : '1') + '">' +
+          (s.active ? 'Desactiver' : 'Activer') + '</button> ' +
+          '<button class="sec mini" data-tester="' + ech(s.id) + '">Tester</button>' +
+          (s.dernierEchec ? '<div style="color:var(--brique);font-size:.75rem;margin-top:.3rem">' +
+            ech(s.dernierEchec.message) + '</div>' : '') +
+        '</td></tr>';
+    }).join('');
+}
 
-    document.querySelectorAll('button[data-source]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        fetch('/api/admin/sources/' + b.dataset.source, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ actif: b.dataset.actif === 'true' }),
-        }).then(function (r) { return r.json(); }).then(function () {
-          dire('msg-sources', 'Modifie. Effet immediat, sans redemarrage.');
-          charger();
-        });
-      });
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-bascule]');
+  if (b) {
+    jsonPost('/api/admin/sources/' + b.dataset.bascule, { actif: b.dataset.actif === '1' })
+      .then(function () { ecrire('msg-sources', 'Reglage enregistre.', 'ok'); chargerBord(); });
+    return;
+  }
+  var t = e.target.closest('button[data-tester]');
+  if (t) {
+    ecrire('msg-essai', 'Essai de « ' + t.dataset.tester +' » en cours...');
+    jsonPost('/api/admin/sources/' + t.dataset.tester + '/tester', {
+      titre: $('essai-titre').value, config: $('essai-config').value
+    }).then(function (d) {
+      if (!d.ok) { ecrire('msg-essai', '✘ ' + t.dataset.tester + ' : ' + (d.erreur || 'echec'), 'ko'); return; }
+      var ex = (d.exemples || []).map(function (x) { return '· ' + x.titre; }).join('\n');
+      ecrire('msg-essai', '✔ ' + t.dataset.tester + ' : ' + d.candidats + ' candidat(s) en ' + ms(d.ms) +
+        (ex ? '\n' + ex : ''), d.candidats ? 'ok' : '');
+      $('msg-essai').style.whiteSpace = 'pre-wrap';
     });
-  });
-
-  fetch('/api/admin/config').then(function (r) { return r.json(); }).then(function (d) {
-    poser('fichiers', d.fichiers.map(function (f) {
-      return '<details class="fichier"><summary>' + f.name + '</summary>' +
-        '<textarea data-fichier="' + f.name + '">' + f.contenu.replace(/</g, '&lt;') + '</textarea>' +
-        '<button data-enregistrer="' + f.name + '" type="button">Enregistrer</button></details>';
-    }).join('') || '<p class="aide">Aucun fichier dans ' + d.dossier + ' pour l instant. Ils se creent au premier usage de chaque source.</p>');
-
-    document.querySelectorAll('button[data-enregistrer]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var nom = b.dataset.enregistrer;
-        var zone = document.querySelector('textarea[data-fichier="' + nom + '"]');
-        fetch('/api/admin/config/' + nom, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contenu: zone.value }),
-        }).then(function (r) { return r.json(); }).then(function (res) {
-          dire('msg-fichiers', res.ok ? nom + ' enregistre et recharge.' : 'Refus : ' + res.erreur);
-        });
-      });
-    });
-  });
-}
-
-function stat(valeur, nom) {
-  return '<div class="stat"><div class="valeur">' + valeur + '</div><div class="nom">' + nom + '</div></div>';
-}
-function ligne(cle, valeur) {
-  return '<tr><td style="color:#9aa0b4">' + cle + '</td><td style="word-break:break-all">' + valeur + '</td></tr>';
-}
-
-document.getElementById('btn-cache').addEventListener('click', function () {
-  fetch('/api/admin/cache/vider', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
-    .then(function (r) { return r.json(); })
-    .then(function (d) { dire('msg-cache', d.supprimees + ' entrees supprimees.'); charger(); });
+  }
 });
 
-document.getElementById('btn-kkey').addEventListener('click', function () {
-  dire('msg-kkey', 'Re-decouverte en cours (elle telecharge les scripts du site)...');
-  fetch('/api/admin/kkey/redecouvrir', { method: 'POST' })
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
-      dire('msg-kkey', d.ok ? 'Constantes re-extraites depuis le site.' : 'Echec : les constantes actuelles sont conservees.');
-      charger();
-    });
+/* -------------------------------- Requetes ------------------------------- */
+function chargerRequetes() {
+  jsonGet('/api/admin/requetes?n=100').then(function (d) {
+    var liste = d.requetes;
+    if ($('req-vides').checked) liste = liste.filter(function (r) { return r.flux === 0; });
+    if (liste.length === 0) { $('requetes').innerHTML = '<p class="aide">Aucune requete enregistree.</p>'; return; }
+    $('requetes').innerHTML = liste.map(function (r) {
+      var sources = Object.keys(r.parSource).sort(function (a, b) { return r.parSource[b] - r.parSource[a]; });
+      return '<details class="pli"><summary>' +
+        heure(r.quand) + ' · <strong>' + ech(r.titre || r.id) + '</strong> · ' +
+        (r.flux ? r.flux + ' flux' : '<span style="color:var(--brique)">0 flux</span>') +
+        ' en ' + ms(r.ms) + '</summary><div>' +
+        '<p class="aide" style="margin:.4rem 0">' + ech(r.type) + ' · <code>' + ech(r.id) + '</code>' +
+        (r.note ? '<br>' + ech(r.note) : '') +
+        (r.abandonnees && r.abandonnees.length ? '<br>Abandonnees faute de budget : ' +
+          ech(r.abandonnees.join(', ')) : '') + '</p>' +
+        '<table><tr><th>Source</th><th class="num">Duree</th><th class="num">Candidats</th></tr>' +
+        sources.map(function (s) {
+          var n = r.apports ? (r.apports[s] || 0) : 0;
+          return '<tr><td>' + ech(s) + '</td><td class="num">' + ms(r.parSource[s]) + '</td>' +
+                 '<td class="num">' + (n === 0 ? '<span style="color:var(--pale)">0</span>' : n) + '</td></tr>';
+        }).join('') + '</table></div></details>';
+    }).join('');
+  });
+}
+$('btn-req-rafraichir').addEventListener('click', chargerRequetes);
+$('req-vides').addEventListener('change', chargerRequetes);
+
+/* --------------------------------- Journal -------------------------------- */
+function chargerJournal() {
+  var q = '?limite=300';
+  if ($('j-niveau').value) q += '&niveau=' + encodeURIComponent($('j-niveau').value);
+  if ($('j-source').value) q += '&source=' + encodeURIComponent($('j-source').value);
+  if ($('j-contient').value) q += '&contient=' + encodeURIComponent($('j-contient').value);
+  jsonGet('/api/admin/journal' + q).then(function (d) {
+    var sel = $('j-source'), avant = sel.value;
+    sel.innerHTML = '<option value="">Toutes les origines</option>' +
+      d.sources.map(function (s) { return '<option value="' + ech(s) + '">' + ech(s) + '</option>'; }).join('');
+    sel.value = avant;
+    $('journal').innerHTML = d.lignes.length === 0
+      ? '<p class="aide">Rien a afficher.</p>'
+      : d.lignes.map(function (l) {
+          return '<div class="l ' + l.niveau + '"><span class="h">' + heure(l.quand) + '</span>' +
+                 '<span class="t">' + ech(l.texte) + '</span></div>';
+        }).join('');
+  });
+}
+$('btn-j-rafraichir').addEventListener('click', chargerJournal);
+['j-niveau', 'j-source'].forEach(function (id) { $(id).addEventListener('change', chargerJournal); });
+$('j-contient').addEventListener('keyup', function (e) { if (e.key === 'Enter') chargerJournal(); });
+$('btn-j-vider').addEventListener('click', function () {
+  jsonPost('/api/admin/journal/vider').then(chargerJournal);
 });
 
-charger();
-setInterval(charger, 30000);
+/* -------------------------------- Reglages -------------------------------- */
+var reglagesCourants = null;
+
+function chargerReglages() {
+  jsonGet('/api/admin/etat').then(function (d) {
+    reglagesCourants = d.settings;
+    $('r-budget').value = d.settings.fanoutBudgetMs;
+    $('r-max').value = d.settings.maxStreams;
+
+    var html = '';
+    [['torznab', 'Torznab'], ['unit3d', 'UNIT3D']].forEach(function (f) {
+      var table = d.settings[f[0]] || {};
+      Object.keys(table).forEach(function (id) {
+        html += ligneIndexeur(f[0], id, table[id]);
+      });
+    });
+    if (d.settings.digitalcore) html += ligneIndexeur('digitalcore', 'digitalcore', d.settings.digitalcore);
+    $('indexeurs').innerHTML = html || '<p class="aide">Aucun indexeur declare.</p>';
+  });
+}
+
+function ligneIndexeur(famille, id, conf) {
+  return '<div style="display:flex;gap:.6rem;align-items:center;margin-bottom:.5rem;flex-wrap:wrap">' +
+    '<label style="font-size:.85rem;min-width:130px"><input type="checkbox" data-idx-actif="' +
+      ech(famille) + '|' + ech(id) + '"' + (conf.enabled !== false ? ' checked' : '') + '> ' + ech(id) + '</label>' +
+    '<input type="text" data-idx-url="' + ech(famille) + '|' + ech(id) + '" value="' + ech(conf.url || '') +
+      '" style="flex:1;min-width:260px"></div>';
+}
+
+$('btn-reglages').addEventListener('click', function () {
+  jsonPost('/api/admin/reglages', {
+    fanoutBudgetMs: Number($('r-budget').value),
+    maxStreams: Number($('r-max').value)
+  }).then(function (d) {
+    ecrire('msg-reglages', d.ok ? 'Enregistre. Applique immediatement.' : (d.erreur || 'echec'), d.ok ? 'ok' : 'ko');
+  });
+});
+
+$('btn-indexeurs').addEventListener('click', function () {
+  var patch = { torznab: {}, unit3d: {} };
+  [].forEach.call(document.querySelectorAll('[data-idx-url]'), function (input) {
+    var parts = input.dataset.idxUrl.split('|'), famille = parts[0], id = parts[1];
+    var actif = document.querySelector('[data-idx-actif="' + famille + '|' + id + '"]').checked;
+    var ancien = (famille === 'digitalcore' ? reglagesCourants.digitalcore
+                                            : (reglagesCourants[famille] || {})[id]) || {};
+    var conf = { enabled: actif, url: input.value };
+    if (ancien.categories) conf.categories = ancien.categories;
+    if (famille === 'digitalcore') patch.digitalcore = conf;
+    else patch[famille][id] = conf;
+  });
+  jsonPost('/api/admin/reglages', patch).then(function (d) {
+    ecrire('msg-indexeurs', d.ok ? 'Adresses enregistrees.' : (d.erreur || 'echec'), d.ok ? 'ok' : 'ko');
+  });
+});
+
+$('btn-exporter').addEventListener('click', function () { window.location = '/api/admin/sauvegarde'; });
+$('btn-importer').addEventListener('click', function () { $('fichier-import').click(); });
+$('fichier-import').addEventListener('change', function (e) {
+  var f = e.target.files[0];
+  if (!f) return;
+  var lecteur = new FileReader();
+  lecteur.onload = function () {
+    var corps;
+    try { corps = JSON.parse(lecteur.result); }
+    catch (err) { ecrire('msg-sauvegarde', 'Fichier illisible : ' + err.message, 'ko'); return; }
+    jsonPost('/api/admin/sauvegarde', corps).then(function (d) {
+      ecrire('msg-sauvegarde', d.ok ? 'Restaure : ' + (d.ecrits || []).join(', ') : (d.erreur || 'echec'),
+        d.ok ? 'ok' : 'ko');
+      chargerReglages();
+    });
+  };
+  lecteur.readAsText(f);
+});
+
+/* ---------------------------------- Cache --------------------------------- */
+function chargerCache() {
+  jsonGet('/api/admin/etat').then(function (d) {
+    var c = d.cache;
+    $('cache-chiffres').innerHTML = [
+      ['Entrees vivantes', nb(c.liveEntries), ''],
+      ['Taille sur disque', octets(c.fileSizeBytes), ''],
+      ['Taux de reussite', Math.round((c.hitRate || 0) * 100) + ' %', c.hits + ' / ' + (c.hits + c.misses)]
+    ].map(function (x) {
+      return '<div class="chiffre"><div class="v" style="font-size:1.2rem">' + ech(x[1]) + '</div>' +
+             '<div class="n">' + ech(x[0]) + '</div>' +
+             (x[2] ? '<div class="d">' + ech(x[2]) + '</div>' : '') + '</div>';
+    }).join('');
+
+    var scopes = Object.keys(c.byScope || {}).sort(function (a, b) { return c.byScope[b] - c.byScope[a]; });
+    $('tab-cache').innerHTML = '<tr><th>Perimetre</th><th class="num">Entrees</th><th></th></tr>' +
+      scopes.map(function (s) {
+        return '<tr><td>' + ech(s) + '</td><td class="num">' + c.byScope[s] + '</td>' +
+               '<td><button class="sec mini" data-purge="' + ech(s) + '">Purger</button></td></tr>';
+      }).join('');
+  });
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-purge]');
+  if (!b) return;
+  jsonPost('/api/admin/cache/vider', { scope: b.dataset.purge }).then(function (d) {
+    ecrire('msg-cache', d.supprimees + ' entree(s) supprimee(s) dans « ' + b.dataset.purge + ' ».', 'ok');
+    chargerCache();
+  });
+});
+$('btn-cache-tout').addEventListener('click', function () {
+  jsonPost('/api/admin/cache/vider', {}).then(function (d) {
+    ecrire('msg-cache', d.supprimees + ' entree(s) supprimee(s).', 'ok');
+    chargerCache();
+  });
+});
+
+/* --------------------------------- Fichiers -------------------------------- */
+function chargerFichiers() {
+  jsonGet('/api/admin/config').then(function (d) {
+    $('fichiers').innerHTML = d.fichiers.length === 0
+      ? '<p class="aide">Aucun fichier dans ' + ech(d.dossier) + '.</p>'
+      : d.fichiers.map(function (f) {
+          return '<details class="pli"><summary>' + ech(f.name) + '</summary><div>' +
+            '<textarea data-fichier="' + ech(f.name) + '">' + ech(f.contenu) + '</textarea>' +
+            '<div class="actions"><button class="act mini" data-enregistrer="' + ech(f.name) +
+            '">Enregistrer</button></div></div></details>';
+        }).join('');
+  });
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-enregistrer]');
+  if (!b) return;
+  var nom = b.dataset.enregistrer;
+  var zone = document.querySelector('textarea[data-fichier="' + nom + '"]');
+  jsonPost('/api/admin/config/' + encodeURIComponent(nom), { contenu: zone.value }).then(function (d) {
+    ecrire('msg-fichiers', d.ok ? nom + ' enregistre et recharge.' : (d.erreur || 'echec'), d.ok ? 'ok' : 'ko');
+  });
+});
+
+/* --------------------------------- Service --------------------------------- */
+$('btn-kkey').addEventListener('click', function () {
+  ecrire('msg-service', 'Re-decouverte en cours...');
+  jsonPost('/api/admin/kkey/redecouvrir').then(function (d) {
+    ecrire('msg-service', d.ok ? 'Signature retrouvee.' : 'Echec : aucune fonction exploitable trouvee.',
+      d.ok ? 'ok' : 'ko');
+    chargerBord();
+  });
+});
+$('btn-domaines').addEventListener('click', function () {
+  ecrire('msg-service', 'Synchronisation...');
+  jsonPost('/api/admin/domaines/synchroniser').then(function (d) {
+    ecrire('msg-service', d.erreur ? d.erreur : 'Domaines synchronises.', d.erreur ? 'ko' : 'ok');
+  });
+});
+$('btn-remesurer').addEventListener('click', function () {
+  jsonPost('/api/admin/mesures/reinitialiser').then(function () {
+    ecrire('msg-service', 'Mesures remises a zero. Les compteurs quotidiens sont conserves.', 'ok');
+    chargerBord();
+  });
+});
+
+/* ------------------------------ Chargement ------------------------------- */
+function charger(vue) {
+  if (vue === 'bord' || vue === 'sources') chargerBord();
+  else if (vue === 'requetes') chargerRequetes();
+  else if (vue === 'journal') chargerJournal();
+  else if (vue === 'reglages') chargerReglages();
+  else if (vue === 'cache') chargerCache();
+  else if (vue === 'fichiers') chargerFichiers();
+}
+charger('bord');
+/* Rafraichissement discret du tableau de bord : il doit rester vrai sans qu'on y pense. */
+setInterval(function () { if (vueActive === 'bord' || vueActive === 'sources') chargerBord(); }, 20000);
 </script>
 </body>
 </html>

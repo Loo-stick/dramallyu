@@ -26,8 +26,18 @@ import {
   handleToggleSource,
   handleClearCache,
   handleRediscoverKkey,
+  handleTableauDeBord,
+  handleRequetes,
+  handleJournal,
+  handleViderJournal,
+  handleReinitialiserMesures,
+  handleEnregistrerReglages,
+  handleTesterSource,
+  handleExporterSauvegarde,
+  handleImporterSauvegarde,
 } from './routes/admin';
 import { register, planSources } from './core/registry';
+import { brancherJournal } from './core/journal';
 import {
   parseConfig,
   encodeConfig,
@@ -55,6 +65,10 @@ const PORT = Number(process.env.PORT || 7020);
 // Derriere Apache + Cloudflare : sans ca, les URLs auto-referentes (/resolve, /sub)
 // sont construites avec le schema et l'hote internes, donc injouables chez le client.
 app.set('trust proxy', 1);
+
+// Journal consultable depuis l'administration. Branche AVANT tout le reste, pour ne
+// pas perdre les lignes de demarrage — ce sont souvent les plus parlantes.
+brancherJournal();
 
 // --- Sources ----------------------------------------------------------------
 register(
@@ -312,6 +326,15 @@ app.post('/admin/logout', handleLogout);
 app.get('/admin', requireAdmin, (_req, res) => res.sendFile(path.join(WEB_DIR, 'admin.html')));
 
 app.get('/api/admin/etat', requireAdmin, handleAdminState);
+app.get('/api/admin/tableau', requireAdmin, handleTableauDeBord);
+app.get('/api/admin/requetes', requireAdmin, handleRequetes);
+app.get('/api/admin/journal', requireAdmin, handleJournal);
+app.post('/api/admin/journal/vider', requireAdmin, handleViderJournal);
+app.post('/api/admin/mesures/reinitialiser', requireAdmin, handleReinitialiserMesures);
+app.post('/api/admin/reglages', requireAdmin, jsonBody, handleEnregistrerReglages);
+app.post('/api/admin/sources/:id/tester', requireAdmin, jsonBody, handleTesterSource);
+app.get('/api/admin/sauvegarde', requireAdmin, handleExporterSauvegarde);
+app.post('/api/admin/sauvegarde', requireAdmin, jsonBody, handleImporterSauvegarde);
 app.get('/api/admin/config', requireAdmin, handleGetConfigFiles);
 app.post('/api/admin/config/:name', requireAdmin, jsonBody, handleSaveConfigFile);
 app.post('/api/admin/sources/:id', requireAdmin, jsonBody, handleToggleSource);
