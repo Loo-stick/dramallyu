@@ -1,0 +1,4 @@
+{
+  "_commentaire": "Domaine Wawacity. TRES rotatif : il change plusieurs fois par an et l'ancien devient un domaine parque (redirection publicitaire). La synchronisation Telegram (src/core/domain-sync.ts) le met a jour toute seule ; ce fichier reste modifiable a la main depuis la page /admin, sans redemarrage.",
+  "base": "https://wawacity.estate"
+}

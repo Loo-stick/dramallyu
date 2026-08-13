@@ -90,13 +90,42 @@ interfaces : chaque etat porte un symbole et un mot.
 | VoirDrama | verifiee en reel — apporte notamment de la VF |
 | Nyaa | analyseur valide sur le flux RSS reel |
 | C411 / Tr4ker / Ygg | implementes (Torznab) — **non verifiables sans compte** |
-| Zone-Telechargement | structure relevee sur le site, recherche DLE en POST |
-| Wawacity | **desactivee** : `wawacity.pro` est un domaine parque et aucune autre extension ne repond depuis ce serveur. Le code suit son portillon et detecte le parking ; il suffit de renseigner le domaine courant dans `config/wawacity-endpoints.json` puis de l'activer dans l'admin. |
+| Zone-Telechargement | verifiee en reel — recherche DLE en POST, liens proteges zoneurs |
+| Wawacity | verifiee en reel sur **wawacity.estate** — 16 candidats VF et VOSTFR sur un episode, hebergeurs debridables uniquement |
 
-## Limite connue
+## Synchronisation automatique des domaines
 
-Certaines pistes de sous-titres KissKH sont **chiffrees** (extensions `.txt` / `.txt1`,
-dechiffrees cote navigateur par des fonctions `b1`/`b2`/`b3`). Elles sont detectees et
-ecartees plutot que servies en charabia. Les pistes `.srt`, majoritaires — dont le
-francais — passent normalement. Le dechiffrement est documente dans `docs/kkey.md` et
-reste a implementer.
+Les sites DDL francais changent de domaine plusieurs fois par an, et l'ancien devient
+generalement un **domaine parque** : il repond 200 avec de la publicite, si bien qu'une
+simple sonde de disponibilite ne detecte pas la bascule. C'est exactement ce qui rendait
+Wawacity muet.
+
+`src/core/domain-sync.ts` lit l'apercu public du canal Telegram officiel de chaque site
+(`t.me/s/<canal>`, sans compte ni cle) et y trouve l'adresse courante dans les
+metadonnees Open Graph :
+
+| Site | Canal | Metadonnee |
+|---|---|---|
+| Wawacity | `Wawacityofficiel` | `og:title` → « Wawacity.estate » |
+| Zone-Telechargement | `zone_telechargement_officielle` | `og:description` → « ...de https://zone-telechargement.org/ » |
+
+Les canaux ont ete trouves par **auto-decouverte** : ils sont publies en lien sur les
+sites eux-memes. Verification toutes les 6 h, plus un declenchement manuel depuis
+l'admin.
+
+**Garde-fou** : un domaine annonce n'est jamais ecrit sans avoir ete teste — joignable
+ET non parque. Un canal pirate ou un message mal formule ne peut donc pas casser une
+source qui fonctionnait.
+
+## Limites connues
+
+**Pistes de sous-titres chiffrees (KissKH).** Certaines pistes ont leurs repliques
+chiffrees (extensions `.txt` / `.txt1`). Le dechiffrement est implemente — on execute
+les fonctions du site avec CryptoJS, meme parti pris que pour le `kkey` — mais il n'a
+**pas pu etre verifie** : sur douze dramas recents sondes, toutes les pistes etaient en
+`.srt`, donc en clair. Le code est defensif : il ne se declenche que sur une extension
+inhabituelle et refuse de servir si le resultat n'est pas plausible.
+
+**Indexeurs Torznab.** C411, Tr4ker et le relais Ygg sont implementes mais non
+verifiables sans un compte sur chacun de ces trackers. Le client Torznab lui-meme est
+couvert par des tests sur du XML reel.

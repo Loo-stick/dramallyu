@@ -32,6 +32,7 @@ import { getSettings } from './core/settings';
 import { getCacheStats } from './core/cache';
 import { kkeyStatus } from './sources/direct/kisskh/kkey';
 import { kisskhSource } from './sources/direct/kisskh';
+import { demarrerDomainSync, synchroniserMaintenant, dernierEtat } from './core/domain-sync';
 import { voirdramaSource } from './sources/direct/voirdrama';
 import { nyaaSource } from './sources/torrent/nyaa';
 import { torznabSources } from './sources/torrent/torznab';
@@ -167,8 +168,15 @@ app.post('/api/admin/sources/:id', requireAdmin, jsonBody, handleToggleSource);
 app.post('/api/admin/cache/vider', requireAdmin, jsonBody, handleClearCache);
 app.post('/api/admin/kkey/redecouvrir', requireAdmin, handleRediscoverKkey);
 
+app.get('/api/admin/domaines', requireAdmin, (_req, res) => res.json({ dernier: dernierEtat() }));
+app.post('/api/admin/domaines/synchroniser', requireAdmin, async (_req, res) => {
+  res.json({ resultats: await synchroniserMaintenant() });
+});
+
 app.listen(PORT, () => {
   console.log(`[Dramallyu] ecoute sur le port ${PORT}`);
+  // Apres l'ecoute : repondre aux requetes passe avant d'interroger Telegram.
+  demarrerDomainSync();
   console.log(`[Dramallyu] configuration : http://localhost:${PORT}/configure`);
 });
 

@@ -37,10 +37,7 @@ const DEFAULTS: Settings = {
     tr4ker: true,
     ygg: true,
     zonetelechargement: true,
-    // Desactive par defaut : aucun domaine wawacity vivant au 2026-08-12 (parque ou
-    // bloque DNS). L operateur l active une fois le domaine courant renseigne dans
-    // config/wawacity-endpoints.json — cf. le commentaire en tete de wawacity.ts.
-    wawacity: false,
+    wawacity: true,
   },
   // 8 s : au-dela, AIOStreams coupe la source et l'utilisateur voit un ecran vide.
   fanoutBudgetMs: 8000,

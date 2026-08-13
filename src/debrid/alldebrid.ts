@@ -54,6 +54,17 @@ async function call<T>(
   }
 }
 
+/**
+ * Redirecteurs employes par les sites DDL francais. Ils ne servent pas un fichier :
+ * ils masquent le lien d'hebergeur derriere une page intermediaire.
+ */
+const REDIRECTORS = ['dl-protect', 'zoneurs', 'protect-link', 'dlprotect', 'rapidsafe'];
+
+export function isRedirector(url: string): boolean {
+  const bas = url.toLowerCase();
+  return REDIRECTORS.some((r) => bas.includes(r));
+}
+
 interface UploadedMagnet {
   id?: number;
   hash?: string;
@@ -157,7 +168,19 @@ export function allDebrid(apiKey: string): DebridService {
     },
 
     async resolveDdl(link, signal) {
-      const data = await call<{ link?: string }>('/link/unlock', apiKey, { link }, signal);
+      // Les sites DDL francais ne publient jamais le lien d'hebergeur en clair : il
+      // est derriere un REDIRECTEUR (dl-protect pour Wawacity, zoneurs pour
+      // Zone-Telechargement). Passer ce lien directement a /link/unlock echoue —
+      // AllDebrid a un endpoint dedie pour ca, qu'il faut appeler d'abord.
+      let cible = link;
+      if (isRedirector(link)) {
+        const redir = await call<{ links?: string[] }>('/link/redirector', apiKey, { link }, signal);
+        const premier = redir?.links?.find((l) => typeof l === 'string' && /^https?:\/\//.test(l));
+        if (!premier) return null;
+        cible = premier;
+      }
+
+      const data = await call<{ link?: string }>('/link/unlock', apiKey, { link: cible }, signal);
       return data?.link ?? null;
     },
 
