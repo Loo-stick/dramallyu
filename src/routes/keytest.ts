@@ -244,6 +244,8 @@ export async function tester(service: string, cle: string): Promise<Verdict> {
       case 'c411':
       case 'tr4ker':
         return await testTorznab(service, cle);
+      case 'ygg':
+        return await testTorznab('yggreborn', cle);
       case 'g3mini':
         return await testUnit3d(service, cle);
       case 'dcore':

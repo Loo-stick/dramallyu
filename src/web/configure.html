@@ -291,6 +291,13 @@
           <button type="button" class="btn" data-teste="dcore" data-champ="dcore">Tester</button>
         </div>
         <div class="verdict" id="v-dcore"></div>
+
+        <label for="ygg">Passkey YggReborn</label>
+        <div class="avec-test">
+          <input type="password" id="ygg" class="mono" autocomplete="off" placeholder="passkey de votre compte">
+          <button type="button" class="btn" data-teste="ygg" data-champ="ygg">Tester</button>
+        </div>
+        <div class="verdict" id="v-ygg"></div>
       </section>
 
       <section class="bloc">
@@ -620,7 +627,7 @@ function configActuelle(){
   var cfg = {};
   // Un champ vide veut dire « garde ce que tu as » : le serveur reconduit la cle via
   // _precedent. Aucune valeur d'affichage ne circule.
-  ['ad','tb','c411','tr4ker','tmdb','g3mini','dcore'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
+  ['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
   if (choisies.length) cfg.subLangs = choisies;
   if (formatsExclus.length) cfg.excludeFormats = formatsExclus;
   if ($('cachedOnly').checked) cfg.cachedOnly = true;
@@ -797,7 +804,7 @@ $('copier').addEventListener('click', function(){
 });
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
-['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','sortBy','maxResults','cachedOnly','priorite',
+['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','sortBy','maxResults','cachedOnly','priorite',
  'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','bonusHdr','subsSurFlux'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);
@@ -850,7 +857,7 @@ function restaurer(){
    exactement le contraire, et supprime au passage toute possibilite d'envoyer
    par erreur une valeur d'affichage a la place de la cle. */
 var LIBELLES = { ad:'AllDebrid', tb:'TorBox', c411:'C411', tr4ker:'Tr4ker', tmdb:'TMDB',
-                 g3mini:'G3mini', dcore:'DigitalCore' };
+                 g3mini:'G3mini', dcore:'DigitalCore', ygg:'YggReborn' };
 
 function marquerClesEnregistrees(){
   Object.keys(clesEnregistrees).forEach(function(champ){

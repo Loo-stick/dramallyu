@@ -42,6 +42,7 @@ const DEFAULTS: Settings = {
     zonetelechargement: true,
     g3mini: true,
     digitalcore: true,
+    yggreborn: true,
     // Wawacity publie beaucoup sur des hebergeurs qu'AllDebrid ne prend pas (Uploady,
     // DailyUploads, Nitroflare) mais que TorBox prend. Le tri se fait desormais sur la
     // liste que chaque service publie, et non sur une liste ecrite a la main.
@@ -53,6 +54,10 @@ const DEFAULTS: Settings = {
   torznab: {
     c411: { enabled: true, url: 'https://c411.org/api', categories: [2000, 5000] },
     tr4ker: { enabled: true, url: 'https://tr4ker.net/torznab', categories: [2000, 5000] },
+    // YggReborn, successeur de YggTorrent. Torznab standard, passkey par utilisateur.
+    // A ne pas confondre avec les relais « ygg.gratis » / « u2p.anhkagi.net », tous
+    // deux morts (404 et 403 verifies le 2026-08-13, y compris depuis stream-fusion).
+    yggreborn: { enabled: true, url: 'https://api.yggreborn.org/api', categories: [2000, 5000] },
     // Le relais YggTorrent a ete RETIRE le 2026-08-13 : `u2p.anhkagi.net` repond 403
     // depuis ce serveur (ni cle acceptee, ni IP autorisee), et stream-fusion — d'ou
     // venait l'adresse — n'a aucun mecanisme de cle pour lui. Ajouter un indexeur ici
