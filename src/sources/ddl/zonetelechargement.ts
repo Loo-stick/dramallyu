@@ -113,6 +113,30 @@ export function parseFicheLinks(html: string): ZtLink[] {
   return out;
 }
 
+/**
+ * Liens d'une fiche, MIS EN CACHE.
+ *
+ * La page etait re-telechargee a chaque requete : seules la recherche et les
+ * protecteurs etaient memorises. Mesure en production, avec toutes les autres sources
+ * en cache chaud (1 a 7 ms), Zone-Telechargement pesait a lui seul 6,5 s sur une
+ * reponse de 6,5 s.
+ *
+ * On memorise les liens ANALYSES, pas le HTML : une fiche pese jusqu'a 3 Mo, la liste
+ * qu'on en tire quelques centaines d'octets. Garder le HTML gonflerait le cache pour
+ * rien — on ne le relit jamais.
+ */
+async function liensDeFiche(fiche: string, signal?: AbortSignal): Promise<ZtLink[]> {
+  return cached<ZtLink[]>(
+    `zt:fiche:${fiche}`,
+    TTL_MS,
+    async () => {
+      const html = await getText(fiche, { timeoutMs: 20000, signal, maxBytes: MAX_HTML_BYTES });
+      return html ? parseFicheLinks(html) : [];
+    },
+    { scope: 'zt', shouldCache: (v) => v.length > 0, negativeTtlMs: EMPTY_TTL_MS },
+  );
+}
+
 /** Recherche DLE. Le POST est indispensable : le GET ne renvoie aucun resultat. */
 async function searchFiches(title: string, signal?: AbortSignal): Promise<string[]> {
   return cached<string[]>(
@@ -186,57 +210,71 @@ async function searchZt(q: Query, ctx: SearchContext): Promise<Candidate[]> {
   const supportes = await hotesSupportes(ctx.config);
 
   const fiches = await searchFiches(title, ctx.deadline.signal);
-  const out: Candidate[] = [];
 
-  for (const fiche of fiches.slice(0, MAX_FICHES)) {
-    if (ctx.deadline.remainingMs() < 2500) break;
+  // Les fiches retenues sont traitees EN PARALLELE, et les liens d'une fiche aussi.
+  // C'etait entierement sequentiel : jusqu'a quinze allers-retours HTTP a la file, ce
+  // qui faisait de cette source le goulot de tout le fan-out. Les bornes MAX_FICHES et
+  // MAX_LINKS gardent le parallelisme modeste — au plus douze requetes de front, pas
+  // de quoi inquieter ni le site ni la memoire de l'hote.
+  const retenues = fiches
+    .slice(0, MAX_FICHES)
+    .map((fiche) => {
+      // Le titre de la fiche est dans son slug : on filtre AVANT d'ouvrir la page, ce
+      // qui evite d'en telecharger trois pour rien.
+      const slug = fiche.split('/').pop() || '';
+      const readable = slug.replace(/^\d+-telecharger-/, '').replace(/\.html$/, '').replace(/-/g, ' ');
+      return { fiche, readable };
+    })
+    .filter(({ readable }) => matchesTitle(readable, q.titles, { threshold: 0.6 }));
 
-    // Le titre de la fiche est dans son slug : on filtre AVANT d'ouvrir la page, ce
-    // qui evite d'en telecharger trois pour rien.
-    const slug = fiche.split('/').pop() || '';
-    const readable = slug.replace(/^\d+-telecharger-/, '').replace(/\.html$/, '').replace(/-/g, ' ');
-    if (!matchesTitle(readable, q.titles, { threshold: 0.6 })) continue;
+  if (retenues.length === 0 || ctx.deadline.remainingMs() < 2500) return [];
 
-    const html = await getText(fiche, {
-      timeoutMs: 20000,
-      signal: ctx.deadline.signal,
-      maxBytes: MAX_HTML_BYTES,
-    });
-    if (!html) continue;
+  const parFiche = await Promise.all(
+    retenues.map(async ({ fiche, readable }) => {
+      const liens = await liensDeFiche(fiche, ctx.deadline.signal);
+      const parsed = parseRelease(readable);
 
-    const parsed = parseRelease(readable);
-    const links = parseFicheLinks(html).filter((l) => {
-      if (q.type === 'movie' || q.episode === undefined) return true;
-      // Un lien sans numero d'episode sur une fiche de serie est ambigu : on l'ecarte
-      // plutot que de risquer de servir le mauvais episode.
-      return l.episode === q.episode;
-    });
+      const utiles = liens
+        .filter((l) => {
+          if (q.type === 'movie' || q.episode === undefined) return true;
+          // Un lien sans numero d'episode sur une fiche de serie est ambigu : on
+          // l'ecarte plutot que de risquer de servir le mauvais episode.
+          return l.episode === q.episode;
+        })
+        // Deja constate mort au moment d'un Play precedent : inutile de resoudre le
+        // protecteur, et surtout inutile de le reproposer.
+        .filter((l) => !estMort(l.protectedUrl))
+        .slice(0, MAX_LINKS);
 
-    for (const link of links.slice(0, MAX_LINKS)) {
-      if (ctx.deadline.remainingMs() < 2000) break;
-      // Deja constate mort au moment d'un Play precedent : inutile de resoudre le
-      // protecteur, et surtout inutile de le reproposer.
-      if (estMort(link.protectedUrl)) continue;
-      const real = await resolveProtected(link.protectedUrl, ctx.deadline.signal);
-      if (!real) continue;
+      if (utiles.length === 0 || ctx.deadline.remainingMs() < 2000) return [];
 
-      // Le protecteur resolu, on connait le VRAI hebergeur : on ecarte ici ce
-      // qu'aucun debrideur de l'utilisateur ne prend, plutot que de lui proposer un
-      // flux dont le clic finira en erreur.
-      const hote = hostOf(real);
-      if (!hoteExploitable(hote, supportes)) continue;
+      const resolus = await Promise.all(
+        utiles.map(async (link) => {
+          const real = await resolveProtected(link.protectedUrl, ctx.deadline.signal);
+          if (!real) return null;
 
-      out.push({
-        sourceId: 'zonetelechargement',
-        kind: 'ddl',
-        title: readable.trim(),
-        quality: parsed.quality,
-        language: parsed.language,
-        ddlUrl: real,
-        ddlHost: hostOf(real),
-      });
-    }
-  }
+          // Le protecteur resolu, on connait le VRAI hebergeur : on ecarte ici ce
+          // qu'aucun debrideur de l'utilisateur ne prend, plutot que de lui proposer
+          // un flux dont le clic finira en erreur.
+          const hote = hostOf(real);
+          if (!hoteExploitable(hote, supportes)) return null;
+
+          return {
+            sourceId: 'zonetelechargement',
+            kind: 'ddl',
+            title: readable.trim(),
+            quality: parsed.quality,
+            language: parsed.language,
+            ddlUrl: real,
+            ddlHost: hote,
+          } as Candidate;
+        }),
+      );
+      return resolus.filter((c): c is Candidate => c !== null);
+    }),
+  );
+
+  const out = parFiche.flat();
   return out;
 }
 
