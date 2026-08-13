@@ -14,7 +14,8 @@ import { comparer, passeFiltres, type EtatFlux } from '../core/filters';
 import { toStremioStream, type StremioStream, type PisteFlux } from '../core/display';
 import { getBaseUrl } from '../core/url';
 import { encodeToken } from '../debrid/token';
-import { cacheParService, type NomDebrid } from '../debrid/resolver';
+import { cacheParService, resolve, type NomDebrid } from '../debrid/resolver';
+import { languesDuFichier } from '../core/pistes-fichier';
 import { marquerMort } from '../debrid/deadlinks';
 import { cached } from '../core/cache';
 import { isRedirector, infosLiens, type InfoLien } from '../debrid/alldebrid';
@@ -50,6 +51,15 @@ function dedupe(candidates: Candidate[]): Candidate[] {
   }
   return [...seen.values()];
 }
+
+/**
+ * Combien de fichiers on accepte d'ouvrir pour connaitre leurs pistes.
+ *
+ * Chacun coute une resolution chez le debrideur et une requete Range. Six suffisent :
+ * ce sont les entrees de tete, celles qu'on regarde. Le resultat etant memorise sur le
+ * hash, les recherches suivantes sur le meme titre n'en paient aucune.
+ */
+const MAX_MESURES = 6;
 
 function buildQuery(
   type: MediaType,
@@ -114,6 +124,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     const episodesSaison =
       parsed.season !== undefined ? work.episodesParSaison?.[parsed.season] : undefined;
     const deduplique = dedupe(candidates);
+
 
     // ETAT DU CACHE, avant le tri.
     //
@@ -237,6 +248,38 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         }),
       )
       .slice(0, plafond);
+
+    // LANGUES LUES DANS LE FICHIER, pour les premiers de la liste.
+    //
+    // Ce que le nom annonce ne vaut rien : il ment dans les deux sens, et seuls deux
+    // trackers sur sept publient leur MediaInfo. On va donc lire l'en-tete du fichier,
+    // qui est la seule verite — mais uniquement la ou c'est raisonnable :
+    //
+    //   - apres le tri, donc sur les entrees que l'utilisateur verra vraiment ;
+    //   - seulement ce qui est DEJA PRET chez un debrideur, pour ne rien mettre en
+    //     telechargement au seul motif de regarder son en-tete ;
+    //   - en parallele, sous plafond, et jamais si le budget est deja consomme.
+    //
+    // Le resultat est memorise sur le HASH pendant trois mois : le cout n'est paye
+    // qu'une fois par fichier, pour tout le monde.
+    const aMesurer = kept
+      .filter((e) => e.cached === true && e.candidate.infoHash && !e.candidate.languesIntegrees)
+      .slice(0, MAX_MESURES);
+
+    if (aMesurer.length > 0 && Date.now() - started < settings.fanoutBudgetMs) {
+      await Promise.all(
+        aMesurer.map(async (e) => {
+          const c = e.candidate;
+          const mesure = await languesDuFichier(c.infoHash as string, () =>
+            resolve(
+              { kind: 'torrent', value: c.infoHash as string, fileHint: c.fileHint, ad: config.ad, tb: config.tb },
+              AbortSignal.timeout(8000),
+            ),
+          );
+          if (mesure?.lisible) c.languesIntegrees = mesure.langues;
+        }),
+      );
+    }
 
     // SANS le segment de config, volontairement : le jeton /resolve porte deja les
     // cles debrid dont la resolution a besoin. L'y ajouter n'apportait rien et
