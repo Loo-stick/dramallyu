@@ -120,10 +120,19 @@ export function passeFiltres(etat: EtatFlux, f: Filtres): boolean {
   const c = etat.candidate;
   const nom = c.title;
 
-  // Le cache : `undefined` veut dire « invérifiable » (un lien DDL n'a pas de hash).
-  // On ne l'assimile PAS a « absent » — sinon l'option viderait la liste de flux
-  // parfaitement jouables.
-  if (f.cachedOnly && etat.cached !== true) return false;
+  // « Uniquement ce qui est pret » = ce qui demarre tout de suite.
+  //
+  // UN FLUX DIRECT PASSE TOUJOURS : il ne traverse aucun debrideur, donc il n'a pas
+  // d'etat de cache — et il est pourtant le plus immediat de la liste. L'ecarter au
+  // motif qu'il n'a rien a debrider etait un contresens, et il se voyait : l'addon
+  // affiche `[▶ ⚡]` sur ces flux, c'est-a-dire l'inverse de ce que le filtre en
+  // faisait. Constate en production sur un drama que KissKH servait parfaitement,
+  // et qui rendait une liste vide.
+  //
+  // Pour le reste, `undefined` signifie « invérifiable » (un lien DDL n'a pas de
+  // somme de controle) : l'utilisateur a demande ce qui est SUR, on ne le garde donc
+  // pas — mais ce n'est pas la meme chose qu'« absent ».
+  if (f.cachedOnly && c.kind !== 'direct' && etat.cached !== true) return false;
 
   const rang = rangResolution(c.quality);
   if (rang !== null) {

@@ -43,6 +43,15 @@ test('« seulement le cache » ne garde que ce qui est VERIFIE present', () => {
   assert.equal(passeFiltres(flux({}, undefined), f), false);
 });
 
+test('un flux DIRECT passe toujours « seulement ce qui est pret »', () => {
+  // Regression vecue : un drama parfaitement servi par KissKH rendait une liste vide.
+  // Le flux direct ne traverse aucun debrideur, donc il n'a pas d'etat de cache — et
+  // il est pourtant le plus immediat de tous. L'ecarter etait un contresens, visible
+  // dans l'interface qui lui affiche « ▶ ⚡ ».
+  const f = { ...NEUTRE, cachedOnly: true };
+  assert.equal(passeFiltres(flux({ kind: 'direct', infoHash: undefined }, undefined), f), true);
+});
+
 test('bornes de resolution', () => {
   const f = { ...NEUTRE, minResolution: '720p', maxResolution: '1080p' };
   assert.equal(passeFiltres(flux({ quality: '1080p' }), f), true);
