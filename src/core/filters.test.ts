@@ -138,3 +138,36 @@ test('le bonus HDR departage a resolution egale', () => {
   assert.ok(comparer(hdr, sans, { ...TRI, sortBy: 'quality', bonusHdr: true }) < 0);
   assert.equal(comparer(hdr, sans, { ...TRI, sortBy: 'quality', bonusHdr: false }), 0);
 });
+
+test('un flux direct est PRET au tri, comme un fichier en cache', () => {
+  // Symetrique du filtre : `passeFiltres` laisse deja passer le direct sous
+  // « uniquement ce qui est pret », et l'addon lui affiche `[▶ ⚡]`. Le compter comme
+  // « pas pret » au tri faisait passer tout torrent en cache devant KissKH.
+  // A qualite et langue egales, seul l'etat de pret peut les departager : le direct
+  // ne doit pas perdre sur ce critere-la. (Un torrent 4K en cache peut evidemment
+  // repasser devant sur un tri par qualite — c'est le tri qui parle, pas le « pret ».)
+  const direct = flux({ kind: 'direct', sourceId: 'kisskh' }, undefined);
+  const torrentPret = flux({ kind: 'torrent' }, true);
+  assert.equal(comparer(direct, torrentPret, TRI), 0, 'egalite : aucun n est relegue');
+  const torrentPasPret = flux({ kind: 'torrent' }, false);
+  assert.ok(comparer(direct, torrentPasPret, TRI) < 0, 'le direct precede ce qui reste a debrider');
+});
+
+test('KissKH mene parmi les sources directes', () => {
+  const kk = flux({ kind: 'direct', sourceId: 'kisskh', quality: '720p' }, undefined);
+  const vd = flux({ kind: 'direct', sourceId: 'voirdrama', quality: '1080p' }, undefined);
+  // Meme avec une qualite annoncee moindre, et quel que soit le critere de tri.
+  assert.ok(comparer(kk, vd, { ...TRI, sortBy: 'quality' }) < 0);
+  assert.ok(comparer(kk, vd, { ...TRI, sortBy: 'size' }) < 0);
+});
+
+test('avec la priorite « direct », KissKH est en tete de toute la liste', () => {
+  const liste = [
+    flux({ kind: 'torrent', quality: '4K', language: 'VOSTFR' }, true),
+    flux({ kind: 'direct', sourceId: 'voirdrama', quality: '1080p' }, undefined),
+    flux({ kind: 'ddl', quality: '1080p' }, undefined),
+    flux({ kind: 'direct', sourceId: 'kisskh', quality: 'HD' }, undefined),
+  ];
+  const trie = [...liste].sort((a, b) => comparer(a, b, { ...TRI, priorite: 'direct' }));
+  assert.equal(trie[0].candidate.sourceId, 'kisskh');
+});

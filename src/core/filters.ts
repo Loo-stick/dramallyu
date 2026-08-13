@@ -194,6 +194,20 @@ function rangLangue(langue: string, ordre: string[]): number {
   return i === -1 ? 100 : i;
 }
 
+/**
+ * Ordre entre sources DIRECTES, a pilier egal.
+ *
+ * KissKH d'abord : c'est la source la mieux dotee en sous-titres — souvent six pistes
+ * dont le francais — et elle sert le flux sans intermediaire. Les sources absentes de
+ * cette table passent apres celles qui y figurent, sans etre penalisees entre elles.
+ */
+const RANG_DIRECT: Record<string, number> = { kisskh: 0, voirdrama: 1 };
+
+function rangSourceDirecte(c: Candidate): number {
+  if (c.kind !== 'direct') return 0;
+  return RANG_DIRECT[c.sourceId] ?? 50;
+}
+
 function rangPriorite(c: Candidate, priorite: Priorite): number {
   if (priorite === 'aucune') return 0;
   if (priorite === 'direct') return c.kind === 'direct' ? 0 : 1;
@@ -208,12 +222,27 @@ function rangPriorite(c: Candidate, priorite: Priorite): number {
  * par ailleurs. Vient ensuite la priorite de pilier choisie, puis le critere de tri.
  */
 export function comparer(a: EtatFlux, b: EtatFlux, o: OptionsTri): number {
-  const pret = (e: EtatFlux): number => (e.cached === true ? 0 : 1);
+  // UNE PRIORITE DE PILIER EXPLICITE PASSE AVANT TOUT.
+  //
+  // Elle etait evaluee apres l'etat de pret, ce qui la rendait inoperante des que la
+  // liste melangeait du pret et du non-pret : quelqu'un qui demande « Torrent d'abord »
+  // recevait quand meme les flux directs en tete. Une consigne posee a la main par
+  // l'utilisateur ne doit pas se faire arbitrer par une heuristique maison.
+  const parPilier = rangPriorite(a.candidate, o.priorite) - rangPriorite(b.candidate, o.priorite);
+  if (parPilier !== 0) return parPilier;
+
+  // UN FLUX DIRECT EST PRET, au meme titre qu'un fichier deja en cache : il ne
+  // traverse aucun debrideur, rien n'est a telecharger. Le compter comme « pas pret »
+  // contredisait le filtre « uniquement ce qui est pret », qui le laisse passer, et
+  // l'etiquette `[▶ ⚡]` que l'addon lui affiche.
+  const pret = (e: EtatFlux): number => (e.cached === true || e.candidate.kind === 'direct' ? 0 : 1);
   const parPret = pret(a) - pret(b);
   if (parPret !== 0) return parPret;
 
-  const parPilier = rangPriorite(a.candidate, o.priorite) - rangPriorite(b.candidate, o.priorite);
-  if (parPilier !== 0) return parPilier;
+  // Entre deux flux directs, l'ordre des sources tranche avant le critere de tri :
+  // sinon KissKH et VoirDrama s'echangent la tete au gre de la qualite annoncee.
+  const parSourceDirecte = rangSourceDirecte(a.candidate) - rangSourceDirecte(b.candidate);
+  if (parSourceDirecte !== 0) return parSourceDirecte;
 
   const langue = rangLangue(a.candidate.language, o.langOrder) - rangLangue(b.candidate.language, o.langOrder);
   const qualite = scoreQualite(b.candidate, o.bonusHdr) - scoreQualite(a.candidate, o.bonusHdr);
