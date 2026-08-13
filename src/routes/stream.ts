@@ -186,7 +186,9 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       return [...c.subs]
         .sort((a, b) => rang(a.lang) - rang(b.lang))
         .map((t, i) => ({
-          id: `dramallyu-flux-${i}`,
+          // Prefixe chiffre pour la meme raison que sur la ressource /subtitles :
+          // remonter dans les lecteurs qui trient les pistes sur leur identifiant.
+          id: `0${i}-dramallyu-flux`,
           url: `${base}/sub/${encodeToken({ k: 'ddl', v: t.url })}.vtt`,
           // DEUX formes, volontairement. Stremio lit `lang` (code ISO 639-2) ; les
           // providers de Nuvio, eux, produisent `{ url, language: 'English' }` — un

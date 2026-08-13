@@ -97,7 +97,16 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
       // presentent les pistes dans l'ordre reçu.
       .sort((a, b) => rang(a.lang) - rang(b.lang))
       .map((t, i) => ({
-        id: `dramallyu-${i}`,
+        // Identifiant prefixe par un CHIFFRE, et c'est deliberé.
+        //
+        // Certains lecteurs presentent les pistes dans l'ordre reçu, d'autres les
+        // trient sur l'id. Dans le second cas, `dramallyu-…` partait derriere a peu
+        // pres tout l'alphabet — un chiffre trie avant les lettres en ASCII, donc nos
+        // pistes remontent. C'est une hypothese, pas une certitude : Nuvio n'est pas
+        // ouvert et rien ne dit qu'il trie sur ce champ. Le pari est sans risque, un
+        // lecteur qui conserve l'ordre reçu ne verra aucune difference. L'id reste
+        // unique et stable, c'est tout ce que le protocole en demande.
+        id: `0${i}-dramallyu`,
         url: subUrl(base, t),
         lang: t.lang,
         // Meme raison que pour les pistes attachees : Nuvio lit un NOM de langue.
