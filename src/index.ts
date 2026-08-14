@@ -129,7 +129,7 @@ const manifest = (req: express.Request, res: express.Response): void => {
  *
  * Il ne change qu'a la main : un an de cache, et les clients cessent de le redemander.
  */
-for (const fichier of ['logo.png', 'fond.jpg', 'favicon.png']) {
+for (const fichier of ['logo.png', 'marque.png', 'fond.jpg', 'favicon.png']) {
   app.get(`/${fichier}`, (_req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.sendFile(path.join(WEB_DIR, fichier));

@@ -15,7 +15,11 @@
     --nuit:#141019; --surface:#1c1724; --relief:#242030; --relief2:#2c2738;
     --trait:#332d42; --trait-doux:#272232;
     --texte:#ece8f2; --doux:#9b93ab; --pale:#645c76;
-    --or:#d4a05a; --or-clair:#e8bc7e; --or-voile:rgba(212,160,90,.13);
+    /* Palette accordee sur l'identite : le logo et le fond sont lavande et fleur de
+       cerisier sur nuit profonde. L'accent etait dore — il jurait avec les images des
+       qu'on les a posees. */
+    --glycine:#b9a3e8; --glycine-clair:#d3c4f2; --glycine-voile:rgba(185,163,232,.14);
+    --sakura:#e6a9c9; --lune:#f4ecdd;
     --jade:#5fae8c; --jade-voile:rgba(95,174,140,.13);
     --brique:#c4626a; --brique-voile:rgba(196,98,106,.13);
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -28,7 +32,7 @@
     background-image:radial-gradient(1000px 480px at 50% -12%, rgba(212,160,90,.09), transparent 60%);
     padding:32px 16px 72px;
   }
-  a{color:var(--or-clair)}
+  a{color:var(--glycine-clair)}
 
   .page{max-width:1080px;margin:0 auto}
   /* Logo et titre cote a cote, centres ensemble : le titre seul flottait au-dessus
@@ -40,7 +44,7 @@
   @media (max-width:520px){ .enseigne{flex-direction:column;text-align:center;gap:12px} }
   .enseigne h1{
     font-size:clamp(30px,6vw,44px); font-weight:800; letter-spacing:-.035em; line-height:1;
-    background:linear-gradient(94deg,var(--or-clair),var(--or) 55%,#a87c3e);
+    background:linear-gradient(94deg,var(--glycine-clair),var(--glycine) 52%,#8f6fd0);
     -webkit-background-clip:text; background-clip:text; color:transparent;
   }
   .enseigne p{color:var(--doux);margin-top:9px;font-size:14.5px}
@@ -62,7 +66,7 @@
   .chapeau{color:var(--doux);font-size:13px;margin-bottom:16px}
   .facultatif{
     font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
-    color:var(--or-clair);background:var(--or-voile);padding:2px 8px;border-radius:999px;
+    color:var(--glycine-clair);background:var(--glycine-voile);padding:2px 8px;border-radius:999px;
     margin-left:auto;flex:none;
   }
 
@@ -75,7 +79,7 @@
     transition:border-color .15s,box-shadow .15s;
   }
   input.mono{font-family:var(--mono);font-size:12.5px}
-  input:focus,select:focus{border-color:var(--or);box-shadow:0 0 0 3px var(--or-voile)}
+  input:focus,select:focus{border-color:var(--glycine);box-shadow:0 0 0 3px var(--glycine-voile)}
   input::placeholder{color:var(--pale)}
 
   .avec-test{display:flex;gap:8px}
@@ -90,9 +94,9 @@
   .btn:active{transform:translateY(1px)}
   .btn:disabled{opacity:.5;cursor:default}
   .btn.principal{
-    background:linear-gradient(150deg,var(--or-clair),#b8853f);
+    background:linear-gradient(150deg,var(--lune),var(--glycine) 58%,var(--sakura));
     border-color:transparent;color:#1a1410;
-    box-shadow:0 12px 26px -14px rgba(212,160,90,.85);
+    box-shadow:0 12px 26px -14px rgba(185,163,232,.8);
   }
   .btn.large{width:100%;padding:13px;font-size:15px}
 
@@ -134,7 +138,7 @@
   .langue .place{
     width:22px;height:22px;border-radius:7px;background:var(--relief2);flex:none;
     display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:700;
-    color:var(--or-clair);font-variant-numeric:tabular-nums;
+    color:var(--glycine-clair);font-variant-numeric:tabular-nums;
   }
   .langue .nom{font-weight:600;flex:1}
   .langue .code{font-family:var(--mono);font-size:11.5px;color:var(--pale)}
@@ -159,7 +163,7 @@
   .pastille.exclue{border-color:var(--brique);background:var(--brique-voile);color:var(--texte);text-decoration:line-through}
   /* Une bascule ACTIVE n'est pas une exclusion : pas de texte barre, l'option est
      retenue, pas ecartee. */
-  .pastille.active{border-color:var(--or);background:var(--or-voile);color:var(--texte)}
+  .pastille.active{border-color:var(--glycine);background:var(--glycine-voile);color:var(--texte)}
 
   /* --- Panneau lateral : la piece maitresse de cette page --- */
   .rail{position:sticky;top:24px}
@@ -181,60 +185,141 @@
     padding-top:12px;margin-top:4px;border-top:1px solid var(--trait);
     font-variant-numeric:tabular-nums;
   }
-  .compte b{color:var(--or-clair)}
+  .compte b{color:var(--glycine-clair)}
 
   .lien-sortie{display:none}
   .lien-sortie.visible{display:block}
   .lien-sortie code{
     display:block;word-break:break-all;background:var(--nuit);border:1px solid var(--trait);
     border-radius:9px;padding:11px;font-family:var(--mono);font-size:11.5px;
-    color:var(--or-clair);margin-bottom:11px;max-height:120px;overflow:auto;
+    color:var(--glycine-clair);margin-bottom:11px;max-height:120px;overflow:auto;
   }
   .actions{display:flex;gap:8px;flex-wrap:wrap}
   .actions .btn{flex:1;min-width:130px;text-align:center;text-decoration:none}
 
   .note{
-    border:1px solid var(--trait);border-left:3px solid var(--or);
+    border:1px solid var(--trait);border-left:3px solid var(--glycine);
     border-radius:9px;padding:12px 14px;font-size:12.7px;background:var(--relief);
     margin-bottom:20px;
   }
   .note strong{display:block;margin-bottom:3px}
   .note.sobre{border-left-color:var(--trait);color:var(--doux)}
 
-  :focus-visible{outline:2px solid var(--or);outline-offset:2px}
+  :focus-visible{outline:2px solid var(--glycine);outline-offset:2px}
   @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+  /* ==================================================================
+     LE FIL DE CERISIER — l'element signature de cette page.
+     Chaque etape est un bourgeon qui S'OUVRE une fois franchie. Le
+     choix n'est pas decoratif : l'identite de l'addon est faite de
+     fleurs de cerisier, et une progression qui fleurit dit exactement
+     ce qu'elle montre.
+     ACCESSIBILITE : la fleur ne porte JAMAIS l'information seule. Chaque
+     etape affiche son numero, son nom, et son etat est annonce par
+     aria-current. Un daltonien, un lecteur d'ecran et un ecran
+     monochrome lisent la meme chose.
+     ================================================================== */
+  .branche{position:relative;display:flex;justify-content:space-between;gap:4px;
+           margin:0 auto 30px;max-width:760px;padding:0 6px}
+  /* Le rameau passe DERRIERE les fleurs, a la hauteur de leur coeur. */
+  .rameau{position:absolute;left:24px;right:24px;top:17px;height:1px;
+          background:linear-gradient(90deg,transparent,var(--trait) 8%,var(--trait) 92%,transparent)}
+  .fleur{position:relative;background:none;border:0;padding:0;cursor:pointer;
+         display:flex;flex-direction:column;align-items:center;gap:7px;flex:1;
+         font:inherit;color:var(--pale)}
+  .fleur:focus-visible{outline:2px solid var(--glycine);outline-offset:4px;border-radius:8px}
+  .corolle{position:relative;width:34px;height:34px;display:block;
+           background:var(--nuit);border-radius:50%}
+  /* Cinq petales, disposes en couronne. Fermes par defaut : reduits vers le
+     coeur et transparents, ils ne « fleurissent » qu'une fois l'etape faite. */
+  .corolle i{position:absolute;left:50%;top:50%;width:11px;height:11px;
+             margin:-5.5px 0 0 -5.5px;border-radius:60% 0 60% 0;
+             background:var(--trait);transform-origin:50% 50%;
+             transform:rotate(var(--a)) translateY(0) scale(.42);opacity:.55;
+             transition:transform .34s cubic-bezier(.34,1.4,.5,1),opacity .34s,background .34s}
+  .corolle i:nth-child(1){--a:0deg}   .corolle i:nth-child(2){--a:72deg}
+  .corolle i:nth-child(3){--a:144deg} .corolle i:nth-child(4){--a:216deg}
+  .corolle i:nth-child(5){--a:288deg}
+  .corolle b{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;
+             border-radius:50%;background:var(--trait);transition:background .34s}
+  .fleur[aria-current="step"] .corolle i{transform:rotate(var(--a)) translateY(-7px) scale(.86);
+                                          opacity:1;background:var(--glycine)}
+  .fleur[aria-current="step"] .corolle b{background:var(--lune)}
+  .fleur.faite .corolle i{transform:rotate(var(--a)) translateY(-8px) scale(1);
+                          opacity:1;background:var(--sakura)}
+  .fleur.faite .corolle b{background:var(--lune)}
+  .etiq{display:flex;align-items:center;gap:5px;font-size:12px;letter-spacing:.03em;
+        white-space:nowrap}
+  .num{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;
+       border:1px solid var(--trait);font-size:9.5px;font-variant-numeric:tabular-nums}
+  .fleur[aria-current="step"] .etiq{color:var(--lune)}
+  .fleur[aria-current="step"] .num{border-color:var(--glycine);color:var(--glycine-clair)}
+  .fleur.faite .etiq{color:var(--doux)}
+  .fleur.faite .num{border-color:var(--sakura);color:var(--sakura)}
+  @media (max-width:640px){ .etiq span+*, .fleur .etiq{font-size:0}
+                            .num{font-size:9.5px} .rameau{top:17px} }
+  @media (prefers-reduced-motion:reduce){ .corolle i{transition:none} }
+
+  /* --- Le pas : navigation entre etapes ------------------------------ */
+  .pas{display:flex;align-items:center;justify-content:space-between;gap:14px;
+       max-width:760px;margin:26px auto 0;padding-top:20px;border-top:1px solid var(--trait-doux)}
+  .position{color:var(--pale);font-size:12.5px;letter-spacing:.04em;margin:0}
+  .etape[hidden]{display:none}
+  /* En etroit, le libelle de position se coinçait entre les deux boutons et se
+     brisait sur deux lignes. Il passe dessous, ou il a la place d'etre lu. */
+  @media (max-width:560px){
+    .pas{flex-wrap:wrap;justify-content:space-between}
+    .position{order:3;width:100%;text-align:center;margin-top:14px}
+  }
+  .colonnes{display:block}
+  main{max-width:760px;margin:0 auto}
 </style>
 </head>
 <body>
 <div class="page">
 
   <div class="enseigne">
-    <img src="/logo.png" alt="" width="72" height="72">
+    <img src="/marque.png" alt="" width="76" height="76">
     <div>
       <h1>Dramallyu</h1>
       <p>Dramas asiatiques et films, sous-titres francais en priorite.</p>
     </div>
   </div>
 
+  <nav class="branche" aria-label="Etapes de l installation">
+    <span class="rameau" aria-hidden="true"></span>
+      <button type="button" class="fleur" data-va="1" aria-current="step">
+        <span class="corolle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><b></b></span>
+        <span class="etiq"><span class="num">1</span>Comptes</span>
+      </button>
+      <button type="button" class="fleur" data-va="2">
+        <span class="corolle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><b></b></span>
+        <span class="etiq"><span class="num">2</span>Trackers</span>
+      </button>
+      <button type="button" class="fleur" data-va="3">
+        <span class="corolle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><b></b></span>
+        <span class="etiq"><span class="num">3</span>Langues</span>
+      </button>
+      <button type="button" class="fleur" data-va="4">
+        <span class="corolle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><b></b></span>
+        <span class="etiq"><span class="num">4</span>Preferences</span>
+      </button>
+      <button type="button" class="fleur" data-va="5">
+        <span class="corolle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><b></b></span>
+        <span class="etiq"><span class="num">5</span>Sources</span>
+      </button>
+      <button type="button" class="fleur" data-va="6">
+        <span class="corolle" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><b></b></span>
+        <span class="etiq"><span class="num">6</span>Lien</span>
+      </button>
+  </nav>
+
+
   <div class="colonnes">
-
     <main>
-      <div class="note" id="banniere-restauration" hidden>
-        <strong>Configuration existante rechargee.</strong>
-        Vos reglages sont revenus et vos comptes restent relies :
-        <strong>rien a ressaisir</strong>. Modifiez ce que vous voulez, puis
-        regenerez votre lien.
-      </div>
-
-      <div class="note">
-        <strong>Vous pouvez installer sans rien remplir.</strong>
-        KissKH et VoirDrama fonctionnent sans aucune cle. Tout ce qui suit ajoute des
-        sources — a vous de voir jusqu'ou vous allez.
-      </div>
-
-      <section class="bloc">
+      <div class="etape" data-etape="1">
+        <section class="bloc">
         <header>
-          <span class="rang">01</span>
           <h2>Debrideur</h2>
           <span class="facultatif">Facultatif</span>
         </header>
@@ -262,10 +347,10 @@
           si un torrent est deja en cache.
         </p>
       </section>
-
-      <section class="bloc">
+      </div>
+      <div class="etape" data-etape="2" hidden>
+        <section class="bloc">
         <header>
-          <span class="rang">02</span>
           <h2>Indexeurs de torrents</h2>
           <span class="facultatif">Facultatif</span>
         </header>
@@ -316,10 +401,26 @@
         </div>
         <div class="verdict" id="v-dpeers"></div>
       </section>
-
-      <section class="bloc">
+      </div>
+      <div class="etape" data-etape="3" hidden>
+        <section class="bloc">
         <header>
-          <span class="rang">03</span>
+          <h2>Langues de sous-titres</h2>
+        </header>
+        <p class="chapeau">
+          Par ordre de preference. La premiere sert aussi a classer les flux : mettre le
+          francais en tete remonte les VOSTFR et les VF.
+        </p>
+
+        <div class="ajout-langue">
+          <select id="choix-langue" aria-label="Langue a ajouter"></select>
+          <button type="button" class="btn" id="ajouter-langue">Ajouter</button>
+        </div>
+        <ul class="langues" id="langues"></ul>
+        <div class="vide" id="langues-vides" hidden>Aucune langue choisie : le francais sera utilise.</div>
+      </section>
+        <section class="bloc">
+        <header>
           <h2>TMDB</h2>
           <span class="facultatif">Facultatif</span>
         </header>
@@ -337,28 +438,10 @@
         </div>
         <div class="verdict" id="v-tmdb"></div>
       </section>
-
-      <section class="bloc">
+      </div>
+      <div class="etape" data-etape="4" hidden>
+        <section class="bloc">
         <header>
-          <span class="rang">04</span>
-          <h2>Langues de sous-titres</h2>
-        </header>
-        <p class="chapeau">
-          Par ordre de preference. La premiere sert aussi a classer les flux : mettre le
-          francais en tete remonte les VOSTFR et les VF.
-        </p>
-
-        <div class="ajout-langue">
-          <select id="choix-langue" aria-label="Langue a ajouter"></select>
-          <button type="button" class="btn" id="ajouter-langue">Ajouter</button>
-        </div>
-        <ul class="langues" id="langues"></ul>
-        <div class="vide" id="langues-vides" hidden>Aucune langue choisie : le francais sera utilise.</div>
-      </section>
-
-      <section class="bloc">
-        <header>
-          <span class="rang">05</span>
           <h2>Ce que vous voulez voir</h2>
         </header>
 
@@ -416,10 +499,8 @@
 
         
       </section>
-
-      <section class="bloc">
+        <section class="bloc">
         <header>
-          <span class="rang">06</span>
           <h2>Filtres avances</h2>
           <span class="facultatif">Facultatif</span>
         </header>
@@ -476,19 +557,17 @@
         <input type="text" id="maxResults" value="40" inputmode="numeric" style="max-width:120px">
         <p class="indice">0 = pas de limite de votre cote.</p>
       </section>
-
-      <section class="bloc">
+      </div>
+      <div class="etape" data-etape="5" hidden>
+        <section class="bloc">
         <header>
-          <span class="rang">07</span>
           <h2>Sources</h2>
         </header>
         <p class="chapeau">Tout decocher revient a tout activer.</p>
         <div class="pastilles" id="sources-choix"></div>
       </section>
-
-      <section class="bloc">
+        <section class="bloc">
         <header>
-          <span class="rang">08</span>
           <h2>Reglages techniques</h2>
           <span class="facultatif">A ne toucher qu'en connaissance de cause</span>
         </header>
@@ -528,10 +607,9 @@
           </div>
         </details>
       </section>
+      </div>
+      <div class="etape" data-etape="6" hidden>
 
-    </main>
-
-    <aside class="rail">
       <div class="bloc">
         <header><h2>Ce qui tournera pour vous</h2></header>
         <p class="chapeau" style="margin-bottom:10px">
@@ -567,9 +645,17 @@
         deja, desinstallez-le d'abord : Nuvio garde en cache la liste des ressources et
         ne verrait pas les sous-titres autrement.
       </div>
-    </aside>
-
+    
+      </div>
+    </main>
   </div>
+
+  <footer class="pas">
+    <button type="button" class="btn" id="precedent">Precedent</button>
+    <p class="position" id="position" role="status"></p>
+    <button type="button" class="btn principal" id="suivant">Continuer</button>
+  </footer>
+
 </div>
 
 <script>
@@ -1021,6 +1107,62 @@ rendreFormats();
 brancherBascules();
 restaurer();
 rafraichirApercu();
+
+/* ---------------------------------------------------------------------------
+   L'ASSISTANT.
+   Six etapes, mais aucune n'est un peage : le fil est cliquable, et quelqu'un
+   qui revient changer un seul reglage saute directement ou il veut. Un
+   assistant qui oblige a tout reparcourir est un formulaire deguise.
+   --------------------------------------------------------------------------- */
+var NOMS_ETAPES = ['Vos debrideurs', 'Vos indexeurs', 'Sous-titres et fiches',
+                   'Ce que vous verrez', 'Ce qui tournera', 'Votre lien'];
+var TOTAL = NOMS_ETAPES.length;
+var etape = 1;
+
+function montrer(n, deplacer) {
+  etape = Math.min(Math.max(n, 1), TOTAL);
+
+  document.querySelectorAll('.etape').forEach(function (e) {
+    e.hidden = Number(e.dataset.etape) !== etape;
+  });
+
+  document.querySelectorAll('.fleur').forEach(function (f) {
+    var i = Number(f.dataset.va);
+    // « faite » signifie franchie, pas remplie : on ne peut pas savoir si
+    // quelqu'un a VOULU laisser une etape vide, et beaucoup sont facultatives.
+    f.classList.toggle('faite', i < etape);
+    if (i === etape) f.setAttribute('aria-current', 'step');
+    else f.removeAttribute('aria-current');
+  });
+
+  $('position').textContent = 'Etape ' + etape + ' sur ' + TOTAL + ' — ' + NOMS_ETAPES[etape - 1];
+  $('precedent').disabled = etape === 1;
+  $('suivant').textContent = etape === TOTAL ? 'Terminer' : 'Continuer';
+  $('suivant').disabled = etape === TOTAL;
+
+  // L'apercu vit dans la derniere etape : il doit etre a jour quand on y arrive.
+  if (etape === TOTAL) rafraichirApercu();
+
+  if (deplacer !== false) {
+    var haut = document.querySelector('.branche');
+    if (haut) haut.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+document.querySelectorAll('.fleur').forEach(function (f) {
+  f.addEventListener('click', function () { montrer(Number(f.dataset.va)); });
+});
+$('precedent').addEventListener('click', function () { montrer(etape - 1); });
+$('suivant').addEventListener('click', function () { montrer(etape + 1); });
+
+/* Les fleches gauche/droite parcourent le fil quand il a le focus : une
+   navigation au clavier qui suit la forme de ce qu'on voit. */
+document.querySelector('.branche').addEventListener('keydown', function (e) {
+  if (e.key === 'ArrowRight') { montrer(etape + 1); e.preventDefault(); }
+  if (e.key === 'ArrowLeft') { montrer(etape - 1); e.preventDefault(); }
+});
+
+montrer(1, false);
 </script>
 </body>
 </html>
