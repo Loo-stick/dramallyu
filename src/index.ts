@@ -9,6 +9,7 @@ import rateLimit from 'express-rate-limit';
 import * as path from 'path';
 
 import { getManifest } from './routes/manifest';
+import { getBaseUrl } from './core/url';
 import { handleStream } from './routes/stream';
 import { handleSubtitles, handleServeSub } from './routes/subtitles';
 import { handleCatalog } from './routes/catalog';
@@ -114,10 +115,24 @@ app.use(limiter);
 // Chaque ressource existe en deux formes : sans config (decouverte, AIOStreams) et
 // avec le segment de config de l'utilisateur.
 
-const manifest = (_req: express.Request, res: express.Response): void => {
+const manifest = (req: express.Request, res: express.Response): void => {
   // JAMAIS gate : un manifeste protege rend l'addon inagregeable par AIOStreams.
-  res.json(getManifest());
+  res.json(getManifest(getBaseUrl(req)));
 };
+
+/**
+ * Logo de l'addon.
+ *
+ * Servi par une route dediee plutot que par un dossier statique ouvert : `src/web`
+ * contient aussi les pages d'administration et de configuration, qu'on n'a aucune
+ * raison d'exposer au telechargement direct.
+ *
+ * Il ne change qu'a la main : un an de cache, et les clients cessent de le redemander.
+ */
+app.get('/logo.png', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  res.sendFile(path.join(WEB_DIR, 'logo.png'));
+});
 app.get('/manifest.json', manifest);
 app.get('/:config/manifest.json', manifest);
 

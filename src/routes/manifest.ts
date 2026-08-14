@@ -28,7 +28,15 @@ export interface Manifest {
   behaviorHints: { configurable: boolean; configurationRequired: boolean };
 }
 
-export function getManifest(): Manifest {
+/**
+ * Manifeste.
+ *
+ * `baseUrl` sert a construire l'adresse ABSOLUE du logo : Stremio l'affiche depuis son
+ * interface, pas depuis notre domaine, et un chemin relatif y pointerait sur lui-meme.
+ * Il reste facultatif — un manifeste sans logo est valide, et mieux vaut un addon sans
+ * illustration qu'un addon illisible.
+ */
+export function getManifest(baseUrl?: string): Manifest {
   const catalogs = COUNTRY_CATALOGS.map((c) => ({
     type: c.type,
     id: c.id,
@@ -40,6 +48,7 @@ export function getManifest(): Manifest {
     id: ADDON_ID,
     version: ADDON_VERSION,
     name: 'Dramallyu',
+    ...(baseUrl ? { logo: `${baseUrl}/logo.png` } : {}),
     description:
       'Dramas asiatiques (coreens, chinois, thailandais, japonais) et films : agregateur multi-sources ' +
       'avec sous-titres francais en priorite. Sources directes sans aucune cle, plus torrents et DDL ' +
