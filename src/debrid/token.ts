@@ -31,6 +31,17 @@ export interface ResolvePayload {
    * hors de proportion.
    */
   t?: string;
+  /**
+   * MediaFlow de l'utilisateur, transporte pour que le Play puisse router.
+   *
+   * `/resolve` ne porte volontairement AUCUN segment de configuration — c'est ce qui
+   * evite de repandre les cles dans les URL de lecture. Le jeton, lui, est chiffre :
+   * c'est le seul endroit ou ces deux valeurs peuvent voyager sans etre exposees.
+   */
+  mu?: string;
+  mp?: string;
+  /** Ce que l'utilisateur veut faire passer par son MediaFlow. */
+  mq?: ('ad' | 'tb' | 'direct')[];
   /** Preference de debrideur, pour que le Play respecte le reglage. */
   pref?: 'auto' | 'alldebrid' | 'torbox';
   /** Expiration (epoch ms). */
@@ -82,7 +93,8 @@ export function encodeToken(payload: Omit<ResolvePayload, 'exp'>): string {
   // Sans TOKEN_SECRET, le chiffrement est impossible. On signe alors un contenu SANS
   // aucune cle : le flux devient injouable, mais rien ne fuit. Mieux vaut un lien
   // mort qu'un lien qui distribue les cles de l'utilisateur.
-  const sansCles: ResolvePayload = { ...full, ad: undefined, tb: undefined };
+  // Le mot de passe MediaFlow tombe avec les autres : signer n'est pas chiffrer.
+  const sansCles: ResolvePayload = { ...full, ad: undefined, tb: undefined, mp: undefined };
   const body = Buffer.from(JSON.stringify(sansCles), 'utf-8').toString('base64url');
   return `${body}.${sign(body)}`;
 }

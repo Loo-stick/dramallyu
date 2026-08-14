@@ -73,7 +73,13 @@
   label{display:block;font-size:12.5px;font-weight:650;margin:14px 0 6px}
   label:first-of-type{margin-top:0}
   .indice{color:var(--pale);font-size:12px;margin-top:6px;font-weight:400}
-  input[type=text],input[type=password],select{
+  /* Liste EXPLICITE, et non une exclusion `:not()`. La tentation etait de cibler
+     « tout sauf les cases », pour qu'un type ajoute plus tard soit couvert d'office.
+     Mais trois `:not([type=…])` pesent plus lourd que `input.mono` : la regle gagnait
+     alors sur la police, et les champs de cle perdaient leur monospace sans que rien
+     ne le signale. Une liste a tenir vaut mieux qu'une specificite qui derape.
+     `url` y figure depuis le champ MediaFlow, qui tombait sur le rendu brut. */
+  input[type=text],input[type=password],input[type=url],select{
     width:100%;font:inherit;color:var(--texte);background:var(--nuit);
     border:1px solid var(--trait);border-radius:10px;padding:10px 12px;outline:none;
     transition:border-color .15s,box-shadow .15s;
@@ -400,6 +406,54 @@
           si un torrent est deja en cache.
         </p>
       </section>
+
+      <details class="bloc repli">
+      <summary>
+        <span class="chevron" aria-hidden="true"></span>
+        <h2>Votre MediaFlow</h2>
+        <span class="facultatif">Facultatif</span>
+      </summary>
+      <div class="dedans">
+        <p class="chapeau">
+          MediaFlow Proxy fait sortir vos lectures par <strong>une seule adresse IP</strong>,
+          la sienne. C'est utile si vous partagez un compte debrid : sans lui, chaque
+          personne consomme les liens depuis sa propre adresse, ce qu'AllDebrid
+          sanctionne. Il sert aussi aux flux qui exigent un en-tete, que certains
+          lecteurs perdent en cours de route.
+        </p>
+        <p class="indice">
+          <strong>C'est le votre, pas le notre.</strong> Le mot de passe se retrouve dans
+          l'adresse de lecture remise a votre lecteur : un MediaFlow partage par
+          l'hebergeur distribuerait le sien a tout le monde.
+          <a href="https://github.com/mhdzumair/mediaflow-proxy" target="_blank" rel="noopener">Installer MediaFlow Proxy</a>.
+        </p>
+
+        <label for="mfpUrl" style="margin-top:16px">Adresse de votre MediaFlow</label>
+        <input type="url" id="mfpUrl" class="mono" autocomplete="off" placeholder="https://mon-mediaflow.exemple.org">
+
+        <label for="mfpPass">Mot de passe</label>
+        <input type="password" id="mfpPass" class="mono" autocomplete="off" placeholder="laissez vide si vous n'en avez pas">
+
+        <p class="indice" style="margin-top:14px">Ce qui doit y passer :</p>
+        <label class="pastille" data-bascule="mfp-ad" style="margin:0 0 8px">
+          <input type="checkbox" id="mfp-ad">
+          <span class="signe">+</span><span>Mes liens AllDebrid</span>
+        </label>
+        <label class="pastille" data-bascule="mfp-tb" style="margin:0 0 8px">
+          <input type="checkbox" id="mfp-tb">
+          <span class="signe">+</span><span>Mes liens TorBox</span>
+        </label>
+        <label class="pastille" data-bascule="mfp-direct" style="margin:0 0 8px">
+          <input type="checkbox" id="mfp-direct">
+          <span class="signe">+</span><span>Les flux directs qui exigent un en-tete</span>
+        </label>
+        <p class="indice">
+          Rien n'y passe tant que vous n'avez rien coche, meme avec une adresse
+          renseignee : router un flux qui n'en a pas besoin ajoute une latence et une
+          panne possible pour rien. Le cas courant est de ne cocher qu'AllDebrid.
+        </p>
+      </div>
+      </details>
       </div>
       <div class="etape" data-etape="2" hidden>
         <section class="bloc">
@@ -868,7 +922,14 @@ function configActuelle(){
   var cfg = {};
   // Un champ vide veut dire « garde ce que tu as » : le serveur reconduit la cle via
   // _precedent. Aucune valeur d'affichage ne circule.
-  ['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
+  ['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces','mfpUrl','mfpPass'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
+  // Ce qui passe par le MediaFlow de l'utilisateur. Liste vide = rien n'y passe,
+  // meme si l'adresse est renseignee — c'est le defaut, et il est volontaire.
+  var mfpPour = [];
+  if ($('mfp-ad').checked) mfpPour.push('ad');
+  if ($('mfp-tb').checked) mfpPour.push('tb');
+  if ($('mfp-direct').checked) mfpPour.push('direct');
+  if (mfpPour.length) cfg.mfpPour = mfpPour;
   if (valeur('pseudo')) cfg.pseudo = valeur('pseudo');
   if (choisies.length) cfg.subLangs = choisies;
   if (formatsExclus.length) cfg.excludeFormats = formatsExclus;
@@ -1056,7 +1117,7 @@ $('copier').addEventListener('click', function(){
 });
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
-['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces','pseudo','frOnly','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
+['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces','pseudo','mfpUrl','mfpPass','mfp-ad','mfp-tb','mfp-direct','frOnly','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
  'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);

@@ -47,6 +47,20 @@ export interface UserConfig {
   /** Cle TMDB (optionnelle : enrichit en FR, sinon on sert Cinemeta + KissKH). */
   tmdb?: string;
   /**
+   * Adresse du MediaFlow Proxy de L'UTILISATEUR, et son mot de passe.
+   *
+   * Pourquoi par-utilisateur et non par-serveur : le mot de passe finit dans l'URL de
+   * lecture remise au lecteur (`api_password=`). Un MediaFlow d'operateur le
+   * distribuerait donc a tout le monde. Chacun apporte le sien, comme pour les
+   * debrideurs et les trackers — et l'operateur ne prete toujours rien.
+   *
+   * A quoi ça sert : faire sortir les liens par UNE seule adresse IP. Un compte
+   * AllDebrid partage a plusieurs voit sinon ses liens consommes depuis autant d'IP
+   * differentes, ce qu'AllDebrid sanctionne.
+   */
+  mfpUrl?: string;
+  mfpPass?: string;
+  /**
    * Identifiant technique, genere une fois et jamais reutilise.
    *
    * C'est LUI qui identifie une installation dans les journaux, pas le pseudo. Un
@@ -145,6 +159,8 @@ export interface UserConfig {
    * qui n'utilisent que lui peuvent reactiver l'option en connaissance de cause.
    */
   subsSurFlux: boolean;
+  /** Ce qui transite par le MediaFlow de l'utilisateur : 'ad', 'tb', 'direct'. */
+  mfpPour: ('ad' | 'tb' | 'direct')[];
 }
 
 export const DEFAULT_CONFIG: UserConfig = {
@@ -168,6 +184,19 @@ export const DEFAULT_CONFIG: UserConfig = {
   envoyerTorrent: false,
   bonusHdr: false,
   subsSurFlux: false,
+  /**
+   * Ce qui passe par le MediaFlow de l'utilisateur, quand il en a declare un.
+   *
+   * Rien par defaut, meme avec un MediaFlow renseigne : router un flux qui n'en a pas
+   * besoin fait payer de la latence et de la bande passante pour rien. On choisit.
+   *
+   * - `ad`     : les liens AllDebrid (le cas qui motive tout le reste)
+   * - `tb`     : les liens TorBox
+   * - `direct` : les sources directes qui EXIGENT des en-tetes. Stremio n'applique pas
+   *              toujours `proxyHeaders` aux segments HLS, seulement a la requete
+   *              initiale ; MediaFlow, lui, les reinjecte sur chaque segment.
+   */
+  mfpPour: [],
 };
 
 /**
@@ -179,7 +208,12 @@ export const DEFAULT_CONFIG: UserConfig = {
  * testee avec succes, puis silencieusement absente du lien genere. C'est exactement ce
  * qui est arrive a G3mini et DigitalCore.
  */
-export const CHAMPS_CLES = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore', 'ygg', 'dpeers', 'acces'] as const;
+export const CHAMPS_CLES = [
+  'ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore', 'ygg', 'dpeers', 'acces',
+  // L'adresse n'est pas un secret, le mot de passe si — et les deux n'ont de sens
+  // qu'ensemble. Les traiter pareil evite qu'on chiffre l'un en oubliant l'autre.
+  'mfpUrl', 'mfpPass',
+] as const;
 export type ChampCle = (typeof CHAMPS_CLES)[number];
 
 const KEY_FIELDS = CHAMPS_CLES;
@@ -281,6 +315,12 @@ export function parseConfig(raw?: string | null): UserConfig {
 
   cfg.cachedOnly = o.cachedOnly === true;
   cfg.subsSurFlux = o.subsSurFlux === true;
+  // On ne retient que des valeurs connues : un lien fabrique a la main ne doit pas
+  // pouvoir injecter n'importe quoi dans une liste qu'on relit ensuite.
+  const connus = ['ad', 'tb', 'direct'] as const;
+  cfg.mfpPour = Array.isArray(o.mfpPour)
+    ? (o.mfpPour.filter((x: unknown) => connus.includes(x as never)) as ('ad' | 'tb' | 'direct')[])
+    : [];
   cfg.excludeCam = o.excludeCam === true;
   cfg.frOnly = o.frOnly === true;
   cfg.envoyerTorrent = o.envoyerTorrent === true;

@@ -513,15 +513,20 @@ async function repondre(
         // en-tetes sur chaque segment.
         //
         // MAIS uniquement dans ce cas : router aussi les flux SANS en-tete ferait
-        // transiter toute la bande passante par le serveur, sans rien resoudre.
-        // Et si MediaFlow n'est pas configure, throughMediaflow rend l'URL telle
-        // quelle — l'addon reste fonctionnel, avec les proxyHeaders pour seul recours.
+        // transiter de la video pour rien. Et si l'utilisateur n'a pas de MediaFlow,
+        // ou ne l'a pas demande ici, `throughMediaflow` rend l'URL telle quelle —
+        // l'addon reste fonctionnel, avec les proxyHeaders pour seul recours.
         const needsHeaders = c.headers && Object.keys(c.headers).length > 0;
-        const playUrl = needsHeaders ? throughMediaflow(c.directUrl, c.headers) : c.directUrl;
+        const playUrl = needsHeaders
+          ? throughMediaflow(c.directUrl, 'direct', config, c.headers)
+          : c.directUrl;
         return toStremioStream(c, { playUrl, sousTitres: pistesDe(c), ...identite });
       }
       // Torrent ou DDL : on differe la resolution au moment du Play.
       const token = encodeToken({
+        mu: config.mfpUrl,
+        mp: config.mfpPass,
+        mq: config.mfpPour,
         k: c.kind === 'torrent' ? 'torrent' : 'ddl',
         v: c.kind === 'torrent' ? (c.infoHash || c.magnet || '') : (c.ddlUrl || ''),
         f: c.fileHint,

@@ -43,6 +43,10 @@ export interface ResolveRequest {
   torrentUrl?: string;
   ad?: string;
   tb?: string;
+  /** MediaFlow de l'utilisateur, tel qu'il voyage dans le jeton de lecture. */
+  mfpUrl?: string;
+  mfpPass?: string;
+  mfpPour?: ('ad' | 'tb' | 'direct')[];
   /** Preference de l'utilisateur, transportee dans le jeton de lecture. */
   pref?: 'auto' | 'alldebrid' | 'torbox';
 }
@@ -134,7 +138,11 @@ export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promis
           ? await service.resolveTorrent(req.value, req.fileHint, signal, req.torrentUrl)
           : await service.resolveDdl(req.value, signal);
       if (!link) continue;
-      return service.name === 'alldebrid' ? throughMediaflow(link) : link;
+      // Chaque debrideur a son propre interrupteur : le compte partage n'est pas
+      // toujours le meme, et router TorBox quand seul AllDebrid pose probleme ferait
+      // transiter de la video pour rien.
+      const mfp = { mfpUrl: req.mfpUrl, mfpPass: req.mfpPass, mfpPour: req.mfpPour } as UserConfig;
+      return throughMediaflow(link, service.name === 'alldebrid' ? 'ad' : 'tb', mfp);
     } catch (e) {
       console.log(`[Resolveur] ${service.name}: ${(e as Error).message.slice(0, 100)}`);
     }
