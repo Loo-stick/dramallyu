@@ -231,12 +231,6 @@ test('AUCUN reglage ne peut etre oublie a la generation du lien', () => {
 
 
 
-test('les sous-titres integres sont desactives par defaut', () => {
-  // Experimental : rien ne garantit qu'un lecteur donne accepte une URL « data: »
-  // pour un sous-titre. Le defaut doit donc etre le comportement eprouve.
-  assert.equal(parseConfig(encodeConfig({})).sousTitresIntegres, false);
-  assert.equal(parseConfig(encodeConfig({ sousTitresIntegres: true })).sousTitresIntegres, true);
-});
 
 test('l envoi du .torrent est DESACTIVE par defaut', () => {
   // Ce reglage engage un compte qui n'appartient pas a l'addon : le tracker compte le

@@ -514,16 +514,7 @@
           et la liste se decale — vous cliquez sur une langue et c'en est une autre qui
           s'affiche. Constate en usage reel.
         </p>
-<label class="pastille" data-bascule="sousTitresIntegres" style="margin:10px 0 0">
-          <input type="checkbox" id="sousTitresIntegres">
-          <span class="signe">+</span><span>Envoyer le texte des sous-titres d'un seul coup</span>
-        </label>
-        <p class="indice">
-          Fait gagner environ deux dixiemes de seconde a l'affichage des sous-titres, en
-          evitant un aller-retour. Tous les lecteurs ne l'acceptent pas. <strong>Si vos
-          sous-titres cessent d'apparaitre, decochez</strong> : tout revient a l'etat
-          precedent. Inutile si vos sous-titres arrivent deja instantanement.
-        </p>
+
           </div>
         </details>
       </section>
@@ -718,7 +709,6 @@ function configActuelle(){
   if ($('bonusHdr').checked) cfg.bonusHdr = true;
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
   if ($('subsSurFlux').checked) cfg.subsSurFlux = true;
-  if ($('sousTitresIntegres').checked) cfg.sousTitresIntegres = true;
   if ($('priorite').value !== 'aucune') cfg.priorite = $('priorite').value;
   if ($('debrid').value !== 'auto') cfg.debrid = $('debrid').value;
   if (valeur('minResolution')) cfg.minResolution = valeur('minResolution');
@@ -890,7 +880,7 @@ $('copier').addEventListener('click', function(){
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
 ['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','frOnly','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
- 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux','sousTitresIntegres'].forEach(function(id){
+ 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);
 });

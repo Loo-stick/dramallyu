@@ -116,19 +116,6 @@ export interface UserConfig {
    * qui n'utilisent que lui peuvent reactiver l'option en connaissance de cause.
    */
   subsSurFlux: boolean;
-  /**
-   * Glisser le CONTENU du sous-titre dans la reponse, au lieu d'une adresse.
-   *
-   * Le lecteur demande d'abord la liste des pistes, puis le fichier : deux
-   * allers-retours en serie, ~373 ms mesures depuis la France derriere Cloudflare. Une
-   * URL `data:` supprime le second — le texte arrive AVEC la liste.
-   *
-   * EXPERIMENTAL, d'ou le defaut a faux : rien ne garantit qu'un lecteur donne accepte
-   * une URL `data:` pour un sous-titre. Stremio n'en a pas besoin (il lit les pistes
-   * attachees au flux), Nuvio reste a verifier — c'est justement ce que ce reglage
-   * permet d'essayer sans rien casser.
-   */
-  sousTitresIntegres: boolean;
 }
 
 export const DEFAULT_CONFIG: UserConfig = {
@@ -152,7 +139,6 @@ export const DEFAULT_CONFIG: UserConfig = {
   envoyerTorrent: false,
   bonusHdr: false,
   subsSurFlux: false,
-  sousTitresIntegres: false,
 };
 
 /**
@@ -258,7 +244,6 @@ export function parseConfig(raw?: string | null): UserConfig {
 
   cfg.cachedOnly = o.cachedOnly === true;
   cfg.subsSurFlux = o.subsSurFlux === true;
-  cfg.sousTitresIntegres = o.sousTitresIntegres === true;
   cfg.excludeCam = o.excludeCam === true;
   cfg.frOnly = o.frOnly === true;
   cfg.envoyerTorrent = o.envoyerTorrent === true;
