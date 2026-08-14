@@ -273,6 +273,31 @@
   }
   .colonnes{display:block}
   main{max-width:760px;margin:0 auto}
+
+  /* --- Blocs depliables ---------------------------------------------
+     Un reglage neutre par defaut n'a pas a occuper huit cents pixels :
+     on le propose, on ne l'impose pas a la lecture. L'entete existante
+     sert de resume — c'est deja le bon libelle. */
+  .repli{padding:0}
+  .repli > summary{display:flex;align-items:center;gap:11px;cursor:pointer;
+                   padding:17px 20px;list-style:none;border-radius:14px}
+  .repli > summary::-webkit-details-marker{display:none}
+  .repli > summary:hover{background:var(--relief)}
+  .repli > summary:focus-visible{outline:2px solid var(--glycine);outline-offset:-2px}
+  .repli > summary h2{margin:0;flex:1}
+  .repli .dedans{padding:0 20px 20px}
+  .repli[open] > summary{border-bottom:1px solid var(--trait-doux);border-radius:14px 14px 0 0}
+  /* Le chevron tourne : la seule animation de la page, et elle dit l'etat. */
+  .chevron{width:8px;height:8px;border-right:1.6px solid var(--doux);
+           border-bottom:1.6px solid var(--doux);transform:rotate(-45deg);
+           transition:transform .22s ease;flex:0 0 auto;margin-left:2px}
+  .repli[open] > summary .chevron{transform:rotate(45deg)}
+  .repli.nu{border:0;background:none}
+  .repli.nu > summary{padding:12px 0}
+  .repli.nu > summary:hover{background:none;color:var(--glycine-clair)}
+  .repli.nu[open] > summary{border-bottom:0}
+  .repli.nu .dedans{padding:0}
+  @media (prefers-reduced-motion:reduce){ .chevron{transition:none} }
 </style>
 </head>
 <body>
@@ -499,11 +524,13 @@
 
         
       </section>
-        <section class="bloc">
-        <header>
+        <details class="bloc repli">
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
           <h2>Filtres avances</h2>
           <span class="facultatif">Facultatif</span>
-        </header>
+        </summary>
+        <div class="dedans">
         <p class="chapeau">
           Tout est neutre par defaut. Un flux dont l'information n'est pas lisible
           (resolution non annoncee, taille inconnue) passe toujours : on ne masque
@@ -556,16 +583,21 @@
         <label for="maxResults">Nombre maximum de flux affiches</label>
         <input type="text" id="maxResults" value="40" inputmode="numeric" style="max-width:120px">
         <p class="indice">0 = pas de limite de votre cote.</p>
-      </section>
+      </div>
+      </details>
       </div>
       <div class="etape" data-etape="5" hidden>
-        <section class="bloc">
-        <header>
+        <details class="bloc repli" open>
+        <summary>
+          <span class="chevron" aria-hidden="true"></span>
           <h2>Sources</h2>
-        </header>
+          
+        </summary>
+        <div class="dedans">
         <p class="chapeau">Tout decocher revient a tout activer.</p>
         <div class="pastilles" id="sources-choix"></div>
-      </section>
+      </div>
+      </details>
         <section class="bloc">
         <header>
           <h2>Reglages techniques</h2>
@@ -577,9 +609,9 @@
           parce qu'ils ont chacun une consequence reelle que vous devez pouvoir choisir.
         </p>
 
-        <details class="technique">
-          <summary>Afficher les reglages techniques</summary>
-          <div style="padding-top:.8rem">
+        <details class="repli nu">
+          <summary><span class="chevron" aria-hidden="true"></span><h2>Reglages techniques</h2></summary>
+          <div class="dedans">
 <label class="pastille" data-bascule="envoyerTorrent" style="margin:10px 0 0">
           <input type="checkbox" id="envoyerTorrent">
           <span class="signe">+</span><span>Autoriser les telechargements sur vos trackers prives</span>
