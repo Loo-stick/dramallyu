@@ -193,6 +193,24 @@ l'adresse — n'a aucun mecanisme de cle pour lui. Le faire revenir tient en tro
 lignes : une entree dans `settings.torznab`, une ligne dans `torznabSources()`, un
 champ dans la page.
 
+## Remerciements
+
+**[Parsium](https://github.com/NepiRaw/Parsium)**, de **NepiRaw** — le parseur de noms
+de release qui lit la structure de nos candidats : saison, episode, pack de saison, et
+surtout le numero ABSOLU des donghua, qu'on ne savait pas reconnaitre. Il a aussi
+corrige un defaut qu'on ne se connaissait pas : la forme francaise des sites de
+telechargement direct (« Titre - Saison 1 Épisode 4 ») dont nous rations l'episode, si
+bien qu'un episode isole etait annonce comme une saison entiere. Sur quarante titres
+reels de K-drama, l'episode passe de 0 a 33 correctement lus et les faux packs de 36 a
+3. Zero dependance, MIT, et rapide au point que le brancher ne coute rien.
+
+**[MediaFlow Proxy](https://github.com/mhdzumair/mediaflow-proxy)**, de **mhdzumair** —
+que chaque utilisateur peut declarer dans sa configuration pour faire sortir ses
+lectures par une seule adresse IP.
+
+**Cinemeta**, le catalogue de metadonnees de Stremio — public, sans cle, et sans lequel
+l'addon ne serait pas utilisable par quelqu'un qui n'a rien a configurer.
+
 ## Licence
 
 MIT License — voir le fichier [LICENSE](LICENSE).
