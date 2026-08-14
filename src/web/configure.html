@@ -492,7 +492,7 @@
           <summary>Afficher les reglages techniques</summary>
           <div style="padding-top:.8rem">
 <label class="pastille" data-bascule="envoyerTorrent" style="margin:10px 0 0">
-          <input type="checkbox" id="envoyerTorrent" checked>
+          <input type="checkbox" id="envoyerTorrent">
           <span class="signe">+</span><span>Autoriser les telechargements sur vos trackers prives</span>
         </label>
         <p class="indice">
@@ -500,8 +500,9 @@
           debrideur va le chercher sur le tracker <em>en votre nom</em>. Le tracker compte donc
           ce telechargement sur votre compte, avec l'obligation de partage qui va avec (souvent
           ratio 1:1 ou six jours de partage, sous peine de sanction).<br>
-          <strong>Decoche</strong> — vous n'engagez rien. Les flux deja prets marches « ⚡ »
-          fonctionnent normalement ; ceux marques « ⏳ » ne demarreront simplement jamais.
+          <strong>Decoche (par defaut)</strong> — vous n'engagez rien. Les flux deja prets
+          marques « ⚡ » fonctionnent normalement ; ceux marques « ⏳ » ne demarreront
+          simplement jamais.
         </p>
 <label class="pastille" data-bascule="subsSurFlux" style="margin:10px 0 0">
           <input type="checkbox" id="subsSurFlux">
@@ -713,7 +714,7 @@ function configActuelle(){
   if ($('excludeCam').checked) cfg.excludeCam = true;
   if ($('frOnly').checked) cfg.frOnly = true;
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
-  if (!$('envoyerTorrent').checked) cfg.envoyerTorrent = false;
+  if ($('envoyerTorrent').checked) cfg.envoyerTorrent = true;
   if ($('bonusHdr').checked) cfg.bonusHdr = true;
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
   if ($('subsSurFlux').checked) cfg.subsSurFlux = true;

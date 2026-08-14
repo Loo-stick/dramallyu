@@ -82,8 +82,14 @@ export interface UserConfig {
    * par ses propres moyens et le tracker ne voit rien. Mais sur un tracker PRIVE,
    * absent du DHT, un hash nu ne demarre jamais — le depot reste inerte.
    *
-   * Le choix est donc entre « ca fonctionne » et « mon compte n'est pas engage », et
-   * il n'appartient qu'a l'utilisateur.
+   * Le choix est donc entre « ca fonctionne » et « mon compte n'est pas engage ».
+   *
+   * DESACTIVE PAR DEFAUT, et c'est deliberé : ce reglage engage un compte qui
+   * n'appartient pas a l'addon. Personne ne doit decouvrir apres coup que des
+   * telechargements ont ete comptes a son nom sur un tracker prive, avec l'obligation
+   * de partage qui va avec. Le defaut inverse rendait certes l'addon plus complet — les
+   * flux « a debrider » des trackers prives fonctionnaient d'emblee — mais au prix d'un
+   * engagement que l'utilisateur n'avait jamais formule.
    */
   envoyerTorrent: boolean;
   /**
@@ -143,7 +149,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   excludeFormats: [],
   excludeCam: false,
   frOnly: false,
-  envoyerTorrent: true,
+  envoyerTorrent: false,
   bonusHdr: false,
   subsSurFlux: false,
   sousTitresIntegres: false,
@@ -255,8 +261,7 @@ export function parseConfig(raw?: string | null): UserConfig {
   cfg.sousTitresIntegres = o.sousTitresIntegres === true;
   cfg.excludeCam = o.excludeCam === true;
   cfg.frOnly = o.frOnly === true;
-  // Actif par defaut : on ne le desactive que si le champ dit explicitement false.
-  cfg.envoyerTorrent = o.envoyerTorrent !== false;
+  cfg.envoyerTorrent = o.envoyerTorrent === true;
   cfg.bonusHdr = o.bonusHdr === true;
 
   if (o.priorite === 'direct' || o.priorite === 'torrent') cfg.priorite = o.priorite;

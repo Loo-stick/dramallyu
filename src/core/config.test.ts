@@ -229,17 +229,19 @@ test('AUCUN reglage ne peut etre oublie a la generation du lien', () => {
   assert.equal(complet.maxSizeGb, 7);
 });
 
-test('l envoi du .torrent est actif par defaut et se desactive', () => {
-  // Actif par defaut parce que sans lui les trackers prives ne demarrent jamais. Mais
-  // il engage le compte de l'utilisateur (sa passkey voyage dans le .torrent), donc il
-  // doit pouvoir etre coupe — et ce refus doit survivre au lien.
-  assert.equal(parseConfig(encodeConfig({})).envoyerTorrent, true);
-  assert.equal(parseConfig(encodeConfig({ envoyerTorrent: false })).envoyerTorrent, false);
-});
+
 
 test('les sous-titres integres sont desactives par defaut', () => {
   // Experimental : rien ne garantit qu'un lecteur donne accepte une URL « data: »
   // pour un sous-titre. Le defaut doit donc etre le comportement eprouve.
   assert.equal(parseConfig(encodeConfig({})).sousTitresIntegres, false);
   assert.equal(parseConfig(encodeConfig({ sousTitresIntegres: true })).sousTitresIntegres, true);
+});
+
+test('l envoi du .torrent est DESACTIVE par defaut', () => {
+  // Ce reglage engage un compte qui n'appartient pas a l'addon : le tracker compte le
+  // telechargement au nom de l'utilisateur, avec l'obligation de partage qui va avec.
+  // Personne ne doit le decouvrir apres coup.
+  assert.equal(parseConfig(encodeConfig({})).envoyerTorrent, false);
+  assert.equal(parseConfig(encodeConfig({ envoyerTorrent: true })).envoyerTorrent, true);
 });
