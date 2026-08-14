@@ -388,22 +388,23 @@
           <option value="size">Leger (le plus petit fichier d'abord)</option>
         </select>
 
+        <label class="pastille" data-bascule="frOnly" style="margin:10px 0">
+          <input type="checkbox" id="frOnly">
+          <span class="signe">+</span><span>Ecarter ce qui n'a pas de francais</span>
+        </label>
+        <p class="indice">
+          N'ecarte que ce dont l'ABSENCE de francais est etablie : pistes lues dans le
+          fichier, MediaInfo publie par le tracker, ou sous-titres enumeres par la
+          source. Une release sur laquelle on ne sait rien est conservee — mieux vaut un
+          flux de trop qu'un flux francais perdu sans qu'on puisse le savoir.
+        </p>
+
         <label class="pastille" data-bascule="bonusHdr" style="margin:14px 0 0">
           <input type="checkbox" id="bonusHdr">
           <span class="signe">+</span><span>Remonter le HDR a qualite egale</span>
         </label>
 
-        <label class="pastille" data-bascule="subsSurFlux" style="margin:10px 0 0">
-          <input type="checkbox" id="subsSurFlux">
-          <span class="signe">✓</span><span>Attacher les sous-titres au flux</span>
-        </label>
-        <p class="indice">
-          UTILE SUR STREMIO SEULEMENT, qui lit les pistes attachees et s'epargne ainsi
-          un aller-retour. <strong>A laisser decoche sur Nuvio</strong> : il ignore ces
-          pistes mais les compte, si bien qu'elles apparaissent en double et decalent la
-          liste — cliquer sur une piste en selectionne alors une autre. Constate en
-          usage reel.
-        </p>
+        
       </section>
 
       <section class="bloc">
@@ -455,41 +456,11 @@
           <span class="signe">+</span><span>Exclure les captations en salle (CAM, TS)</span>
         </label>
 
-        <label class="pastille" data-bascule="sousTitresIntegres" style="margin:10px 0 0">
-          <input type="checkbox" id="sousTitresIntegres">
-          <span class="signe">+</span><span>Livrer les sous-titres avec la liste (experimental)</span>
-        </label>
-        <p class="indice">
-          Le lecteur demande d'abord la liste des pistes, puis le fichier : deux
-          allers-retours en serie, environ 370 ms. Cette option glisse le TEXTE dans la
-          liste, ce qui supprime le second — mais tous les lecteurs n'acceptent pas ce
-          format. Stremio n'en a pas besoin. A essayer sur Nuvio : si les sous-titres
-          n'apparaissent plus, decochez et tout revient comme avant.
-        </p>
+        
 
-        <label class="pastille" data-bascule="envoyerTorrent" style="margin:10px 0 0">
-          <input type="checkbox" id="envoyerTorrent" checked>
-          <span class="signe">+</span><span>Envoyer le fichier .torrent au debrideur</span>
-        </label>
-        <p class="indice">
-          NECESSAIRE sur les trackers prives : sans lui, un flux « a debrider » ne
-          demarre jamais, faute d'annonceur. MAIS le .torrent contient votre passkey :
-          le debrideur annonce sous votre nom, et le tracker compte le telechargement a
-          votre credit — donc soumis a sa regle de partage (ratio 1:1 ou 144 h de seed).
-          Decochez si vous preferez ne rien engager : vous garderez tous les flux deja
-          prets.
-        </p>
+        
 
-        <label class="pastille" data-bascule="frOnly" style="margin:10px 0 0">
-          <input type="checkbox" id="frOnly">
-          <span class="signe">+</span><span>Ecarter ce qui n'a pas de francais</span>
-        </label>
-        <p class="indice">
-          N'ecarte que ce dont l'ABSENCE de francais est etablie : pistes lues dans le
-          fichier, MediaInfo publie par le tracker, ou sous-titres enumeres par la
-          source. Une release sur laquelle on ne sait rien est conservee — mieux vaut un
-          flux de trop qu'un flux francais perdu sans qu'on puisse le savoir.
-        </p>
+        
 
         <label for="maxResults">Nombre maximum de flux affiches</label>
         <input type="text" id="maxResults" value="40" inputmode="numeric" style="max-width:120px">
@@ -504,6 +475,58 @@
         <p class="chapeau">Tout decocher revient a tout activer.</p>
         <div class="pastilles" id="sources-choix"></div>
       </section>
+
+      <section class="bloc">
+        <header>
+          <span class="rang">08</span>
+          <h2>Reglages techniques</h2>
+          <span class="facultatif">A ne toucher qu'en connaissance de cause</span>
+        </header>
+        <p class="chapeau">
+          Ces trois reglages ne changent pas CE que vous voyez, mais COMMENT c'est
+          transporte. Les valeurs par defaut conviennent a tout le monde ; ils sont ici
+          parce qu'ils ont chacun une consequence reelle que vous devez pouvoir choisir.
+        </p>
+
+        <details class="technique">
+          <summary>Afficher les reglages techniques</summary>
+          <div style="padding-top:.8rem">
+<label class="pastille" data-bascule="envoyerTorrent" style="margin:10px 0 0">
+          <input type="checkbox" id="envoyerTorrent" checked>
+          <span class="signe">+</span><span>Autoriser les telechargements sur vos trackers prives</span>
+        </label>
+        <p class="indice">
+          <strong>Coche</strong> — quand vous lancez un flux marque « a telecharger », votre
+          debrideur va le chercher sur le tracker <em>en votre nom</em>. Le tracker compte donc
+          ce telechargement sur votre compte, avec l'obligation de partage qui va avec (souvent
+          ratio 1:1 ou six jours de partage, sous peine de sanction).<br>
+          <strong>Decoche</strong> — vous n'engagez rien. Les flux deja prets marches « ⚡ »
+          fonctionnent normalement ; ceux marques « ⏳ » ne demarreront simplement jamais.
+        </p>
+<label class="pastille" data-bascule="subsSurFlux" style="margin:10px 0 0">
+          <input type="checkbox" id="subsSurFlux">
+          <span class="signe">✓</span><span>Joindre nos sous-titres au flux — Stremio uniquement</span>
+        </label>
+        <p class="indice">
+          Fait arriver nos sous-titres un peu plus vite, mais seulement sur Stremio.
+          <strong>Sur Nuvio, laissez decoche</strong> : les pistes y apparaissent en double
+          et la liste se decale — vous cliquez sur une langue et c'en est une autre qui
+          s'affiche. Constate en usage reel.
+        </p>
+<label class="pastille" data-bascule="sousTitresIntegres" style="margin:10px 0 0">
+          <input type="checkbox" id="sousTitresIntegres">
+          <span class="signe">+</span><span>Envoyer le texte des sous-titres d'un seul coup</span>
+        </label>
+        <p class="indice">
+          Fait gagner environ deux dixiemes de seconde a l'affichage des sous-titres, en
+          evitant un aller-retour. Tous les lecteurs ne l'acceptent pas. <strong>Si vos
+          sous-titres cessent d'apparaitre, decochez</strong> : tout revient a l'etat
+          precedent. Inutile si vos sous-titres arrivent deja instantanement.
+        </p>
+          </div>
+        </details>
+      </section>
+
     </main>
 
     <aside class="rail">

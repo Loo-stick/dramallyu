@@ -53,6 +53,7 @@ function subUrl(base: string, track: SubTrack): string {
 }
 
 export async function handleSubtitles(req: Request, res: Response): Promise<void> {
+  const debut = Date.now();
   const config = parseConfig((req.params as Record<string, string>).config);
   const type: MediaType = req.params.type === 'movie' ? 'movie' : 'series';
   const parsed = parseStremioId(req.params.id);
@@ -90,8 +91,12 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
 
     // Les sources d'abord (KissKH porte de vraies pistes synchronisees avec SON flux),
     // OpenSubtitles ensuite en complement pour les langues manquantes.
+    let t = Date.now();
     const fromSources = await subtitlesAll(query, config);
-    const missing = config.subLangs.filter((l) => !fromSources.some((t) => t.lang === l));
+    const msSources = Date.now() - t;
+
+    const missing = config.subLangs.filter((l) => !fromSources.some((t2) => t2.lang === l));
+    t = Date.now();
     const external = (
       await Promise.all(
         missing.map((lang) =>
@@ -99,6 +104,7 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
         ),
       )
     ).flat();
+    const msExterne = Date.now() - t;
 
     const base = getBaseUrl(req);
     const seen = new Set<string>();
@@ -182,9 +188,21 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
 
     // CONTENU INTEGRE, sur demande. Supprime le second aller-retour : le texte arrive
     // avec la liste au lieu d'etre reclame ensuite. Cf. `integrer` pour les garde-fous.
+    let msIntegration = 0;
     if (config.sousTitresIntegres) {
+      const t2 = Date.now();
       await integrer(subtitles, retenues);
+      msIntegration = Date.now() - t2;
     }
+
+    // TRACE, comme /stream en a une. Sans elle, ce chemin etait un angle mort : on ne
+    // voyait que ses echecs, jamais sa duree — impossible de savoir si une lenteur
+    // ressentie venait d'ici ou du lecteur.
+    console.log(
+      `[Subtitles] ${req.params.type}/${req.params.id} -> ${subtitles.length} piste(s) ` +
+        `en ${Date.now() - debut}ms (sources=${msSources}ms externe=${msExterne}ms` +
+        `${config.sousTitresIntegres ? ` integration=${msIntegration}ms` : ''})`,
+    );
 
     res.json({ subtitles });
   } catch (e) {
