@@ -136,16 +136,19 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
       // presentent les pistes dans l'ordre reçu.
       .sort((a, b) => rang(a.lang) - rang(b.lang))
       .map((t, i) => ({
-        // Identifiant prefixe par un CHIFFRE, et c'est deliberé.
+        // IDENTIFIANT NEUTRE. Il a porte un prefixe chiffre — « 00-dramallyu » — pour
+        // tenter de remonter dans les lecteurs qui trient les pistes sur ce champ. Je
+        // l'avais annonce sans risque : il ne l'etait pas.
         //
-        // Certains lecteurs presentent les pistes dans l'ordre reçu, d'autres les
-        // trient sur l'id. Dans le second cas, `dramallyu-…` partait derriere a peu
-        // pres tout l'alphabet — un chiffre trie avant les lettres en ASCII, donc nos
-        // pistes remontent. C'est une hypothese, pas une certitude : Nuvio n'est pas
-        // ouvert et rien ne dit qu'il trie sur ce champ. Le pari est sans risque, un
-        // lecteur qui conserve l'ordre reçu ne verra aucune difference. L'id reste
-        // unique et stable, c'est tout ce que le protocole en demande.
-        id: `0${i}-dramallyu`,
+        // Constate en production sur Nuvio : la piste s'AFFICHAIT en tete mais se
+        // SELECTIONNAIT a sa position d'origine. Cliquer sur notre ligne ne donnait
+        // rien, et cliquer sur celle du dessous activait la notre. Un lecteur qui trie
+        // l'affichage sans reordonner ce qu'il selectionne produit exactement ce
+        // decalage — et rien dans le protocole ne lui interdit.
+        //
+        // La lecon vaut au-dela d'ici : un champ qu'on detourne de son role pour
+        // influencer un comportement non specifie finit par en casser un autre.
+        id: `dramallyu-${i}`,
         url: subUrl(base, t),
         lang: t.lang,
         // Meme raison que pour les pistes attachees : Nuvio lit un NOM de langue.

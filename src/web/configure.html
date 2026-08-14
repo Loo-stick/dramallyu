@@ -394,14 +394,15 @@
         </label>
 
         <label class="pastille" data-bascule="subsSurFlux" style="margin:10px 0 0">
-          <input type="checkbox" id="subsSurFlux" checked>
+          <input type="checkbox" id="subsSurFlux">
           <span class="signe">✓</span><span>Attacher les sous-titres au flux</span>
         </label>
         <p class="indice">
-          Nos pistes sont alors proposees AVEC le flux, au lieu d'attendre leur tour
-          derriere vos autres extensions de sous-titres. Elles restent aussi
-          disponibles par la voie habituelle ; selon le lecteur, elles peuvent donc
-          apparaitre en double.
+          UTILE SUR STREMIO SEULEMENT, qui lit les pistes attachees et s'epargne ainsi
+          un aller-retour. <strong>A laisser decoche sur Nuvio</strong> : il ignore ces
+          pistes mais les compte, si bien qu'elles apparaissent en double et decalent la
+          liste — cliquer sur une piste en selectionne alors une autre. Constate en
+          usage reel.
         </p>
       </section>
 
@@ -692,7 +693,7 @@ function configActuelle(){
   if (!$('envoyerTorrent').checked) cfg.envoyerTorrent = false;
   if ($('bonusHdr').checked) cfg.bonusHdr = true;
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
-  if (!$('subsSurFlux').checked) cfg.subsSurFlux = false;
+  if ($('subsSurFlux').checked) cfg.subsSurFlux = true;
   if ($('sousTitresIntegres').checked) cfg.sousTitresIntegres = true;
   if ($('priorite').value !== 'aucune') cfg.priorite = $('priorite').value;
   if ($('debrid').value !== 'auto') cfg.debrid = $('debrid').value;

@@ -100,9 +100,14 @@ export interface UserConfig {
   /**
    * Attacher aussi les sous-titres a l'objet Stream, en plus de la ressource.
    *
-   * Les lecteurs presentent les pistes d'une ressource /subtitles groupees par addon,
-   * et rien ne garantit que les notres arrivent en tete — alors que ce sont celles qui
-   * correspondent au flux qu'on sert. Attachees au flux, elles sont proposees avec lui.
+   * DESACTIVE PAR DEFAUT, et c'est un retour en arriere paye cher. `routes/subtitles.ts`
+   * enonce la regle en tete de fichier : ne jamais servir les pistes par les DEUX
+   * chemins, sinon Nuvio les empile en double. Le defaut disait l'inverse depuis le
+   * debut, et les doublons decalent la liste — cliquer sur une piste en selectionne une
+   * autre.
+   *
+   * Stremio, lui, sait lire les pistes attachees et s'epargne un aller-retour : ceux
+   * qui n'utilisent que lui peuvent reactiver l'option en connaissance de cause.
    */
   subsSurFlux: boolean;
   /**
@@ -140,7 +145,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   frOnly: false,
   envoyerTorrent: true,
   bonusHdr: false,
-  subsSurFlux: true,
+  subsSurFlux: false,
   sousTitresIntegres: false,
 };
 
@@ -246,8 +251,7 @@ export function parseConfig(raw?: string | null): UserConfig {
   }
 
   cfg.cachedOnly = o.cachedOnly === true;
-  // Actif par defaut : on ne le desactive que si le champ dit explicitement false.
-  cfg.subsSurFlux = o.subsSurFlux !== false;
+  cfg.subsSurFlux = o.subsSurFlux === true;
   cfg.sousTitresIntegres = o.sousTitresIntegres === true;
   cfg.excludeCam = o.excludeCam === true;
   cfg.frOnly = o.frOnly === true;
