@@ -42,10 +42,14 @@ import type { MediaType, SubTrack } from '../sources/types';
  */
 const TTL_ADRESSE_MS = 30 * 24 * 60 * 60 * 1000;
 
-function subUrl(base: string, track: SubTrack): string {
-  const id = createHash('sha256').update(track.url).digest('base64url').slice(0, 32);
-  set(`subid:${id}`, track.url, TTL_ADRESSE_MS, 'subid');
+export function adresseDePiste(base: string, url: string): string {
+  const id = createHash('sha256').update(url).digest('base64url').slice(0, 32);
+  set(`subid:${id}`, url, TTL_ADRESSE_MS, 'subid');
   return `${base}/sub/${id}.vtt`;
+}
+
+function subUrl(base: string, track: SubTrack): string {
+  return adresseDePiste(base, track.url);
 }
 
 export async function handleSubtitles(req: Request, res: Response): Promise<void> {

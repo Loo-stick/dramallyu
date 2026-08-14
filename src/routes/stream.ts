@@ -17,7 +17,7 @@ import { encodeToken } from '../debrid/token';
 import { cacheParService, resolve, type NomDebrid } from '../debrid/resolver';
 import { languesDuFichier, languesDejaConnues } from '../core/pistes-fichier';
 import { noterRequete } from '../core/metrics';
-import { prechauffer } from './subtitles';
+import { prechauffer, adresseDePiste } from './subtitles';
 import { marquerMort } from '../debrid/deadlinks';
 import { cached } from '../core/cache';
 import { isRedirector, infosLiens, type InfoLien } from '../debrid/alldebrid';
@@ -394,13 +394,22 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         const i = config.subLangs.indexOf(lang);
         return i === -1 ? 100 : i;
       };
-      return [...c.subs]
+      // MEME REGLE QUE LA RESSOURCE : on n'attache que les langues demandees.
+      //
+      // Le filtre n'existait que sur /subtitles : le flux, lui, portait les sept
+      // pistes de KissKH pour quelqu'un qui n'en voulait qu'une. Deux chemins, deux
+      // comportements — et celui qui reste bavard est justement celui que Stremio lit.
+      const demandees = c.subs.filter((t) => config.subLangs.includes(t.lang));
+      return (demandees.length > 0 ? demandees : c.subs)
         .sort((a, b) => rang(a.lang) - rang(b.lang))
         .map((t, i) => ({
           // Prefixe chiffre pour la meme raison que sur la ressource /subtitles :
           // remonter dans les lecteurs qui trient les pistes sur leur identifiant.
           id: `0${i}-dramallyu-flux`,
-          url: `${base}/sub/${encodeToken({ k: 'ddl', v: t.url })}.vtt`,
+          // Adresse STABLE, derivee du contenu — comme sur la ressource. Un jeton
+          // chiffre changeait a chaque appel et rendait tout cache intermediaire
+          // inoperant, y compris celui de Cloudflare.
+          url: adresseDePiste(base, t.url),
           // DEUX formes, volontairement. Stremio lit `lang` (code ISO 639-2) ; les
           // providers de Nuvio, eux, produisent `{ url, language: 'English' }` — un
           // NOM, pas un code. Emettre les deux evite qu'un lecteur reçoive un champ
