@@ -23,12 +23,29 @@ import { getBaseUrl } from '../core/url';
 import { encodeToken, decodeToken } from '../debrid/token';
 import { httpGet } from '../core/http';
 import { get, set } from '../core/cache';
+import { createHash } from 'node:crypto';
 import type { MediaType, SubTrack } from '../sources/types';
 
-/** Un jeton signe par piste : l'endpoint /sub ne doit pas devenir un proxy ouvert. */
+/**
+ * Adresse STABLE d'une piste, derivee de son contenu.
+ *
+ * Elle etait chiffree, donc differente a chaque appel : le vecteur d'initialisation
+ * est aleatoire, par construction. Consequence, invisible jusqu'a ce qu'on la cherche
+ * — aucun cache intermediaire ne pouvait servir deux fois la meme piste, puisqu'il ne
+ * voyait jamais deux fois la meme URL. Cloudflare comptait chaque requete comme
+ * nouvelle et la faisait remonter jusqu'ici.
+ *
+ * On adresse donc par le CONTENU : l'identifiant est une empreinte de l'URL source,
+ * et la correspondance est gardee de notre cote. C'est aussi plus sur que le jeton
+ * chiffre — l'endpoint ne peut servir QUE des adresses qu'on a nous-memes enregistrees,
+ * la ou un jeton dechiffrable acceptait tout ce qui se dechiffrait correctement.
+ */
+const TTL_ADRESSE_MS = 30 * 24 * 60 * 60 * 1000;
+
 function subUrl(base: string, track: SubTrack): string {
-  const token = encodeToken({ k: 'ddl', v: track.url });
-  return `${base}/sub/${token}.vtt`;
+  const id = createHash('sha256').update(track.url).digest('base64url').slice(0, 32);
+  set(`subid:${id}`, track.url, TTL_ADRESSE_MS, 'subid');
+  return `${base}/sub/${id}.vtt`;
 }
 
 export async function handleSubtitles(req: Request, res: Response): Promise<void> {
@@ -222,13 +239,17 @@ export function prechauffer(urls: string[]): void {
 /** Sert une piste convertie en VTT. Le jeton signe evite le proxy ouvert. */
 export async function handleServeSub(req: Request, res: Response): Promise<void> {
   const raw = String(req.params.token || '').replace(/\.vtt$/i, '');
-  const payload = decodeToken(raw);
-  if (!payload) {
-    res.status(403).type('text/plain').send('jeton invalide ou expire');
+
+  // Adresse stable (forme actuelle), ou ancien jeton chiffre — des liens en circulation
+  // en portent encore, et une piste qui cesserait de s'afficher apres une mise a jour
+  // serait un mauvais echange.
+  const url = get<string>(`subid:${raw}`) ?? decodeToken(raw)?.v;
+  if (!url) {
+    res.status(404).type('text/plain').send('piste inconnue ou expiree');
     return;
   }
 
-  const corps = await preparerVtt(payload.v);
+  const corps = await preparerVtt(url);
   if (!corps) {
     res.status(502).type('text/plain').send('sous-titre injoignable ou illisible');
     return;
