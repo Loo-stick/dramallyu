@@ -236,3 +236,10 @@ test('l envoi du .torrent est actif par defaut et se desactive', () => {
   assert.equal(parseConfig(encodeConfig({})).envoyerTorrent, true);
   assert.equal(parseConfig(encodeConfig({ envoyerTorrent: false })).envoyerTorrent, false);
 });
+
+test('les sous-titres integres sont desactives par defaut', () => {
+  // Experimental : rien ne garantit qu'un lecteur donne accepte une URL « data: »
+  // pour un sous-titre. Le defaut doit donc etre le comportement eprouve.
+  assert.equal(parseConfig(encodeConfig({})).sousTitresIntegres, false);
+  assert.equal(parseConfig(encodeConfig({ sousTitresIntegres: true })).sousTitresIntegres, true);
+});

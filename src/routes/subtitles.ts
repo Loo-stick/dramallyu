@@ -168,6 +168,12 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
     // dizaines de millisecondes a lire notre JSON, autant s'en servir.
     prechauffer(retenues.map((t) => t.url));
 
+    // CONTENU INTEGRE, sur demande. Supprime le second aller-retour : le texte arrive
+    // avec la liste au lieu d'etre reclame ensuite. Cf. `integrer` pour les garde-fous.
+    if (config.sousTitresIntegres) {
+      await integrer(subtitles, retenues);
+    }
+
     res.json({ subtitles });
   } catch (e) {
     console.error(`[Subtitles] echec ${req.params.id}: ${(e as Error).message}`);
@@ -176,6 +182,52 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
 }
 
 const MAX_SUB_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Au-dela, on ne glisse pas le contenu dans la reponse.
+ *
+ * Une piste bavarde ferait enfler le JSON pour tous les lecteurs, y compris ceux qui
+ * n'en tirent aucun benefice. Ce plafond porte sur le VTT AVANT encodage : le base64
+ * ajoute un tiers.
+ */
+const MAX_INTEGRE_OCTETS = 300 * 1024;
+
+/** Temps maximal accorde a l'integration, tous sous-titres confondus. */
+const BUDGET_INTEGRE_MS = 2500;
+
+/**
+ * Remplace l'adresse par le CONTENU, quand c'est possible.
+ *
+ * Deux garde-fous, et ils comptent autant que la fonctionnalite :
+ *
+ *   - un BUDGET. Integrer suppose d'avoir la piste sous la main ; si elle n'est pas
+ *     encore prete, l'attendre indefiniment rendrait la liste plus lente que les deux
+ *     allers-retours qu'on cherche a economiser. Passe le delai, on laisse l'adresse.
+ *   - un PLAFOND de taille, pour ne pas faire enfler la reponse.
+ *
+ * Toute piste non integree garde son URL : la reponse reste valide en toutes
+ * circonstances, et un echec ici degrade la latence, jamais le resultat.
+ */
+async function integrer(
+  sorties: { url: string }[],
+  sources: SubTrack[],
+): Promise<void> {
+  const echeance = Date.now() + BUDGET_INTEGRE_MS;
+
+  await Promise.all(
+    sorties.map(async (sortie, i) => {
+      const source = sources[i];
+      if (!source || Date.now() > echeance) return;
+      try {
+        const corps = await preparerVtt(source.url);
+        if (!corps || corps.length > MAX_INTEGRE_OCTETS) return;
+        sortie.url = `data:text/vtt;base64,${Buffer.from(corps, 'utf-8').toString('base64')}`;
+      } catch {
+        // L'adresse d'origine reste en place : le lecteur la reclamera normalement.
+      }
+    }),
+  );
+}
 
 /**
  * Recupere une piste, la convertit en VTT, la dechiffre au besoin, et la memorise.
