@@ -7,6 +7,36 @@ en priorite**.
 Il agrege trois familles de sources vers un resolveur debrid unique, et il est
 utilisable **sans aucune cle** : les sources directes suffisent a regarder.
 
+## Disclaimer / Avertissement
+
+**IMPORTANT — VEUILLEZ LIRE ATTENTIVEMENT**
+
+Ce projet est fourni **uniquement a des fins educatives et de recherche**. L'auteur et
+les contributeurs de ce projet :
+
+- **NE SONT PAS RESPONSABLES** de l'utilisation qui est faite de ce logiciel
+- **NE CAUTIONNENT PAS** le piratage ou toute violation des droits d'auteur
+- **NE FOURNISSENT AUCUN CONTENU** — ce logiciel n'heberge, ne stocke et ne diffuse
+  aucune oeuvre. Il ne fait qu'agreger des liens disponibles publiquement sur Internet
+  et des metadonnees publiques, et rediriger vers des services tiers que l'utilisateur
+  a lui-meme configures avec ses propres comptes.
+- **NE GARANTISSENT PAS** le fonctionnement, la disponibilite ou la legalite des
+  sources externes
+- **DECLINENT TOUTE RESPONSABILITE** quant aux consequences legales de l'utilisation de
+  ce logiciel
+
+**L'utilisateur est seul responsable** de verifier la legalite de l'utilisation de ce
+logiciel dans sa juridiction et d'obtenir les autorisations necessaires pour acceder
+aux contenus.
+
+Aucune cle, aucun compte et aucun identifiant ne sont fournis par ce projet : chaque
+utilisateur configure les siens, et l'operateur d'une instance n'en detient aucun.
+
+Ce projet peut cesser de fonctionner a tout moment sans preavis si les sources externes
+changent ou ferment.
+
+---
+
 ## Ce qu'il fait
 
 | Pilier | Sources | Cle requise |
@@ -162,3 +192,12 @@ depuis ce serveur (ni cle acceptee, ni IP autorisee), et stream-fusion — d'ou 
 l'adresse — n'a aucun mecanisme de cle pour lui. Le faire revenir tient en trois
 lignes : une entree dans `settings.torznab`, une ligne dans `torznabSources()`, un
 champ dans la page.
+
+## Licence
+
+MIT License — voir le fichier [LICENSE](LICENSE).
+
+---
+
+**En utilisant ce logiciel, vous acceptez ces conditions et assumez l'entiere
+responsabilite de son utilisation.**
