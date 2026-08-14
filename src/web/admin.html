@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/favicon.png">
 <title>Dramallyu — administration</title>
 <style>
   /* ------------------------------------------------------------------
@@ -28,6 +29,11 @@
 
   header.tete { display:flex; align-items:center; justify-content:space-between;
                 gap:1rem; flex-wrap:wrap; margin-bottom:.4rem; }
+  /* Le logo a un fond noir opaque : le coin arrondi et la bordure discrete l'ancrent
+     dans la page au lieu de le laisser flotter comme une vignette collee. */
+  .marque { display:flex; align-items:center; gap:.85rem; }
+  .marque img { border-radius:11px; border:1px solid var(--trait); flex:0 0 auto;
+                display:block; }
   h1 { font-size:1.55rem; margin:0; letter-spacing:-.01em; }
   h1 .sous { display:block; font-size:.82rem; font-weight:400; color:var(--doux); letter-spacing:.02em; }
 
@@ -113,9 +119,12 @@
 <div class="page">
 
   <header class="tete">
-    <h1>Dramallyu
-      <span class="sous">Administration — l'operateur ne detient aucune cle d'utilisateur</span>
-    </h1>
+    <div class="marque">
+      <img src="/logo.png" alt="" width="52" height="52">
+      <h1>Dramallyu
+        <span class="sous">Administration — l'operateur ne detient aucune cle d'utilisateur</span>
+      </h1>
+    </div>
     <form method="post" action="/admin/logout"><button class="sec" type="submit">Se deconnecter</button></form>
   </header>
 

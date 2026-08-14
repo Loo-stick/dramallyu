@@ -21,6 +21,7 @@ export interface Manifest {
   name: string;
   description: string;
   logo?: string;
+  background?: string;
   resources: string[];
   types: string[];
   idPrefixes: string[];
@@ -48,7 +49,7 @@ export function getManifest(baseUrl?: string): Manifest {
     id: ADDON_ID,
     version: ADDON_VERSION,
     name: 'Dramallyu',
-    ...(baseUrl ? { logo: `${baseUrl}/logo.png` } : {}),
+    ...(baseUrl ? { logo: `${baseUrl}/logo.png`, background: `${baseUrl}/fond.jpg` } : {}),
     description:
       'Dramas asiatiques (coreens, chinois, thailandais, japonais) et films : agregateur multi-sources ' +
       'avec sous-titres francais en priorite. Sources directes sans aucune cle, plus torrents et DDL ' +

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/favicon.png">
 <title>Dramallyu — installation</title>
 <style>
   /* ------------------------------------------------------------------
@@ -30,7 +31,13 @@
   a{color:var(--or-clair)}
 
   .page{max-width:1080px;margin:0 auto}
-  .enseigne{text-align:center;margin-bottom:26px}
+  /* Logo et titre cote a cote, centres ensemble : le titre seul flottait au-dessus
+     d'une page dense, l'image lui donne un ancrage. Sur telephone, on repasse en
+     colonne — 72 px plus un titre ne tiennent pas sur une ligne etroite. */
+  .enseigne{display:flex;align-items:center;justify-content:center;gap:16px;
+            margin-bottom:26px;text-align:left}
+  .enseigne img{border-radius:14px;border:1px solid var(--trait);flex:0 0 auto;display:block}
+  @media (max-width:520px){ .enseigne{flex-direction:column;text-align:center;gap:12px} }
   .enseigne h1{
     font-size:clamp(30px,6vw,44px); font-weight:800; letter-spacing:-.035em; line-height:1;
     background:linear-gradient(94deg,var(--or-clair),var(--or) 55%,#a87c3e);
@@ -202,8 +209,11 @@
 <div class="page">
 
   <div class="enseigne">
-    <h1>Dramallyu</h1>
-    <p>Dramas asiatiques et films, sous-titres francais en priorite.</p>
+    <img src="/logo.png" alt="" width="72" height="72">
+    <div>
+      <h1>Dramallyu</h1>
+      <p>Dramas asiatiques et films, sous-titres francais en priorite.</p>
+    </div>
   </div>
 
   <div class="colonnes">
