@@ -91,22 +91,27 @@ docker compose pull && docker compose up -d
 `build: .` reste declare dans `docker-compose.yml` : `docker compose up -d --build`
 construit localement quand on developpe.
 
-### Le dossier `config/` doit etre accessible en ecriture
+### Configuration et etat sont separes
 
-Le conteneur tourne sous l'utilisateur `node`, dont **l'uid vaut 1000** dans les images
-Node. Or `docker-compose.yml` monte `./config` depuis l'hote, et un montage REMPLACE le
-dossier de l'image — les permissions posees a la construction avec. Il faut donc que
-`config/` soit accessible en ecriture a l'uid 1000 :
+Deux emplacements, parce qu'ils n'ont ni le meme proprietaire ni le meme cycle de vie :
+
+- **`./config`** — monte depuis l'hote, lisible et modifiable a la main (domaines,
+  reglages). Il appartient a votre utilisateur.
+- **`/app/data`** — un volume nomme (`dramallyu-etat`) qui porte les bases SQLite,
+  ecrites par le conteneur a chaque requete. Docker en confie la propriete a
+  l'utilisateur du conteneur : **vous n'avez aucun `chown` a poser**.
+
+Les bases vivaient auparavant dans `config/`, ce qui obligeait l'hote a les rendre
+inscriptibles a l'uid 1000 — invisible quand son propre compte avait cet uid, bloquant
+au demarrage pour tous les autres (`SQLITE_CANTOPEN`). Une base restee a l'ancien
+emplacement est **reprise automatiquement** au premier demarrage, y compris ses trente
+jours de traces ; l'ancien fichier est laisse en place et peut etre supprime ensuite.
+
+Sauvegarder l'etat :
 
 ```sh
-sudo chown -R 1000:1000 config
+docker run --rm -v dramallyu-etat:/d -v "$PWD":/s alpine tar czf /s/etat.tgz -C /d .
 ```
-
-Sans cela, l'addon s'arrete au demarrage sur `SQLITE_CANTOPEN`. Il vous le dira en
-clair, avec la commande a passer et l'uid constate — mais autant le savoir avant.
-
-Cela ne se voit pas quand l'utilisateur de l'hote a lui-meme l'uid 1000, ce qui est le
-cas du premier compte cree sur la plupart des distributions.
 
 ### Developpement
 

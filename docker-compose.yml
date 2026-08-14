@@ -35,7 +35,15 @@ services:
     # Bind-monte : les domaines rotatifs, les reglages et le cache s'editent sans
     # rebuild, et survivent au redemarrage du conteneur.
     volumes:
+      # CONFIGURATION : lisible et modifiable a la main, donc montee depuis l'hote —
+      # elle appartient a l'utilisateur de l'hote.
       - ./config:/app/config
+      # ETAT (bases SQLite) : ecrit par le conteneur a chaque requete. Un volume NOMME,
+      # dont Docker confie la propriete a l'utilisateur du conteneur. Les loger dans
+      # `config/` obligeait l'hote a poser un `chown 1000:1000`, faute de quoi l'addon
+      # s'arretait au demarrage sur SQLITE_CANTOPEN — invisible quand les deux uid
+      # coincidaient, bloquant pour tous les autres.
+      - dramallyu-etat:/app/data
 
     healthcheck:
       test:
@@ -53,3 +61,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  dramallyu-etat:

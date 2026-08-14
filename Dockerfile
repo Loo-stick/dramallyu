@@ -23,8 +23,13 @@ FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Un utilisateur non privilegie : l'addon ne fait qu'ecouter et ecrire dans config/.
-RUN mkdir -p /app/config && chown -R node:node /app
+# Un utilisateur non privilegie : l'addon ne fait qu'ecouter et ecrire dans /app/data.
+#
+# `/app/data` DOIT exister ici, et appartenir a `node`. Docker n'attribue a un volume
+# nomme la propriete du dossier de l'image que si ce dossier existe : sinon il le cree
+# a la volee, en root, et le conteneur ne peut pas y ecrire. C'est exactement la panne
+# qu'on vient de corriger, deplacee d'un cran.
+RUN mkdir -p /app/config /app/data && chown -R node:node /app
 
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist

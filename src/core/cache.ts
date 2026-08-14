@@ -6,15 +6,14 @@
 // doit survivre aux redemarrages (il se reconstruit lentement), et un cache en
 // memoire non borne est exactement ce qui a fait tomber l'hote par le passe.
 
-import { ouvrirBase } from './sqlite';
+import { ouvrirBase, cheminEtat, reprendreAncienneBase, dossierConfigHistorique } from './sqlite';
 import * as path from 'path';
 import * as fs from 'fs';
 
-const CACHE_PATH =
-  process.env.CACHE_DB_PATH ||
-  (fs.existsSync('/app/config')
-    ? '/app/config/cache.db'
-    : path.join(process.cwd(), 'config', 'cache.db'));
+const CACHE_PATH = cheminEtat('cache.db', 'CACHE_DB_PATH');
+
+// Installations anterieures : la base vivait dans le dossier de configuration.
+reprendreAncienneBase(CACHE_PATH, path.join(dossierConfigHistorique(), 'cache.db'));
 
 const db = ouvrirBase(CACHE_PATH);
 db.pragma('journal_mode = WAL');

@@ -20,17 +20,12 @@
 // et ce sont les seuls qu'on relira.
 
 import type Database from 'better-sqlite3';
-import { ouvrirBase } from './sqlite';
+import { ouvrirBase, cheminEtat, reprendreAncienneBase, dossierConfigHistorique } from './sqlite';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 function chemin(): string {
-  return (
-    process.env.ACTIVITE_DB_PATH ||
-    (fs.existsSync('/app/config')
-      ? '/app/config/activite.db'
-      : path.join(process.cwd(), 'config', 'activite.db'))
-  );
+  return cheminEtat('activite.db', 'ACTIVITE_DB_PATH');
 }
 
 /** Au-dela, une trace ne sert plus a diagnostiquer : elle encombre. */
@@ -53,7 +48,10 @@ let connexion: Database.Database | null = null;
 
 function db(): Database.Database {
   if (connexion) return connexion;
-  connexion = ouvrirBase(chemin());
+  const fichier = chemin();
+  // Installations anterieures : trente jours de traces vivaient dans `config/`.
+  reprendreAncienneBase(fichier, path.join(dossierConfigHistorique(), 'activite.db'));
+  connexion = ouvrirBase(fichier);
   connexion.pragma('journal_mode = WAL');
   connexion.exec(`
   CREATE TABLE IF NOT EXISTS activite (

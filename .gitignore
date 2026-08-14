@@ -1,21 +1,21 @@
 node_modules/
 dist/
 .env
+
 # Reglages d'exploitation, ecrits par la page d'administration : ils sont propres a
 # l'instance et changent en cours de route. Les versionner ferait entrer en conflit
 # chaque modification faite depuis l'admin.
 config/runtime-settings.json
+
+# Etat d'execution hors conteneur (developpement). En conteneur, c'est un volume nomme.
+data/
+
+# Ancien emplacement des bases, avant leur passage dans un volume nomme. Conserve
+# pour ne pas versionner celles des installations qui n'ont pas encore migre.
 config/*.db
-# Reglages d'exploitation, ecrits par la page d'administration : ils sont propres a
-# l'instance et changent en cours de route. Les versionner ferait entrer en conflit
-# chaque modification faite depuis l'admin.
-config/runtime-settings.json
 config/*.db-shm
-# Reglages d'exploitation, ecrits par la page d'administration : ils sont propres a
-# l'instance et changent en cours de route. Les versionner ferait entrer en conflit
-# chaque modification faite depuis l'admin.
-config/runtime-settings.json
 config/*.db-wal
+
 scratchpad/
 *.log
 CLAUDE.md

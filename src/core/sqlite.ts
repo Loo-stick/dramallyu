@@ -25,6 +25,58 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 /**
+ * Ou vivent les bases : dans l'ETAT, jamais dans la configuration.
+ *
+ * Les deux n'ont pas le meme proprietaire ni le meme cycle de vie. `config/` est monte
+ * depuis l'hote pour etre lisible et modifiable a la main ; il appartient donc a
+ * l'utilisateur de l'hote. Les bases, elles, sont ecrites par le conteneur a chaque
+ * requete — les loger dans un dossier qui ne lui appartient pas etait la cause du
+ * `SQLITE_CANTOPEN` au demarrage, et cela ne se voyait pas quand les deux uid
+ * coincidaient.
+ *
+ * `/app/data` est un volume NOMME : Docker en confie la propriete a l'utilisateur du
+ * conteneur, sans que personne ait a poser un `chown`.
+ */
+export function cheminEtat(nomFichier: string, variable?: string): string {
+  const impose = variable ? (process.env[variable] || '').trim() : '';
+  if (impose) return impose;
+  if (fs.existsSync('/app/data')) return path.join('/app/data', nomFichier);
+  // Hors conteneur (developpement), a cote du projet.
+  return path.join(process.cwd(), 'data', nomFichier);
+}
+
+/** Ancien emplacement des bases, conserve pour les reprendre une seule fois. */
+export function dossierConfigHistorique(): string {
+  return fs.existsSync('/app/config') ? '/app/config' : path.join(process.cwd(), 'config');
+}
+
+/**
+ * Reprend une base restee dans l'ancien emplacement.
+ *
+ * Sans cela, la mise a jour repartirait sur une base vide : le cache se reconstruirait
+ * tout seul, mais l'activite par utilisateur — trente jours de traces — serait perdue
+ * sans un mot. On COPIE au lieu de deplacer : le dossier d'origine n'est peut-etre pas
+ * inscriptible, et c'est precisement le cas qu'on est en train de corriger.
+ *
+ * Les fichiers `-wal` et `-shm` suivent : une base WAL peut porter dans son journal des
+ * ecritures que le fichier principal n'a pas encore. Rien n'est encore ouvert a cet
+ * instant, la copie est donc coherente.
+ */
+export function reprendreAncienneBase(destination: string, ancien: string): void {
+  if (fs.existsSync(destination) || !fs.existsSync(ancien)) return;
+  try {
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    for (const suffixe of ['', '-wal', '-shm']) {
+      if (fs.existsSync(ancien + suffixe)) fs.copyFileSync(ancien + suffixe, destination + suffixe);
+    }
+    console.log(`[Base] reprise de ${ancien} vers ${destination} — l'ancien fichier peut etre supprime`);
+  } catch (e) {
+    // Une reprise ratee ne doit pas empecher de demarrer : on repart a vide, en le disant.
+    console.error(`[Base] reprise impossible depuis ${ancien} : ${(e as Error).message}`);
+  }
+}
+
+/**
  * Ouvre la base, ou echoue en expliquant.
  *
  * Le diagnostic est etabli au moment de l'erreur, pas devine : on relit l'uid effectif
