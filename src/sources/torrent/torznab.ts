@@ -98,6 +98,9 @@ function buildUrl(
 function queriesFor(q: Query): Record<string, string>[] {
   const out: Record<string, string>[] = [];
   const title = q.titles[0] || '';
+  // Une seule forme supplementaire, et seulement si elle differe : deux requetes de
+  // plus par source couteraient plus que ce qu'elles rapportent.
+  const autre = q.titreAnglais && q.titreAnglais !== title ? q.titreAnglais : '';
 
   if (q.type === 'series') {
     if (q.tmdbId) {
@@ -109,9 +112,14 @@ function queriesFor(q: Query): Record<string, string>[] {
       });
     }
     if (title) out.push({ t: 'search', q: title });
+    // Seconde forme : le titre international. Ces indexeurs sont francais, donc le
+    // titre FR passe d'abord — mais une partie de leur contenu est publiee sous le nom
+    // international, et la recherche par identifiant n'aboutit pas partout.
+    if (autre) out.push({ t: 'search', q: autre });
   } else {
     if (q.tmdbId) out.push({ t: 'movie', tmdbid: q.tmdbId });
     if (title) out.push({ t: 'search', q: q.year ? `${title} ${q.year}` : title });
+    if (autre) out.push({ t: 'search', q: q.year ? `${autre} ${q.year}` : autre });
   }
   return out;
 }
@@ -122,11 +130,15 @@ async function fetchItems(
   apiKey: string,
   params: Record<string, string>,
   signal?: AbortSignal,
-): Promise<TorznabItem[]> {
+): Promise<TorznabItem[] | null> {
   // La cle N'ENTRE PAS dans la cle de cache : deux utilisateurs interrogeant le meme
   // tracker partagent le resultat, et aucune cle ne se retrouve ecrite sur disque.
+  //
+  // Ce partage a un revers qu'il faut traiter : `null` signale que l'appel a echoue —
+  // passkey refusee, indexeur injoignable — et n'est jamais memorise. Autrement, une
+  // passkey expiree rendrait le tracker vide pour TOUS pendant le TTL negatif.
   const cacheKey = `torznab:${indexerId}:${JSON.stringify(params)}`;
-  return cached<TorznabItem[]>(
+  return cached<TorznabItem[] | null>(
     cacheKey,
     TTL_MS,
     async () => {
@@ -136,9 +148,14 @@ async function fetchItems(
         retries: 1,
         maxBytes: MAX_XML_BYTES,
       });
-      return xml ? parseTorznab(xml) : [];
+      return xml === null ? null : parseTorznab(xml);
     },
-    { scope: 'torznab', shouldCache: (v) => v.length > 0, negativeTtlMs: 10 * 60 * 1000 },
+    {
+      scope: 'torznab',
+      echec: (v) => v === null,
+      shouldCache: (v) => v !== null && v.length > 0,
+      negativeTtlMs: 10 * 60 * 1000,
+    },
   );
 }
 
@@ -159,9 +176,19 @@ function makeSource(id: string, label: string, userKey: 'c411' | 'tr4ker' | 'ygg
       const seen = new Set<string>();
       const out: Candidate[] = [];
 
+      // Meme distinction que partout ailleurs : un indexeur muet n'est pas un
+      // indexeur vide, et l'administration doit pouvoir lire la difference.
+      let appels = 0;
+      let echecs = 0;
+
       for (const params of queriesFor(q)) {
         if (ctx.deadline.remainingMs() < 1500) break;
+        appels++;
         const items = await fetchItems(id, indexer, apiKey, params, ctx.deadline.signal);
+        if (items === null) {
+          echecs++;
+          continue;
+        }
 
         for (const item of items) {
           const key = item.infoHash || item.magnet || item.title;
@@ -173,7 +200,7 @@ function makeSource(id: string, label: string, userKey: 'c411' | 'tr4ker' | 'ygg
           if (!matchesTitle(item.title, q.titles, { year: q.year, threshold: 0.6 })) continue;
 
           const parsed = parseRelease(item.title);
-          if (!matchesEpisode(parsed, q.season, q.episode)) continue;
+          if (!matchesEpisode(parsed, q.season, q.episode, q.episodesParSaison)) continue;
 
           out.push({
             sourceId: id,
@@ -192,6 +219,10 @@ function makeSource(id: string, label: string, userKey: 'c411' | 'tr4ker' | 'ygg
           });
         }
       }
+      if (appels > 0 && echecs === appels) {
+        throw new Error(`${label} : aucune reponse exploitable (passkey refusee ou indexeur injoignable)`);
+      }
+
       return out;
     },
   };

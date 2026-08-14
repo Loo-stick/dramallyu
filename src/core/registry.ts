@@ -67,51 +67,127 @@ export interface FanoutResult {
   timedOut: string[];
 }
 
+/**
+ * Rechauffements simultanes tolerés, toutes requetes confondues.
+ *
+ * Chacun est un appel reseau qui continue apres la reponse. Sans plafond, un pic de
+ * trafic empilerait autant de travaux de fond que de recherches — sur cette machine,
+ * ou la memoire est la ressource rare, c'est exactement ce qu'il ne faut pas laisser
+ * arriver. Au-dela, on coupe court : le cache ne se remplira pas cette fois-ci.
+ */
+const MAX_RECHAUFFEMENTS = 8;
+
+let rechauffementsEnCours = 0;
+
+/**
+ * Rechauffements deja lances, par source et par recherche.
+ *
+ * Chaque fiche est demandee DEUX fois (le lecteur en direct, et AIOStreams qui relaie) :
+ * sans cette garde, les deux lanceraient le meme travail de fond, pour le meme cache.
+ */
+const rechauffementsLances = new Set<string>();
+
 export async function searchAll(
   query: Query,
   config: UserConfig,
   budgetMs?: number,
 ): Promise<FanoutResult> {
   const settings = getSettings();
-  // Le fan-out ne prend jamais plus que ce que l'appelant lui accorde : c'est ainsi que
-  // le plafond de reponse reste tenable, meme quand une source traine.
-  const deadline = new Deadline(Math.min(budgetMs ?? settings.fanoutBudgetMs, settings.fanoutBudgetMs));
-  const ctx: SearchContext = { config, deadline };
+
+  // DEUX HORIZONS, et c'est tout l'interet.
+  //
+  // Le premier est ce que l'appelant accorde a la REPONSE : passe ce delai, on repond
+  // avec ce qu'on a. Le second est le temps qu'on laisse au TRAVAIL de se terminer,
+  // apres la reponse, pour que son resultat entre en cache.
+  //
+  // Avant, il n'y en avait qu'un : une source plus lente que le budget etait avortee et
+  // son travail jete. Elle ne remplissait donc jamais le cache — et se faisait couper a
+  // l'identique a la recherche suivante. Une source structurellement lente n'apparaissait
+  // JAMAIS. Desormais elle manque a la premiere recherche, et elle est la ensuite.
+  const budgetReponse = Math.min(budgetMs ?? settings.fanoutBudgetMs, settings.fanoutBudgetMs);
+  const budgetFond = Math.max(budgetReponse, settings.rechauffementMs);
 
   const active = planSources(config).filter((p) => !p.skip);
   const timings: Record<string, number> = {};
   const apports: Record<string, number> = {};
   const timedOut: string[] = [];
 
+  const debutGlobal = Date.now();
+  const echeance = new Promise<'delai'>((resolve) => {
+    setTimeout(() => resolve('delai'), budgetReponse).unref?.();
+  });
+
   const results = await Promise.all(
     active.map(async ({ source }) => {
       const started = Date.now();
-      try {
-        const found = await source.search(query, ctx);
-        const ms = Date.now() - started;
-        timings[source.id] = ms;
-        apports[source.id] = found.length;
-        noterSource(source.id, ms, found.length);
-        return found;
-      } catch (e) {
-        const ms = Date.now() - started;
-        timings[source.id] = ms;
+      // Une echeance PAR SOURCE : le retard de l'une ne doit pas rogner le temps des
+      // autres, et il faut pouvoir interrompre celle-ci sans toucher aux voisines.
+      const deadline = new Deadline(budgetFond);
+      const ctx: SearchContext = { config, deadline };
+
+      const travail = source.search(query, ctx).then(
+        (found) => ({ found, erreur: undefined as string | undefined }),
+        (e) => ({ found: [] as Candidate[], erreur: (e as Error).message.slice(0, 120) }),
+      );
+
+      const issue = await Promise.race([travail, echeance]);
+
+      if (issue === 'delai') {
+        // Elle n'entrera pas dans CETTE reponse. La question est seulement de savoir si
+        // on la laisse finir pour le cache, ou si on coupe.
+        timings[source.id] = Date.now() - started;
         apports[source.id] = 0;
-        const message = (e as Error).message.slice(0, 120);
-        // Un abandon de budget n'est PAS un echec de la source : le compter comme tel
-        // ferait passer pour defaillante une source simplement arrivee apres l'heure.
-        noterSource(source.id, ms, 0, deadline.expired() ? undefined : message);
-        if (deadline.expired()) {
-          timedOut.push(source.id);
-        } else {
-          console.log(`[Fanout] ${source.id}: ${message}`);
+        timedOut.push(source.id);
+
+        const cle = `${source.id}:${clefRecherche(query)}`;
+        if (rechauffementsEnCours >= MAX_RECHAUFFEMENTS || rechauffementsLances.has(cle)) {
+          deadline.arreter();
+          travail.catch(() => undefined);
+          return [] as Candidate[];
         }
+
+        rechauffementsEnCours++;
+        rechauffementsLances.add(cle);
+        void travail
+          .then((r) => {
+            const ms = Date.now() - started;
+            // Mesure quand meme : c'est la seule facon de savoir ce que la source
+            // aurait rapporte, et donc si le budget merite d'etre revu.
+            noterSource(source.id, ms, r.found.length, r.erreur);
+            if (r.erreur) console.log(`[Rechauffement] ${source.id} : ${r.erreur}`);
+            else console.log(`[Rechauffement] ${source.id} : ${r.found.length} candidat(s) en ${ms} ms, en cache`);
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            rechauffementsEnCours--;
+            rechauffementsLances.delete(cle);
+          });
+
         return [] as Candidate[];
       }
+
+      const ms = Date.now() - started;
+      timings[source.id] = ms;
+      apports[source.id] = issue.found.length;
+      noterSource(source.id, ms, issue.found.length, issue.erreur);
+      if (issue.erreur) console.log(`[Fanout] ${source.id}: ${issue.erreur}`);
+      return issue.found;
     }),
   );
 
+  if (timedOut.length > 0) {
+    console.log(
+      `[Fanout] repondu en ${Date.now() - debutGlobal} ms sans ${timedOut.join(', ')} ` +
+        '(elles continuent pour le cache)',
+    );
+  }
+
   return { candidates: results.flat(), timings, apports, timedOut };
+}
+
+/** Signature d'une recherche : deux requetes identiques ne se rechauffent qu'une fois. */
+function clefRecherche(q: Query): string {
+  return [q.type, q.imdbId ?? '', q.tmdbId ?? '', q.kkhId ?? '', q.season ?? '', q.episode ?? ''].join('|');
 }
 
 /** Meme discipline pour les sous-titres : budget partage, aucune source bloquante. */

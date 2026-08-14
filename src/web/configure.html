@@ -684,10 +684,23 @@
 
         <div class="lien-sortie" id="sortie" style="margin-top:16px">
           <code id="lien"></code>
+          <!-- Une seule action, deux destinations : l'intitule est porte une fois, les
+               boutons ne nomment que l'application. Cote a cote, ils se lisent comme le
+               choix qu'ils sont. « Copier » couvre le cas ou l'on configure sur un
+               ordinateur pour installer sur un autre appareil — il vient donc apres. -->
+          <p class="indice" style="margin:14px 0 7px">Installer directement dans :</p>
           <div class="actions">
-            <button type="button" class="btn" id="copier">Copier</button>
-            <a class="btn" id="vers-stremio" href="#">Installer dans Stremio</a>
+            <a class="btn" id="vers-stremio" href="#">Stremio</a>
+            <a class="btn" id="vers-nuvio" href="#">Nuvio</a>
           </div>
+          <div class="actions" style="margin-top:8px">
+            <button type="button" class="btn" id="copier">Copier le lien</button>
+          </div>
+          <p class="indice" id="indice-appli" style="margin-top:11px">
+            Ces boutons ouvrent l&rsquo;application installee sur l&rsquo;appareil ou vous
+            etes. Depuis un ordinateur, copiez le lien et collez-le dans
+            l&rsquo;application, sur le telephone ou le televiseur.
+          </p>
           <p class="indice" id="etat-chiffrement" style="margin-top:11px"></p>
         </div>
       </div>
@@ -701,9 +714,10 @@
 
       <div class="note sobre">
         <strong>Nuvio</strong>
-        Ajoutez le lien dans « Addons &rarr; Ajouter une extension ». Si Dramallyu y est
-        deja, desinstallez-le d'abord : Nuvio garde en cache la liste des ressources et
-        ne verrait pas les sous-titres autrement.
+        Le bouton ci-dessus ouvre l'application directement. Sinon, collez le lien dans
+        « Addons &rarr; Ajouter une extension ». Si Dramallyu y est deja,
+        desinstallez-le d'abord : Nuvio garde en cache la liste des ressources et ne
+        verrait pas les sous-titres autrement.
       </div>
     
       </div>
@@ -1014,7 +1028,13 @@ $('generer').addEventListener('click', function(){
   .then(function(data){
     var lien = location.origin + '/' + data.config + '/manifest.json';
     $('lien').textContent = lien;
+    // Stremio et Nuvio enregistrent tous deux le schema « stremio: » : sur un appareil
+    // ou les deux sont installes, le systeme demande lequel ouvrir — ou tranche seul.
+    // Nuvio accepte en plus « nuvio: », qu'il est le seul a revendiquer : ce second
+    // bouton vise donc l'application sans ambiguite. (Verifie dans son code : un lien
+    // dont l'hote ressemble a un domaine est repris en https et installe comme addon.)
     $('vers-stremio').href = lien.replace(/^https?:/, 'stremio:');
+    $('vers-nuvio').href = lien.replace(/^https?:/, 'nuvio:');
     $('etat-chiffrement').textContent = data.chiffre
       ? 'Vos cles sont chiffrees dans ce lien.'
       : 'Cette instance n a pas de secret configure : vos cles sont seulement encodees.';

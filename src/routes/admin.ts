@@ -13,7 +13,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { getSettings, reloadSettings, settingsPath } from '../core/settings';
 import { clearAll, clearScope, getCacheStats, clesDuPerimetre } from '../core/cache';
-import { allSources } from '../core/registry';
+import { allSources, planSources } from '../core/registry';
+import type { Source } from '../sources/types';
 import { kkeyStatus, rediscoverConstants, reloadKkeyConfig } from '../sources/direct/kisskh/kkey';
 import {
   statsSources,
@@ -21,9 +22,15 @@ import {
   historique,
   requetesRecentes,
   reinitialiser as reinitialiserMesures,
+  statsUtilisateurs,
+  utilisateursSatures,
 } from '../core/metrics';
+import { resumeUtilisateurs, requetesDe, traceDe, oublier } from '../core/activite';
 import { lire, sourcesConnues, vider as viderJournal } from '../core/journal';
-import { parseConfig, chiffrementDisponible } from '../core/config';
+import { parseConfig, chiffrementDisponible, type UserConfig } from '../core/config';
+import { parseStremioId } from '../core/ids';
+import { resolveWork, chercherOeuvre } from '../core/meta';
+import type { Query } from '../sources/types';
 import { Deadline } from '../core/http';
 import { kisskhBase } from '../sources/direct/kisskh/client';
 
@@ -330,6 +337,17 @@ export function handleEnregistrerReglages(req: Request, res: Response): void {
     patch.maxStreams = Math.round(v);
   }
 
+  if (corps.rechauffementMs !== undefined) {
+    const v = Number(corps.rechauffementMs);
+    if (!Number.isFinite(v) || v < 2000 || v > 60000) {
+      res.status(400).json({ erreur: 'delai de rechauffement hors bornes (2000 a 60000 ms)' });
+      return;
+    }
+    patch.rechauffementMs = Math.round(v);
+  }
+
+  if (corps.tracerTout !== undefined) patch.tracerTout = corps.tracerTout === true;
+
   for (const [famille, cle] of [
     ['torznab', 'torznab'],
     ['unit3d', 'unit3d'],
@@ -387,6 +405,76 @@ export function handleEnregistrerReglages(req: Request, res: Response): void {
  * dit rien tant que personne n'a cherche. On execute donc la VRAIE recherche, avec les
  * cles fournies pour l'essai — jamais memorisees.
  */
+/**
+ * Extrait le segment de configuration d'un lien d'installation.
+ *
+ * Ce qu'on a sous la main, c'est le lien entier : c'est lui qu'on copie depuis la page
+ * de configuration, lui qu'on colle dans Stremio. Exiger d'en isoler un morceau a la
+ * main serait une petite corvee inutile — et une source d'erreur silencieuse, puisqu'un
+ * collage errone donne simplement une configuration vide.
+ */
+export function segmentDeConfig(entree: string): string {
+  const texte = entree.trim();
+  if (!texte) return '';
+  const m = texte.match(/(?:^|\/)((?:e1\.)?[A-Za-z0-9_-]{16,})(?:\/|$)/);
+  return m ? m[1] : texte;
+}
+
+/**
+ * Pourquoi une source n'a pas ete interrogee, en clair.
+ *
+ * `planSources` reunit sous « cle-absente » deux situations tres differentes pour qui
+ * lit le resultat : la cle du tracker manque, ou aucun debrideur n'est configure. On
+ * les distingue ici, dans la formulation seulement — la decision, elle, reste unique.
+ */
+function raisonIgnoree(source: Source, config: UserConfig, skip: string): string {
+  if (skip === 'operateur') {
+    return 'Source desactivee dans l onglet Sources : elle ne participe a aucune recherche reelle.';
+  }
+  if (skip === 'utilisateur') {
+    return 'La configuration fournie a desactive cette source.';
+  }
+  if (source.requiredUserKey && !config[source.requiredUserKey]) {
+    return (
+      `Aucune cle « ${source.requiredUserKey} » dans la configuration fournie. ` +
+      'Les cles de trackers appartiennent aux utilisateurs : collez ci-dessous un lien ' +
+      'de configuration qui en porte une, sinon la source ne peut rien chercher.'
+    );
+  }
+  if (source.needsDebrid) {
+    // Nommer ce que la source rend vraiment : parler de torrents a propos de
+    // Zone-Telechargement ferait douter de l'exactitude du reste du message.
+    const rendus = source.kind === 'ddl' ? 'des liens d hebergeur' : 'des torrents';
+    return (
+      `La source repond, mais ses resultats sont ${rendus} : sans cle AllDebrid ou ` +
+      'TorBox dans la configuration fournie, ils seraient injouables et le fan-out reel ' +
+      'ne l interrogerait pas.'
+    );
+  }
+  return 'Source non retenue par le plan de recherche.';
+}
+
+/**
+ * Recherche par titre, pour remplir le champ de l'essai.
+ *
+ * Personne ne connait les identifiants IMDb par coeur — et les trackers UNIT3D ne
+ * cherchent QUE par identifiant. Sans ça, l'essai etait inutilisable pour eux.
+ * Aucune cle : le catalogue de recherche de Cinemeta est public et repond aux titres
+ * francais comme anglais.
+ */
+export async function handleRechercheOeuvre(req: Request, res: Response): Promise<void> {
+  const q = String(req.query.q || '').slice(0, 120);
+  if (q.trim().length < 2) {
+    res.json({ resultats: [] });
+    return;
+  }
+  try {
+    res.json({ resultats: await chercherOeuvre(q) });
+  } catch (e) {
+    res.json({ resultats: [], erreur: (e as Error).message.slice(0, 120) });
+  }
+}
+
 export async function handleTesterSource(req: Request, res: Response): Promise<void> {
   const id = String(req.params.id || '');
   const source = allSources().find((s) => s.id === id);
@@ -396,27 +484,100 @@ export async function handleTesterSource(req: Request, res: Response): Promise<v
   }
 
   const corps = (req.body ?? {}) as Record<string, unknown>;
-  const titre = String(corps.titre || 'Squid Game').slice(0, 120);
-  const config = parseConfig(String(corps.config || '') || null);
+  const saisie = String(corps.titre || 'Squid Game').slice(0, 120);
+  const config = parseConfig(segmentDeConfig(String(corps.config || '')) || null);
 
-  const deadline = new Deadline(15000);
-  const debut = Date.now();
-  try {
-    const trouves = await source.search(
-      {
+  // On accepte un TITRE ou un IDENTIFIANT (tt…, tmdb:…, kkh:…), et quand c'en est un,
+  // on resout l'identite comme le fait /stream. Sans ça, l'essai n'envoyait qu'un titre
+  // — or les trackers UNIT3D ne filtrent que sur imdbId/tmdbId : ils ne construisaient
+  // aucune requete et rendaient « 0 candidat » en 0 ms. L'essai doit interroger la
+  // source dans les memes conditions que la recherche reelle, sinon il ne prouve rien.
+  const identifiant = parseStremioId(saisie);
+  const genre: 'movie' | 'series' = identifiant?.season !== undefined ? 'series' : 'movie';
+  const oeuvre = identifiant ? await resolveWork(identifiant, genre, config) : null;
+
+  const requete: Query = oeuvre
+    ? {
+        type: genre,
+        titles: oeuvre.titles,
+        // Sans lui, l'essai n'interroge pas les sources dans les memes conditions que
+        // la recherche reelle : Nyaa, Torznab et DigitalCore ne cherchent alors que
+        // sous le titre francais, et rendent zero la ou la vraie recherche trouve.
+        titreAnglais: oeuvre.titreAnglais,
+        episodesParSaison: oeuvre.episodesParSaison,
+        year: oeuvre.year,
+        imdbId: oeuvre.imdbId ?? (identifiant?.kind === 'imdb' ? identifiant.value : undefined),
+        tmdbId: oeuvre.tmdbId ?? (identifiant?.kind === 'tmdb' ? identifiant.value : undefined),
+        kkhId: oeuvre.kkhId ?? (identifiant?.kind === 'kkh' ? identifiant.value : undefined),
+        season: identifiant?.season,
+        episode: identifiant?.episode,
+        originalLanguage: oeuvre.originalLanguage,
+      }
+    : {
         type: 'series',
-        titles: [titre],
+        titles: [saisie],
         season: 1,
         episode: 1,
         imdbId: String(corps.imdbId || '') || undefined,
         tmdbId: String(corps.tmdbId || '') || undefined,
-      },
-      { config, deadline },
-    );
+      };
+
+  // CE QUE CET ESSAI REPOND : « cette source repond-elle ? ». Pas « cet utilisateur
+  // verrait-il quelque chose ? » — c'est le fan-out reel qui tranche ça.
+  //
+  // La distinction compte. Sans cle de tracker, la source ne peut RIEN chercher : elle
+  // rendait une liste vide sans rien tenter, et l'essai affichait « 0 candidat »,
+  // exactement comme un tracker joignable qui n'a rien. On concluait qu'elle etait
+  // cassee — c'est ce qui est arrive sur DigitalCore. Ce cas-la doit s'annoncer.
+  //
+  // En revanche, une source desactivee ou dont les resultats seraient injouables faute
+  // de debrideur reste parfaitement INTERROGEABLE. L'essayer a du sens, justement pour
+  // verifier avant d'activer. On l'interroge donc, en signalant la reserve.
+  if (source.requiredUserKey && !config[source.requiredUserKey]) {
+    res.json({
+      ok: false,
+      ignoree: 'cle-absente',
+      raison: raisonIgnoree(source, config, 'cle-absente'),
+      ms: 0,
+      candidats: 0,
+    });
+    return;
+  }
+
+  // Une source qui ne cherche que par identifiant, a qui on n'en donne aucun, ne
+  // tentera rien. Le dire vaut mieux que de laisser lire « 0 candidat ».
+  if (source.requiertIdentifiant && !requete.imdbId && !requete.tmdbId) {
+    res.json({
+      ok: false,
+      ignoree: 'identifiant-absent',
+      raison:
+        'Ce tracker ne cherche que par identifiant (son API filtre sur imdbId/tmdbId), ' +
+        'jamais par titre. Saisissez un identifiant IMDb — « tt10919420:1:1 » pour un ' +
+        'episode, « tt10919420 » pour un film — au lieu du titre.',
+      ms: 0,
+      candidats: 0,
+    });
+    return;
+  }
+
+  const plan = planSources(config).find((p) => p.source.id === id);
+  const reserve = plan?.skip ? raisonIgnoree(source, config, plan.skip) : undefined;
+
+  const deadline = new Deadline(15000);
+  const debut = Date.now();
+  try {
+    const trouves = await source.search(requete, { config, deadline });
     res.json({
       ok: true,
       ms: Date.now() - debut,
       candidats: trouves.length,
+      // Ce qui a REELLEMENT ete cherche : un identifiant saisi devient un titre, et
+      // c'est utile de le voir pour interpreter le resultat.
+      cherche: requete.titles[0],
+      // Presente seulement quand la source repond mais ne participerait pas au
+      // fan-out reel de cette configuration : l'essai reste concluant, la reserve
+      // explique pourquoi l'utilisateur, lui, ne verrait rien.
+      reserve,
       exemples: trouves.slice(0, 5).map((c) => ({
         titre: c.title,
         qualite: c.quality,
@@ -554,4 +715,124 @@ export async function handleSante(_req: Request, res: Response): Promise<void> {
   );
 
   res.json({ services: resultats.sort((a, b) => Number(a.joignable) - Number(b.joignable)) });
+}
+
+/**
+ * Activite par INSTALLATION.
+ *
+ * L'operateur ne detient aucune cle, mais il repond des questions : « pourquoi je ne
+ * vois rien ? », « ca marche chez toi ? ». Sans identite, chaque plainte oblige a
+ * fouiller un journal global ou toutes les requetes se ressemblent. Avec, on relie une
+ * personne a ses traces en un coup d'oeil.
+ *
+ * On ne rend QUE des compteurs et des titres, jamais une cle : les cles appartiennent
+ * aux utilisateurs, et une page d'administration qui les exposerait trahirait la
+ * promesse centrale de cet addon.
+ */
+export function handleUtilisateurs(_req: Request, res: Response): void {
+  // DEUX HORIZONS, reunis ici parce qu'ils ne repondent pas a la meme question.
+  //
+  // Les mesures en memoire disent l'activite DEPUIS LE DEMARRAGE : c'est ce qu'on
+  // regarde quand quelque chose se passe maintenant. Elles disparaissent au
+  // redeploiement — et on redeploie souvent, ce qui les rendait inutilisables pour un
+  // signalement du type « hier soir je n'avais rien ». L'historique persiste repond a
+  // celui-la, et lui seul sait trier par nombre d'ennuis recents.
+  const vivant = new Map(statsUtilisateurs().map((u) => [u.qui, u]));
+  const durables = resumeUtilisateurs();
+
+  const utilisateurs = durables.map((d) => {
+    const v = vivant.get(d.qui);
+    vivant.delete(d.qui);
+    return {
+      qui: d.qui,
+      requetes: d.requetes,
+      vides: d.vides,
+      erreurs: d.erreurs,
+      horsCreneau: d.horsCreneau,
+      soucisRecents: d.soucisRecents,
+      premierVu: d.premierVu,
+      dernierVu: d.dernierVu,
+      msMoyen: d.msMoyen ?? 0,
+      // Ce que cette installation a fait depuis le dernier demarrage seulement.
+      depuisDemarrage: v ? { requetes: v.requetes, flux: v.flux } : null,
+      derniersTitres: v?.derniersTitres ?? [],
+    };
+  });
+
+  // Une installation vue depuis le demarrage mais absente de la base n'a fait que des
+  // requetes non enregistrees (identifiant illisible) : on la montre quand meme, sans
+  // quoi les totaux paraitraient faux.
+  for (const v of vivant.values()) {
+    utilisateurs.push({
+      qui: v.qui,
+      requetes: v.requetes,
+      vides: v.vides,
+      erreurs: 0,
+      horsCreneau: 0,
+      soucisRecents: 0,
+      premierVu: v.premierVu,
+      dernierVu: v.dernierVu,
+      msMoyen: v.msMoyen,
+      depuisDemarrage: { requetes: v.requetes, flux: v.flux },
+      derniersTitres: v.derniersTitres,
+    });
+  }
+
+  res.json({
+    utilisateurs,
+    satures: utilisateursSatures(),
+    // Une installation sans identite vient d'un lien anterieur a cette version : le
+    // dire evite de croire a un bug quand les compteurs ne totalisent pas.
+    sansIdentite: requetesRecentes(200).filter((r) => !r.qui).length,
+    tracerTout: getSettings().tracerTout,
+  });
+}
+
+/**
+ * Les recherches d'une installation.
+ *
+ * L'identifiant passe en parametre de requete, pas dans le chemin : il contient une
+ * barre oblique (« pseudo/uid ») que le routeur decouperait en deux segments.
+ */
+export function handleRequetesUtilisateur(req: Request, res: Response): void {
+  const qui = String(req.query.qui || '');
+  if (!qui) {
+    res.status(400).json({ erreur: 'installation manquante' });
+    return;
+  }
+  res.json({ qui, requetes: requetesDe(qui, Number(req.query.limite) || 40) });
+}
+
+/**
+ * La trace complete d'une recherche : les lignes de journal qu'ELLE a produites,
+ * isolees de celles des autres requetes qui tournaient au meme moment.
+ *
+ * Elle est demandee a la ligne, jamais servie avec la liste : c'est la seule partie
+ * volumineuse, et on n'en lit qu'une a la fois.
+ */
+export function handleTraceRequete(req: Request, res: Response): void {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ erreur: 'identifiant invalide' });
+    return;
+  }
+  const trace = traceDe(id);
+  res.json({
+    trace,
+    // Distinguer « pas de trace conservee » de « trace vide » : sans ça, l'operateur
+    // croit a une panne d'affichage alors que la regle de conservation a joue.
+    absente: trace === null,
+  });
+}
+
+/** Efface l'activite d'une installation. Utile quand quelqu'un le demande. */
+export function handleOublierUtilisateur(req: Request, res: Response): void {
+  const qui = String((req.body as { qui?: string })?.qui || '');
+  if (!qui) {
+    res.status(400).json({ erreur: 'installation manquante' });
+    return;
+  }
+  const n = oublier(qui);
+  console.log(`[Admin] activite effacee pour ${qui} (${n} ligne(s))`);
+  res.json({ ok: true, supprimees: n });
 }

@@ -10,6 +10,9 @@
 // deux verites qui divergeraient. Le detournement conserve la sortie standard intacte
 // — `docker logs` continue de tout recevoir.
 
+import { masquer } from './masque';
+import { capturerLigne } from './trace';
+
 /** Lignes conservees. Bornees : rien ici ne doit croitre avec le trafic. */
 const TAILLE = 500;
 
@@ -45,15 +48,21 @@ function prefixeDe(texte: string): string | undefined {
 }
 
 function ajouter(texte: string, canal: 'log' | 'error' | 'warn'): void {
-  const propre = texte.replace(/\s+$/, '');
+  // Le masquage a lieu ICI, au point de passage unique, et avant tout le reste : c'est
+  // ce qui garantit qu'aucun secret n'atteint ni la page d'administration, ni la trace
+  // par utilisateur, ni la base. Le faire plus loin laisserait des chemins non couverts.
+  const propre = masquer(texte.replace(/\s+$/, ''));
   if (!propre) return;
+  const abrege = propre.slice(0, 500);
   lignes.push({
     quand: Date.now(),
     niveau: niveauDe(propre, canal),
     source: prefixeDe(propre),
-    texte: propre.slice(0, 500),
+    texte: abrege,
   });
   if (lignes.length > TAILLE) lignes.shift();
+  // Et, si une requete est en cours, la meme ligne rejoint SA trace.
+  capturerLigne(abrege);
 }
 
 let branche = false;

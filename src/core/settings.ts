@@ -36,6 +36,28 @@ export interface Settings {
   reponseMaxMs: number;
   /** Nombre maximum de flux renvoyes, toutes sources confondues. */
   maxStreams: number;
+  /**
+   * Temps laisse a une source pour TERMINER son travail apres que la reponse est
+   * partie, afin que son resultat entre en cache.
+   *
+   * Le plafond de reponse dit quand on repond ; celui-ci dit quand on renonce. Une
+   * source plus lente que le budget etait avortee et son travail jete : elle ne
+   * remplissait donc jamais le cache et se faisait couper a l'identique la fois
+   * suivante — elle n'apparaissait jamais. Avec ce delai, elle manque a la premiere
+   * recherche et elle est la ensuite.
+   *
+   * Mettre la valeur du plafond de reponse revient a desactiver le rechauffement.
+   */
+  rechauffementMs: number;
+  /**
+   * Conserver la trace de TOUTES les recherches, y compris celles qui ont abouti.
+   *
+   * Par defaut on ne garde que celles qui posent probleme : une recherche reussie n'a
+   * rien a expliquer, et l'ecrire couterait quelques kilo-octets a chaque fois. On
+   * l'active le temps de comprendre un cas precis — typiquement « ça marche mais les
+   * flux ne sont pas les bons », qu'aucune trace d'echec ne montrera jamais.
+   */
+  tracerTout: boolean;
   torznab: Record<string, TorznabIndexerSettings>;
   /** Trackers UNIT3D (G3mini...). Meme forme que Torznab : l'adresse est a
    *  l'operateur, la cle reste a l'utilisateur. */
@@ -64,6 +86,8 @@ const DEFAULTS: Settings = {
   fanoutBudgetMs: 8000,
   reponseMaxMs: 5000,
   maxStreams: 60,
+  rechauffementMs: 15000,
+  tracerTout: false,
   torznab: {
     c411: { enabled: true, url: 'https://c411.org/api', categories: [2000, 5000] },
     tr4ker: { enabled: true, url: 'https://tr4ker.net/torznab', categories: [2000, 5000] },
@@ -103,6 +127,8 @@ export function getSettings(): Settings {
     fanoutBudgetMs: clamp(Number(raw.fanoutBudgetMs) || DEFAULTS.fanoutBudgetMs, 2000, 20000),
     reponseMaxMs: clamp(Number(raw.reponseMaxMs) || DEFAULTS.reponseMaxMs, 2000, 30000),
     maxStreams: clamp(Number(raw.maxStreams) || DEFAULTS.maxStreams, 5, 300),
+    rechauffementMs: clamp(Number(raw.rechauffementMs) || DEFAULTS.rechauffementMs, 2000, 60000),
+    tracerTout: raw.tracerTout === true,
     torznab: { ...DEFAULTS.torznab, ...(raw.torznab || {}) },
     unit3d: { ...DEFAULTS.unit3d, ...(raw.unit3d || {}) },
     digitalcore: { ...DEFAULTS.digitalcore, ...(raw.digitalcore || {}) },

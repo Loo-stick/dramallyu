@@ -94,10 +94,15 @@ async function interroger(
   apiKey: string,
   params: Record<string, string>,
   signal?: AbortSignal,
-): Promise<ItemUnit3d[]> {
+): Promise<ItemUnit3d[] | null> {
   // La cle N'ENTRE PAS dans la cle de cache : deux utilisateurs du meme tracker
   // partagent le resultat, et aucun secret ne se retrouve ecrit sur disque.
-  return cached<ItemUnit3d[]>(
+  //
+  // Ce partage impose une precaution : `null` signale que l'APPEL a echoue — cle
+  // refusee, tracker injoignable — et n'est jamais memorise. Sans ça, un utilisateur
+  // dont la cle a expire faisait passer le tracker pour vide aux yeux de tous les
+  // autres, pour toute la duree du TTL negatif. Vecu en essayant une cle invalide.
+  return cached<ItemUnit3d[] | null>(
     `unit3d:${id}:${JSON.stringify(params)}`,
     TTL_MS,
     async () => {
@@ -108,10 +113,16 @@ async function interroger(
         retries: 1,
         headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
       });
+      if (data === null) return null;
       const brut = Array.isArray(data) ? data : ((data as { data?: unknown })?.data ?? []);
       return Array.isArray(brut) ? (brut.filter((x) => x && typeof x === 'object') as ItemUnit3d[]) : [];
     },
-    { scope: 'unit3d', shouldCache: (v) => v.length > 0, negativeTtlMs: TTL_VIDE_MS },
+    {
+      scope: 'unit3d',
+      echec: (v) => v === null,
+      shouldCache: (v) => v !== null && v.length > 0,
+      negativeTtlMs: TTL_VIDE_MS,
+    },
   );
 }
 
@@ -122,6 +133,8 @@ export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 
     kind: 'torrent',
     needsDebrid: true,
     requiredUserKey: userKey,
+    // L'API UNIT3D filtre sur imdbId/tmdbId : aucune recherche par titre.
+    requiertIdentifiant: true,
 
     async search(q: Query, ctx: SearchContext): Promise<Candidate[]> {
       const reglages = getSettings().unit3d?.[id];
@@ -134,9 +147,21 @@ export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 
       const parHash = new Map<string, ItemUnit3d>();
       const sansHash: ItemUnit3d[] = [];
 
+      // Un echec d'appel doit REMONTER, pas se fondre dans un resultat vide : c'est la
+      // difference entre « ce tracker n'a rien » et « ce tracker ne nous repond pas »,
+      // et l'administration comme les mesures ont besoin de la connaitre.
+      let echecs = 0;
+      let appels = 0;
+
       for (const params of requetesPour(q)) {
         if (ctx.deadline.remainingMs() < 1500) break;
-        for (const item of await interroger(id, base, apiKey, params, ctx.deadline.signal)) {
+        appels++;
+        const lot = await interroger(id, base, apiKey, params, ctx.deadline.signal);
+        if (lot === null) {
+          echecs++;
+          continue;
+        }
+        for (const item of lot) {
           const h = hashDe(item);
           if (h) {
             if (!parHash.has(h)) parHash.set(h, item);
@@ -144,6 +169,11 @@ export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 
             sansHash.push(item);
           }
         }
+      }
+
+      // Toutes les tentatives ont echoue : ce n'est pas « zero resultat ».
+      if (appels > 0 && echecs === appels) {
+        throw new Error(`${label} : aucune reponse exploitable (cle refusee ou tracker injoignable)`);
       }
 
       // Les entrees sans hash coutent un telechargement chacune : on ne s'y engage que
@@ -169,7 +199,7 @@ export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 
         // oeuvre. Rejeter sur le titre ferait perdre les releases nommees dans une
         // romanisation qu'on ne connait pas — exactement ce qu'on cherche a eviter.
         const parsed = parseRelease(titre);
-        if (!matchesEpisode(parsed, q.season, q.episode)) continue;
+        if (!matchesEpisode(parsed, q.season, q.episode, q.episodesParSaison)) continue;
 
         out.push({
           sourceId: id,

@@ -4,7 +4,7 @@
 // Aucun debridage ici (cf. debrid/token.ts pour le pourquoi).
 
 import type { Request, Response } from 'express';
-import { parseConfig, nomLangue, identite } from '../core/config';
+import { parseConfig, nomLangue, identite, type UserConfig } from '../core/config';
 import { parseStremioId } from '../core/ids';
 import { resolveWork, estAsiatique } from '../core/meta';
 import { searchAll } from '../core/registry';
@@ -17,6 +17,8 @@ import { encodeToken } from '../debrid/token';
 import { cacheParService, resolve, type NomDebrid } from '../debrid/resolver';
 import { languesDuFichier, languesDejaConnues } from '../core/pistes-fichier';
 import { noterRequete } from '../core/metrics';
+import { tracer, traceCourante } from '../core/trace';
+import { enregistrer, type Issue } from '../core/activite';
 import { prechauffer, adresseDePiste } from './subtitles';
 import { marquerMort } from '../debrid/deadlinks';
 import { cached } from '../core/cache';
@@ -78,7 +80,16 @@ function qui(config: { pseudo?: string; uid?: string }): string {
 function buildQuery(
   type: MediaType,
   parsed: NonNullable<ReturnType<typeof parseStremioId>>,
-  work: { titles: string[]; year?: number; originalLanguage?: string; imdbId?: string; tmdbId?: string; kkhId?: string },
+  work: {
+    titles: string[];
+    titreAnglais?: string;
+    episodesParSaison?: Record<number, number>;
+    year?: number;
+    originalLanguage?: string;
+    imdbId?: string;
+    tmdbId?: string;
+    kkhId?: string;
+  },
 ): Query {
   return {
     type,
@@ -86,6 +97,8 @@ function buildQuery(
     tmdbId: work.tmdbId ?? (parsed.kind === 'tmdb' ? parsed.value : undefined),
     kkhId: work.kkhId ?? (parsed.kind === 'kkh' ? parsed.value : undefined),
     titles: work.titles,
+    titreAnglais: work.titreAnglais,
+    episodesParSaison: work.episodesParSaison,
     year: work.year,
     season: parsed.season,
     episode: parsed.episode,
@@ -106,6 +119,59 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     return;
   }
 
+  // A partir d'ici, TOUT ce que le code journalise — sources, HTTP, debrid, a
+  // n'importe quelle profondeur — rejoint la trace de cette requete, et d'elle seule.
+  // C'est ce qui permet de repondre a « pourquoi cette personne ne voit rien » sans
+  // demeler a la main un journal ou plusieurs recherches se chevauchent.
+  await tracer(identite(config), () => repondre(req, res, config, type, parsed, started));
+}
+
+interface Contexte {
+  config: UserConfig;
+  type: 'movie' | 'series';
+  parsed: NonNullable<ReturnType<typeof parseStremioId>>;
+  started: number;
+}
+
+/** Conserve la trace d'une requete, avec sa raison. */
+function noterActivite(
+  ctx: Contexte,
+  req: Request,
+  issue: Issue,
+  flux: number,
+  extra: { titre?: string; detail?: unknown } = {},
+): void {
+  // Attention : `qui()` plus haut est le prefixe de journal. Ici on veut l'identite
+  // brute, celle qui sert de cle en base.
+  const installation = identite(ctx.config);
+  if (!installation) return;
+  // La trace complete n'est gardee que lorsqu'elle servira : un succes ordinaire n'a
+  // rien a expliquer, et l'ecrire a chaque fois couterait des kilo-octets pour rien.
+  // Le reglage « tracer tout » leve cette regle, le temps d'un diagnostic.
+  const garderTrace = issue !== 'ok' || getSettings().tracerTout;
+  enregistrer({
+    qui: installation,
+    type: ctx.type,
+    contenu: req.params.id,
+    titre: extra.titre,
+    flux,
+    issue,
+    ms: Date.now() - ctx.started,
+    detail: extra.detail,
+    trace: garderTrace ? traceCourante() : undefined,
+  });
+}
+
+async function repondre(
+  req: Request,
+  res: Response,
+  config: UserConfig,
+  type: 'movie' | 'series',
+  parsed: NonNullable<ReturnType<typeof parseStremioId>>,
+  started: number,
+): Promise<void> {
+  const ctx: Contexte = { config, type, parsed, started };
+
   try {
     const work = await resolveWork(parsed, type, config);
     if (!work) {
@@ -114,6 +180,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       // reponse est la meme liste vide, et le journal restait muet. C'est ce qui m'a
       // fait suspecter les sources alors que l'identifiant demande n'existait pas.
       console.log(`[Stream] ${req.params.type}/${req.params.id} -> identite non resolue (aucune fiche)`);
+      noterActivite(ctx, req, 'inconnu', 0);
       res.json({ streams: [] });
       return;
     }
@@ -122,6 +189,9 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // liste vide apres avoir scrape et depose des magnets ne servirait personne.
     if (!estAsiatique(work)) {
       console.log(`[Perimetre] ${req.params.id} hors creneau (${work.country ?? work.originalLanguage ?? '?'})`);
+      // Compte a part : c'est le fonctionnement normal, pas une panne. Les melanger
+      // ferait passer une navigation ordinaire dans Stremio pour un incident.
+      noterActivite(ctx, req, 'hors-creneau', 0, { titre: work.titles[0] });
       res.json({ streams: [] });
       return;
     }
@@ -386,7 +456,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
     // `behaviorHints.filename` analysable quand la source ne fournit qu'un titre nu.
     // Elle ne change RIEN a l'affichage : ni le nom, ni la description, ni les
     // behaviorHints existants.
-    const identite = {
+    const oeuvre = {
       annee: work.year,
       saison: parsed.season,
       episode: parsed.episode,
@@ -469,7 +539,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
         debrid: service,
         cached: pret,
         sousTitres: pistesDe(c),
-        ...identite,
+        ...oeuvre,
       });
     });
 
@@ -520,12 +590,19 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       parSource: timings,
       apports,
       abandonnees: timedOut,
+      qui: identite(config),
       note: streams.length === 0 ? `titres cherches : ${query.titles.join(' | ')}` : undefined,
+    });
+
+    noterActivite(ctx, req, streams.length > 0 ? 'ok' : 'vide', streams.length, {
+      titre: work.titles[0],
+      detail: { parSource: timings, apports, abandonnees: timedOut, phases },
     });
 
     res.json({ streams });
   } catch (e) {
     console.error(`[Stream] echec ${req.params.id}: ${(e as Error).message}`);
+    noterActivite(ctx, req, 'erreur', 0, { detail: { message: (e as Error).message } });
     // Une exception ne doit jamais remonter en 500 a Stremio : il afficherait une
     // erreur alors qu'une liste vide est le bon comportement.
     res.json({ streams: [] });

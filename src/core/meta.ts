@@ -20,12 +20,80 @@ const TMDB = 'https://api.themoviedb.org/3';
 const META_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAP_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
+export interface Suggestion {
+  id: string;
+  nom: string;
+  annee?: string;
+  type: MediaType;
+  affiche?: string;
+}
+
+/**
+ * Recherche d'une oeuvre PAR TITRE, pour l'administration.
+ *
+ * AUCUNE CLE. Le catalogue de recherche de Cinemeta est public, et il repond a des
+ * titres FRANCAIS aussi bien qu'anglais : « Le Palais de l'est » y rend « The East
+ * Palace » avec son identifiant IMDb. Demander une cle TMDB a l'operateur pour ce seul
+ * usage aurait ajoute un secret a stocker, a exporter dans les sauvegardes et a
+ * proteger — pour un service que personne ne facture.
+ *
+ * Sert a l'essai de sources : personne ne connait les identifiants par coeur, et les
+ * trackers UNIT3D ne cherchent QUE par identifiant.
+ */
+export async function chercherOeuvre(
+  requete: string,
+  signal?: AbortSignal,
+): Promise<Suggestion[]> {
+  const q = requete.trim();
+  if (q.length < 2) return [];
+
+  const parType = async (type: MediaType): Promise<Suggestion[]> => {
+    const data = await cached<{ metas?: CinemetaMeta[] } | null>(
+      `cinemeta:recherche:v1:${type}:${q.toLowerCase()}`,
+      60 * 60 * 1000,
+      () =>
+        getJson<{ metas?: CinemetaMeta[] }>(
+          `${CINEMETA}/catalog/${type === 'series' ? 'series' : 'movie'}/top/search=${encodeURIComponent(q)}.json`,
+          { signal, timeoutMs: 8000 },
+        ),
+      { scope: 'cinemeta', echec: (v) => v === null, shouldCache: (v) => Boolean(v?.metas?.length) },
+    );
+    return (data?.metas ?? [])
+      .filter((m) => Boolean((m.imdb_id || m.id) && m.name))
+      .slice(0, 8)
+      .map((m) => ({
+        id: String(m.imdb_id || m.id),
+        nom: m.name as string,
+        annee: m.releaseInfo || (m.year ? String(m.year) : undefined),
+        type,
+        affiche: m.poster,
+      }));
+  };
+
+  const [series, films] = await Promise.all([parType('series'), parType('movie')]);
+  return [...series, ...films].slice(0, 12);
+}
+
 export interface WorkInfo {
   type: MediaType;
   /** Pays de production annonce par Cinemeta (« South Korea », « Japan »...). */
   country?: string;
   /** Titres connus, du plus fiable au moins fiable. Jamais vide si non nul. */
   titles: string[];
+  /**
+   * Titre ANGLAIS / romanise, quand il differe du francais.
+   *
+   * Indispensable, et longtemps absent. Un drama coreen se cherche sous trois formes :
+   * son titre francais sur les trackers FR, son titre original en hangul, et son titre
+   * INTERNATIONAL — celui qu'emploient KissKH, Nyaa et les groupes de release. On ne
+   * portait que les deux premiers.
+   *
+   * Cas vecu : « Le Palais de l'est » (tt35051401) ne cherchait que sous ce nom et sous
+   * « 동궁 ». Huit sources sur onze ne trouvaient rien. TMDB en anglais l'appelle
+   * « The East Palace » et Cinemeta « East Palace » — et `alternative_titles` ne
+   * contenait qu'une forme russe, ecartee par notre filtre de pays.
+   */
+  titreAnglais?: string;
   year?: number;
   /** ISO 639-1 de la langue d'origine ("ko", "zh", "ja", "th"). */
   originalLanguage?: string;
@@ -51,6 +119,8 @@ interface CinemetaMeta {
   poster?: string;
   description?: string;
   imdb_id?: string;
+  /** Le catalogue de recherche rend l'identifiant sous `id`, la fiche sous `imdb_id`. */
+  id?: string;
   moviedb_id?: number;
   videos?: { season?: number }[];
 }
@@ -125,6 +195,8 @@ async function fromCinemeta(
       return {
         type,
         titles: [meta.name],
+        // Cinemeta reprend le titre IMDb, donc la forme internationale.
+        titreAnglais: meta.name,
         year: yearOf(meta.year || meta.releaseInfo),
         country: meta.country,
         imdbId,
@@ -201,6 +273,21 @@ async function enrichWithTmdb(
   );
   if (!details) return { ...info, tmdbId };
 
+  // La fiche est lue en francais pour l'affichage. On la relit en ANGLAIS pour le
+  // TITRE seulement : c'est la forme internationale, celle sous laquelle les trackers
+  // et KissKH publient les dramas asiatiques. Un aller-retour, memorise sept jours.
+  const details_en = await cached<TmdbDetails | null>(
+    `tmdb:v2:${path}:${tmdbId}:en`,
+    META_TTL_MS,
+    () =>
+      getJson<TmdbDetails>(`${TMDB}/${path}/${tmdbId}?api_key=${apiKey}&language=en-US`, {
+        signal,
+        timeoutMs: 10000,
+      }),
+    { scope: 'tmdb', shouldCache: (v) => v !== null, negativeTtlMs: 60 * 60 * 1000 },
+  );
+  const titreAnglais = details_en?.name || details_en?.title || undefined;
+
   const alt = await cached<string[]>(
     `tmdb:${path}:${tmdbId}:alt`,
     META_TTL_MS,
@@ -220,8 +307,12 @@ async function enrichWithTmdb(
     { scope: 'tmdb', shouldCache: (v) => v.length > 0, negativeTtlMs: 24 * 60 * 60 * 1000 },
   );
 
+  // ORDRE VOLONTAIRE, et il pese lourd : plusieurs sources ne cherchent qu'avec
+  // `titles[0]`. Le titre francais reste en tete — les trackers FR, qui rapportent le
+  // plus, l'attendent — puis le titre international, puis l'original.
   const titles = [
     details.name || details.title,
+    titreAnglais,
     details.original_name || details.original_title,
     ...info.titles,
     ...alt,
@@ -231,6 +322,7 @@ async function enrichWithTmdb(
     ...info,
     tmdbId,
     titles: [...new Set(titles)],
+    titreAnglais: titreAnglais || info.titreAnglais,
     episodesParSaison: depuisSaisonsTmdb(details.seasons) ?? info.episodesParSaison,
     originalLanguage: details.original_language || info.originalLanguage,
     year: info.year ?? yearOf(details.first_air_date || details.release_date),
@@ -371,6 +463,11 @@ export async function resolveWork(
         if (!info.episodesParSaison && parCinemeta.episodesParSaison) {
           info.episodesParSaison = parCinemeta.episodesParSaison;
         }
+        // Puisqu'on a paye l'appel, on prend aussi son titre : c'est celui d'IMDb, une
+        // forme internationale qui differe souvent de celle de TMDB (« East Palace »
+        // contre « The East Palace »). Deux formes valent mieux qu'une pour matcher.
+        for (const t of parCinemeta.titles) if (!info.titles.includes(t)) info.titles.push(t);
+        if (!info.titreAnglais) info.titreAnglais = parCinemeta.titreAnglais;
       }
     }
   }

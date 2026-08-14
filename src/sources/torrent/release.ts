@@ -12,7 +12,18 @@ export interface ParsedRelease {
   episode: number | null;
   /** Vrai si la release couvre une saison entiere plutot qu'un episode. */
   isPack: boolean;
+  /**
+   * Numero d'episode ABSOLU, compte depuis le debut de la serie.
+   *
+   * Renseigne seulement quand la release en porte un ET qu'aucune saison n'est
+   * annoncee — le cas des donghua et des raws asiatiques (« ... - 156 »). Sert a
+   * faire correspondre une demande S02E01 a une release numerotee 13, ce qui etait
+   * simplement impossible avant.
+   */
+  absolu?: number | null;
 }
+
+import { structureDe } from './structure';
 
 export function qualityOf(name: string): string {
   const n = name.toLowerCase();
@@ -194,13 +205,30 @@ export function releaseDetails(name: string): ReleaseDetails {
 }
 
 export function parseRelease(name: string): ParsedRelease {
-  const { season, episode } = seasonEpisodeOf(name);
+  const nous = seasonEpisodeOf(name);
+  // La structure vient de `structure.ts` quand il la connait, de nos expressions
+  // regulieres sinon. Le partage n'est pas arbitraire : mesure sur 122 titres reels,
+  // il a eu raison dix fois sur dix la ou nous divergions — toujours sur la forme
+  // francaise « Saison 1 Épisode 4 », que nous lisions comme un PACK faute d'y voir
+  // l'episode. La langue, elle, ne lui est jamais confiee (cf. structure.ts).
+  const lue = structureDe(name);
+
+  const season = lue?.season ?? nous.season;
+  const episode = lue?.episode ?? nous.episode;
+
+  // Un numero n'est ABSOLU que si aucune saison n'est annoncee : « S02E13 » porte un
+  // 13 qui appartient a sa saison, pas a la serie entiere.
+  const absolu = lue && lue.absolu !== null && season === null ? lue.absolu : null;
+
   return {
     quality: qualityOf(name),
     language: languageOf(name),
     season,
     episode,
-    isPack: isPackRelease(name, episode),
+    // Notre detection reste en repli : elle reconnait « INTEGRALE » et « pack », que
+    // la lecture structuree ne signale pas toujours.
+    isPack: lue?.isPack || isPackRelease(name, episode),
+    absolu,
   };
 }
 
@@ -215,11 +243,50 @@ export function matchesEpisode(
   parsed: ParsedRelease,
   season?: number,
   episode?: number,
+  episodesParSaison?: Record<number, number>,
 ): boolean {
   if (season === undefined || episode === undefined) return true;
 
   if (parsed.season !== null && parsed.season !== season) return false;
-  if (parsed.episode !== null) return parsed.episode === episode;
+  if (parsed.episode !== null) {
+    if (parsed.episode === episode) return true;
+    // NUMEROTATION ABSOLUE. Un donghua publie « - 156 » sans saison : ce 156 compte
+    // depuis le debut de la serie. On ne pouvait pas le rapprocher d'une demande
+    // S02E01, et ces releases etaient donc toutes rejetees. Avec le compte d'episodes
+    // par saison — qu'on connait deja, il sert a juger les packs — la conversion est
+    // exacte, et on ne l'applique QUE si elle l'est.
+    if (parsed.absolu !== null && parsed.absolu !== undefined && episodesParSaison) {
+      const attendu = absoluDe(season, episode, episodesParSaison);
+      if (attendu !== null) return parsed.absolu === attendu;
+    }
+    return false;
+  }
   // Pas d'episode annonce : recevable seulement si ca ressemble a un pack.
   return parsed.isPack || parsed.season === season;
+}
+
+/**
+ * Numero absolu correspondant a un couple saison/episode.
+ *
+ * Rend `null` des qu'une saison anterieure manque au compte : mieux vaut ne pas
+ * conclure que servir le mauvais episode, qui est la pire faute possible ici.
+ */
+export function absoluDe(
+  season: number,
+  episode: number,
+  episodesParSaison: Record<number, number>,
+): number | null {
+  // L'episode demande doit exister dans sa saison. Sans ce controle, une demande
+  // impossible comme S01E42 sur une saison de trente episodes se convertissait en
+  // absolu 42 — et tombait pile sur une release qui appartient a la saison 2.
+  const dansLaSaison = episodesParSaison[season];
+  if (dansLaSaison !== undefined && episode > dansLaSaison) return null;
+
+  let total = 0;
+  for (let s = 1; s < season; s++) {
+    const n = episodesParSaison[s];
+    if (!n) return null;
+    total += n;
+  }
+  return total + episode;
 }

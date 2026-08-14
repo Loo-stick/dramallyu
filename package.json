@@ -18,7 +18,8 @@
     "better-sqlite3": "^12.9.0",
     "crypto-js": "^4.2.0",
     "express": "^4.21.2",
-    "express-rate-limit": "^7.5.0"
+    "express-rate-limit": "^7.5.0",
+    "parsium-media": "^1.1.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

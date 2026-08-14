@@ -1,8 +1,20 @@
 node_modules/
 dist/
 .env
+# Reglages d'exploitation, ecrits par la page d'administration : ils sont propres a
+# l'instance et changent en cours de route. Les versionner ferait entrer en conflit
+# chaque modification faite depuis l'admin.
+config/runtime-settings.json
 config/*.db
+# Reglages d'exploitation, ecrits par la page d'administration : ils sont propres a
+# l'instance et changent en cours de route. Les versionner ferait entrer en conflit
+# chaque modification faite depuis l'admin.
+config/runtime-settings.json
 config/*.db-shm
+# Reglages d'exploitation, ecrits par la page d'administration : ils sont propres a
+# l'instance et changent en cours de route. Les versionner ferait entrer en conflit
+# chaque modification faite depuis l'admin.
+config/runtime-settings.json
 config/*.db-wal
 scratchpad/
 *.log

@@ -70,13 +70,20 @@ export function parseNyaaRss(xml: string): NyaaItem[] {
 /**
  * Categories interrogees.
  *
- * 4_0 = Live Action (les dramas). 1_0 = Anime, ajoute seulement pour du contenu
- * japonais : sur un drama coreen, interroger la categorie anime ne ramene que du bruit
- * et consomme du budget.
+ * 4_0 = Live Action (les dramas). 1_0 = Anime.
+ *
+ * L'anime n'etait ajoute que pour du contenu JAPONAIS, au motif qu'un drama coreen n'a
+ * rien a y faire. C'etait oublier les DONGHUA — l'animation chinoise, qui represente
+ * une part importante de ce que cet addon doit servir. Nyaa les classe en Anime, pas en
+ * Live Action : « Battle Through The Heavens » (langue d'origine `zh`, 219 episodes en
+ * saison 5) etait donc introuvable, quelle que soit la recherche.
+ *
+ * Le coreen reste hors de cette liste : l'animation y est marginale, et interroger une
+ * categorie pour rien coute du budget a chaque recherche.
  */
 function categoriesFor(q: Query): string[] {
   const cats = ['4_0'];
-  if (q.originalLanguage === 'ja') cats.push('1_0');
+  if (q.originalLanguage === 'ja' || q.originalLanguage === 'zh') cats.push('1_0');
   return cats;
 }
 
@@ -101,7 +108,10 @@ async function fetchRss(base: string, term: string, cat: string, signal?: AbortS
  * « S01E09 », d'ou les deux formes.
  */
 function termsFor(q: Query): string[] {
-  const title = q.titles[0];
+  // Nyaa est un site INTERNATIONAL : on n'y publie pas sous un titre francais. On lui
+  // donne donc la forme internationale en priorite — c'est celle des groupes de
+  // release — et le premier titre en repli quand on ne la connait pas.
+  const title = q.titreAnglais || q.titles[0];
   if (!title) return [];
   const terms = [title];
   if (q.type === 'series' && q.episode) {
@@ -140,7 +150,7 @@ export const nyaaSource: Source = {
           if (!matchesTitle(item.title, q.titles, { threshold: 0.55 })) continue;
 
           const parsed = parseRelease(item.title);
-          if (!matchesEpisode(parsed, q.season, q.episode)) continue;
+          if (!matchesEpisode(parsed, q.season, q.episode, q.episodesParSaison)) continue;
 
           out.push({
             sourceId: 'nyaa',

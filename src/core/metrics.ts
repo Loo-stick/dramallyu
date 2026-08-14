@@ -45,6 +45,8 @@ export interface RequeteMesuree {
   abandonnees: string[];
   /** Motif quand la reponse est vide malgre un fan-out complet. */
   note?: string;
+  /** Installation a l'origine de la requete : « pseudo/uid », ou vide. */
+  qui?: string;
 }
 
 const anneau: RequeteMesuree[] = [];
@@ -66,6 +68,28 @@ interface EtatSource {
 const TAILLE_LATENCES = 100;
 
 const sources = new Map<string, EtatSource>();
+
+/**
+ * Activite par INSTALLATION.
+ *
+ * Bornee, comme tout le reste de ce fichier : au-dela de MAX_UTILISATEURS on cesse
+ * d'en ajouter plutot que de laisser la table croitre avec le trafic. Un addon
+ * communautaire peut recevoir n'importe qui, y compris des robots.
+ */
+const MAX_UTILISATEURS = 300;
+
+interface EtatUtilisateur {
+  requetes: number;
+  flux: number;
+  vides: number;
+  msTotal: number;
+  premierVu: number;
+  dernierVu: number;
+  /** Derniers titres demandes, pour reconnaitre un usage sans tenir d'historique. */
+  derniersTitres: string[];
+}
+
+const utilisateurs = new Map<string, EtatUtilisateur>();
 
 function etat(id: string): EtatSource {
   let e = sources.get(id);
@@ -107,6 +131,25 @@ export function noterSource(id: string, ms: number, candidats: number, echec?: s
 export function noterRequete(r: RequeteMesuree): void {
   anneau.push(r);
   if (anneau.length > TAILLE_ANNEAU) anneau.shift();
+
+  if (r.qui) {
+    let u = utilisateurs.get(r.qui);
+    if (!u && utilisateurs.size < MAX_UTILISATEURS) {
+      u = { requetes: 0, flux: 0, vides: 0, msTotal: 0, premierVu: r.quand, dernierVu: r.quand, derniersTitres: [] };
+      utilisateurs.set(r.qui, u);
+    }
+    if (u) {
+      u.requetes++;
+      u.flux += r.flux;
+      if (r.flux === 0) u.vides++;
+      u.msTotal += r.ms;
+      u.dernierVu = r.quand;
+      if (r.titre && u.derniersTitres[0] !== r.titre) {
+        u.derniersTitres.unshift(r.titre);
+        u.derniersTitres.length = Math.min(u.derniersTitres.length, 5);
+      }
+    }
+  }
 
   incrementerJour('requetes');
   incrementerJour('flux', r.flux);
@@ -201,8 +244,41 @@ export function historique(jours = 14): { jour: string; requetes: number; flux: 
   return out;
 }
 
+export interface StatUtilisateur {
+  qui: string;
+  requetes: number;
+  flux: number;
+  vides: number;
+  msMoyen: number;
+  premierVu: number;
+  dernierVu: number;
+  derniersTitres: string[];
+}
+
+/** Activite par installation, la plus recente d'abord. */
+export function statsUtilisateurs(): StatUtilisateur[] {
+  return [...utilisateurs.entries()]
+    .map(([qui, u]) => ({
+      qui,
+      requetes: u.requetes,
+      flux: u.flux,
+      vides: u.vides,
+      msMoyen: u.requetes > 0 ? Math.round(u.msTotal / u.requetes) : 0,
+      premierVu: u.premierVu,
+      dernierVu: u.dernierVu,
+      derniersTitres: u.derniersTitres,
+    }))
+    .sort((a, b) => b.dernierVu - a.dernierVu);
+}
+
+/** Vrai quand la table est pleine : l'admin doit pouvoir le dire, pas le cacher. */
+export function utilisateursSatures(): boolean {
+  return utilisateurs.size >= MAX_UTILISATEURS;
+}
+
 /** Remet les compteurs vivants a zero. Les compteurs persistes ne bougent pas. */
 export function reinitialiser(): void {
   anneau.length = 0;
   sources.clear();
+  utilisateurs.clear();
 }

@@ -185,14 +185,26 @@ function shortUrl(url: string): string {
  */
 export class Deadline {
   private readonly endsAt: number;
+  private readonly controleur = new AbortController();
   readonly signal: AbortSignal;
 
   constructor(budgetMs: number) {
     this.endsAt = Date.now() + budgetMs;
-    this.signal = AbortSignal.timeout(budgetMs);
+    // Deux facons d'expirer : l'echeance, et une interruption explicite. La seconde
+    // sert au rechauffement en arriere-plan — on doit pouvoir couper court a un
+    // travail devenu inutile sans attendre son echeance.
+    this.signal = AbortSignal.any([this.controleur.signal, AbortSignal.timeout(budgetMs)]);
+  }
+
+  /** Coupe court immediatement, avant l'echeance. */
+  arreter(): void {
+    this.controleur.abort();
   }
 
   remainingMs(): number {
+    // Une interruption vaut echeance atteinte : sans ça, une source continuerait a
+    // engager des requetes vouees a echouer parce qu'elle croit avoir du temps.
+    if (this.controleur.signal.aborted) return 0;
     return Math.max(0, this.endsAt - Date.now());
   }
 

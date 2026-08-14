@@ -31,6 +31,11 @@ import {
   handleRediscoverKkey,
   handleTableauDeBord,
   handleRequetes,
+  handleUtilisateurs,
+  handleRequetesUtilisateur,
+  handleRechercheOeuvre,
+  handleTraceRequete,
+  handleOublierUtilisateur,
   handleJournal,
   handleViderJournal,
   handleReinitialiserMesures,
@@ -381,6 +386,11 @@ app.get('/admin', requireAdmin, (_req, res) => res.sendFile(path.join(WEB_DIR, '
 app.get('/api/admin/etat', requireAdmin, handleAdminState);
 app.get('/api/admin/tableau', requireAdmin, handleTableauDeBord);
 app.get('/api/admin/requetes', requireAdmin, handleRequetes);
+app.get('/api/admin/utilisateurs', requireAdmin, handleUtilisateurs);
+app.get('/api/admin/recherche', requireAdmin, handleRechercheOeuvre);
+app.get('/api/admin/utilisateurs/requetes', requireAdmin, handleRequetesUtilisateur);
+app.post('/api/admin/utilisateurs/oublier', requireAdmin, jsonBody, handleOublierUtilisateur);
+app.get('/api/admin/activite/:id/trace', requireAdmin, handleTraceRequete);
 app.get('/api/admin/journal', requireAdmin, handleJournal);
 app.post('/api/admin/journal/vider', requireAdmin, handleViderJournal);
 app.post('/api/admin/mesures/reinitialiser', requireAdmin, handleReinitialiserMesures);

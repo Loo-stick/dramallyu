@@ -23,6 +23,23 @@ export interface Query {
   kkhId?: string;
   /** Titres connus, du plus fiable au moins fiable (original, FR, alternatifs). */
   titles: string[];
+  /**
+   * Titre international, quand il differe du premier de `titles`.
+   *
+   * Plusieurs sources ne cherchent qu'avec `titles[0]` — le titre francais. Pour les
+   * sites internationaux (Nyaa, KissKH) c'est le mauvais choix, et pour les trackers FR
+   * c'est le bon : chacune prend donc la forme qui la concerne, au lieu d'une seule
+   * imposee a toutes.
+   */
+  titreAnglais?: string;
+  /**
+   * Nombre d'episodes par saison, quand on le connait.
+   *
+   * Permet de convertir un numero ABSOLU (« - 156 », sans saison) en couple
+   * saison/episode. Sans lui, ces releases — la norme chez les donghua — ne peuvent
+   * etre rapprochees d'aucune demande et sont toutes rejetees.
+   */
+  episodesParSaison?: Record<number, number>;
   year?: number;
   season?: number;
   episode?: number;
@@ -112,6 +129,17 @@ export interface Source {
    * elle n'echoue pas et ne consomme pas de budget.
    */
   requiredUserKey?: 'ad' | 'tb' | 'c411' | 'tr4ker' | 'tmdb' | 'g3mini' | 'dcore' | 'ygg' | 'dpeers';
+  /**
+   * Vrai quand la source ne sait chercher QUE par identifiant (imdb/tmdb), jamais par
+   * titre — c'est le cas des trackers UNIT3D, dont l'API filtre sur `imdbId`/`tmdbId`.
+   *
+   * Sans identifiant, une telle source ne construit aucune requete et rend une liste
+   * vide instantanement. Dans le fan-out reel c'est sans consequence : l'identite est
+   * toujours resolue avant. Mais l'essai de l'administration, lui, partait d'un simple
+   * titre — et affichait « 0 candidat », indiscernable d'un tracker qui ne repond plus.
+   * Le declarer ici permet de le DIRE au lieu de le laisser deviner.
+   */
+  requiertIdentifiant?: boolean;
   search(q: Query, ctx: SearchContext): Promise<Candidate[]>;
   /** Sous-titres propres a la source, quand elle en expose. */
   subtitles?(q: Query, ctx: SearchContext): Promise<SubTrack[]>;

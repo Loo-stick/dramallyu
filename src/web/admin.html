@@ -112,6 +112,47 @@
   .msg.ko { color:var(--brique); }
   .filtres { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:.8rem; }
   a { color:var(--or-clair); }
+
+  /* ------------------------------------------------------------------
+     TELEPHONE. Ce tableau de bord se consulte souvent debout, loin de la
+     machine — c'est meme la que « est-ce que ça tourne ? » se pose.
+     Le defaut n'etait pas un debordement : c'est que les tableaux
+     n'exposaient que trois colonnes sur huit, les autres cachees derriere
+     un defilement lateral que rien n'annonce. Une donnee qu'on ne voit
+     pas n'existe pas.
+     Sous 620 px chaque LIGNE devient une FICHE et chaque cellule porte
+     son intitule. Rien n'est masque, rien ne se defile de travers.
+     Les intitules sont poses par `etiqueter()` a partir des en-tetes :
+     aucune vue n'a a s'en occuper, y compris celles ecrites plus tard.
+     ------------------------------------------------------------------ */
+  @media (max-width:620px) {
+    .page { padding:1.1rem .75rem 3.5rem; }
+    header.tete { gap:.7rem; }
+    .marque img { width:42px; height:42px; }
+    h1 { font-size:1.28rem; }
+    .bloc { padding:.95rem .9rem; border-radius:11px; }
+    nav.onglets { gap:.22rem; margin:1rem 0 1.2rem; }
+    nav.onglets button { padding:.34rem .6rem; font-size:.82rem; }
+
+    .defile { overflow-x:visible; }
+    table { display:block; font-size:.9rem; }
+    tbody { display:block; }
+    tr.entete { display:none; }
+    tr { display:block; background:var(--relief); border:1px solid var(--trait-doux);
+         border-radius:9px; padding:.5rem .7rem; margin-bottom:.5rem; }
+    tr:last-child td { border-bottom:0; }
+    td { display:flex; gap:.7rem; align-items:baseline; justify-content:space-between;
+         padding:.22rem 0; border-bottom:0; text-align:left; }
+    td + td { border-top:1px solid var(--trait-doux); }
+    /* L'intitule vient de l'en-tete de colonne : la fiche reste lisible seule. */
+    td[data-l]::before { content:attr(data-l); color:var(--doux); font-size:.72rem;
+                         font-weight:600; text-transform:uppercase; letter-spacing:.05em;
+                         flex:0 0 auto; padding-top:.15rem; }
+    td.num { text-align:right; }
+    .barre { flex:1 1 auto; min-width:80px; }
+    /* Une cellule sans contenu n'a pas a occuper une ligne de la fiche. */
+    td:empty { display:none; }
+  }
   code { font:12.5px var(--mono); background:var(--relief); padding:.08rem .3rem; border-radius:4px; }
 </style>
 </head>
@@ -132,6 +173,7 @@
     <button data-vue="bord" aria-current="page">Tableau de bord</button>
     <button data-vue="sources">Sources</button>
     <button data-vue="requetes">Requetes</button>
+    <button data-vue="utilisateurs">Utilisateurs</button>
     <button data-vue="sante">Sante</button>
     <button data-vue="journal">Journal</button>
     <button data-vue="reglages">Reglages</button>
@@ -186,13 +228,42 @@
       <p class="aide">
         Interroge la source pour de vrai, avec un titre de votre choix. La mesure passive ne dit rien
         tant que personne n'a cherche — c'est le seul moyen honnete de verifier qu'une source repond.
-        Les sources a cle restent muettes ici : leurs cles appartiennent aux utilisateurs.
-        Collez un segment de configuration pour les essayer avec.
+        <strong>Les trackers prives ne peuvent rien chercher sans cle</strong>, et ces
+        cles appartiennent aux utilisateurs : l'operateur n'en detient aucune. Pour les
+        essayer, collez ci-dessous un lien de configuration qui en porte une — le votre,
+        par exemple. Sans cela, l'essai vous dira que la source n'a pas ete interrogee,
+        au lieu de la faire passer pour muette.
       </p>
-      <label class="champ" for="essai-titre">Titre a chercher</label>
-      <input type="text" id="essai-titre" value="Squid Game" style="max-width:320px">
-      <label class="champ" for="essai-config">Segment de configuration (facultatif)</label>
-      <input type="text" id="essai-config" placeholder="e1...." style="width:100%">
+      <label class="champ" for="essai-recherche">Chercher une oeuvre par son titre</label>
+      <div class="filtres">
+        <input type="text" id="essai-recherche" placeholder="Le Palais de l'est, Squid Game…" style="min-width:260px;flex:1">
+        <button class="sec" id="btn-recherche">Chercher</button>
+      </div>
+      <div id="resultats-recherche"></div>
+
+      <label class="champ" for="essai-titre">Titre, ou identifiant IMDb</label>
+      <input type="text" id="essai-titre" value="tt10919420:1:1" style="max-width:320px">
+      <p class="aide" style="margin:.3rem 0 0">
+        <strong>G3mini et DarkPeers ne cherchent que par identifiant</strong> (leur API
+        filtre sur imdbId/tmdbId, jamais sur un titre). Donnez un identifiant —
+        <code>tt10919420:1:1</code> pour un episode, <code>tt10919420</code> pour un
+        film — et l'essai les interroge dans les memes conditions qu'une vraie recherche.
+      </p>
+      <label class="champ" for="essai-config">
+        Lien ou segment de configuration &mdash; necessaire pour les sources a cle
+      </label>
+      <input type="text" id="essai-config" placeholder="https://dramallyu.loostick.ovh/e1..../manifest.json  ou  e1...." style="width:100%">
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.85rem;margin-top:.5rem">
+        <input type="checkbox" id="essai-retenir"> Retenir dans ce navigateur
+      </label>
+      <p class="aide" style="margin:.3rem 0 0">
+        Le lien reste alors dans CE navigateur, sur cette machine, et n'est jamais envoye
+        au serveur pour y etre conserve. Decochez pour l'oublier immediatement.
+      </p>
+      <div class="actions">
+        <button class="act" id="essai-tout">Essayer toutes les sources</button>
+      </div>
+      <div class="defile" style="margin-top:.8rem"><table id="tab-essai"></table></div>
       <div class="msg" id="msg-essai"></div>
     </div>
   </section>
@@ -255,6 +326,46 @@
     </div>
   </section>
 
+
+  <!-- ============================== UTILISATEURS ============================== -->
+  <section class="vue" id="vue-utilisateurs">
+    <div class="bloc">
+      <h2>Installations</h2>
+      <p class="aide">
+        Chaque lien porte un identifiant tire au sort ; le pseudo, lui, est libre et n'a
+        pas a etre unique. Les installations qui ont rencontre le plus d'ennuis cette
+        semaine sont en tete. <strong>Aucune cle n'apparait ici</strong> — elles
+        appartiennent aux utilisateurs, et les traces sont masquees avant d'etre ecrites.
+        Conservation : 30 jours.
+      </p>
+      <div class="defile"><table id="tab-utilisateurs"></table></div>
+      <div class="msg" id="msg-utilisateurs"></div>
+      <div class="actions">
+        <label style="font-size:.85rem;display:flex;align-items:center;gap:.4rem">
+          <input type="checkbox" id="u-tracertout"> Conserver la trace de TOUTES les recherches
+        </label>
+      </div>
+      <p class="aide" style="margin:.4rem 0 0">
+        Par defaut seules les recherches qui posent probleme gardent leur trace. Activez
+        ceci le temps de comprendre un cas qui « marche » mal — puis desactivez-le.
+      </p>
+    </div>
+
+    <div class="bloc" id="bloc-detail-utilisateur" hidden>
+      <h2 id="titre-detail">Recherches</h2>
+      <p class="aide">
+        Chaque ligne est une recherche. Depliez-la pour voir la trace : les lignes de
+        journal produites par CETTE recherche, isolees de celles des autres.
+      </p>
+      <div id="liste-requetes-utilisateur"></div>
+      <div class="actions">
+        <button class="sec" id="fermer-detail">Fermer</button>
+        <button class="sec" id="oublier-utilisateur">Effacer son activite</button>
+      </div>
+      <div class="msg" id="msg-detail"></div>
+    </div>
+  </section>
+
   <!-- ================================ JOURNAL ================================ -->
   <section class="vue" id="vue-journal">
     <div class="bloc">
@@ -294,6 +405,17 @@
         Gouverne la reponse ENTIERE, enrichissements compris — la ou le budget de fan-out ne bornait
         que l'interrogation des sources. Ce qui n'a pas le temps de se faire est omis : une etiquette
         « pret » manquante vaut mieux qu'une reponse qui n'arrive pas.
+      </p>
+
+      <label class="champ" for="r-rechauffement">Rechauffement en arriere-plan (ms, 2000 a 60000)</label>
+      <input type="number" id="r-rechauffement" min="2000" max="60000" step="1000" style="max-width:160px">
+      <p class="aide" style="margin:.3rem 0 0">
+        Le plafond ci-dessus dit quand on REPOND ; celui-ci dit quand on renonce. Une source
+        arrivee apres l'heure ne figure pas dans la reponse, mais elle continue et son
+        resultat entre en cache : elle sera la a la recherche suivante. Sans ce delai, son
+        travail etait jete et elle se faisait couper a l'identique la fois d'apres — une
+        source structurellement lente n'apparaissait jamais. Huit rechauffements
+        simultanes au maximum. Egalez-le au plafond de reponse pour le desactiver.
       </p>
 
       <label class="champ" for="r-max">Plafond de flux renvoyes (5 a 300)</label>
@@ -516,13 +638,131 @@ document.addEventListener('click', function (e) {
     jsonPost('/api/admin/sources/' + t.dataset.tester + '/tester', {
       titre: $('essai-titre').value, config: $('essai-config').value
     }).then(function (d) {
+      // Une source ignoree n'est pas une source en panne : le dire, plutot que
+      // d'afficher « 0 candidat » et laisser croire qu'elle ne repond plus.
+      if (d.ignoree) {
+        ecrire('msg-essai', '— ' + t.dataset.tester + ' non interrogee. ' + d.raison, '');
+        $('msg-essai').style.whiteSpace = 'pre-wrap';
+        return;
+      }
       if (!d.ok) { ecrire('msg-essai', '✘ ' + t.dataset.tester + ' : ' + (d.erreur || 'echec'), 'ko'); return; }
       var ex = (d.exemples || []).map(function (x) { return '· ' + x.titre; }).join('\n');
-      ecrire('msg-essai', '✔ ' + t.dataset.tester + ' : ' + d.candidats + ' candidat(s) en ' + ms(d.ms) +
-        (ex ? '\n' + ex : ''), d.candidats ? 'ok' : '');
+      // La reserve dit que la source repond mais ne participerait pas au fan-out reel :
+      // c'est une precision, pas un echec.
+      var reserve = d.reserve ? '\n⚠ ' + d.reserve : '';
+      var cherche = d.cherche ? ' (« ' + d.cherche + ' »)' : '';
+      ecrire('msg-essai', '✔ ' + t.dataset.tester + cherche + ' : ' + d.candidats +
+        ' candidat(s) en ' + ms(d.ms) + (ex ? '\n' + ex : '') + reserve, d.candidats ? 'ok' : '');
       $('msg-essai').style.whiteSpace = 'pre-wrap';
     });
   }
+});
+
+/* Recherche par titre : personne ne connait les identifiants par coeur, et les
+   trackers UNIT3D ne cherchent QUE par identifiant. Aucune cle n'est requise — le
+   catalogue de recherche de Cinemeta est public et comprend les titres francais. */
+function lancerRecherche() {
+  var q = $('essai-recherche').value.trim();
+  if (q.length < 2) return;
+  $('resultats-recherche').innerHTML = '<p class="aide">Recherche…</p>';
+  jsonGet('/api/admin/recherche?q=' + encodeURIComponent(q)).then(function (d) {
+    if (!d.resultats || d.resultats.length === 0) {
+      $('resultats-recherche').innerHTML = '<p class="aide">Aucune oeuvre trouvee.</p>';
+      return;
+    }
+    $('resultats-recherche').innerHTML =
+      '<div class="actions" style="margin-top:.5rem">' +
+      d.resultats.map(function (r) {
+        // Une serie a besoin d'une saison et d'un episode : on propose S01E01, que
+        // l'operateur ajuste dans le champ. Un film n'a que son identifiant.
+        var val = r.type === 'series' ? r.id + ':1:1' : r.id;
+        return '<button class="sec mini" data-choix="' + val + '">' +
+          ech(r.nom) + (r.annee ? ' (' + ech(r.annee) + ')' : '') +
+          ' <span style="color:var(--doux)">' + (r.type === 'series' ? 'serie' : 'film') + '</span></button>';
+      }).join('') + '</div>' +
+      '<p class="aide" style="margin:.4rem 0 0">Pour une serie, l episode propose est S01E01 — ' +
+      'modifiez-le dans le champ ci-dessous si besoin.</p>';
+  });
+}
+
+$('btn-recherche').addEventListener('click', lancerRecherche);
+$('essai-recherche').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); lancerRecherche(); }
+});
+
+document.addEventListener('click', function (e) {
+  var b = e.target.closest ? e.target.closest('[data-choix]') : null;
+  if (!b) return;
+  $('essai-titre').value = b.dataset.choix;
+  ecrire('msg-essai', 'Champ rempli avec ' + b.dataset.choix + '. Lancez un essai.', 'ok');
+});
+
+/* Essayer TOUTES les sources, l'une apres l'autre.
+   En serie, volontairement : onze appels sortants simultanes depuis cette machine
+   n'apprendraient rien de plus et donneraient des mesures de duree fausses. */
+$('essai-tout').addEventListener('click', function () {
+  var bouton = this;
+  bouton.disabled = true;
+  var libelle = bouton.textContent;
+  $('tab-essai').innerHTML = '<tr><th>Source</th><th>Resultat</th><th class="num">Duree</th><th>Reserve</th></tr>';
+  ecrire('msg-essai', '');
+
+  jsonGet('/api/admin/etat').then(function (etat) {
+    var restantes = etat.sources.map(function (s) { return s.id; });
+
+    (function suivante() {
+      if (restantes.length === 0) {
+        bouton.disabled = false; bouton.textContent = libelle;
+        return;
+      }
+      var id = restantes.shift();
+      bouton.textContent = 'Essai de ' + id + '… (' + (restantes.length + 1) + ' restante(s))';
+      jsonPost('/api/admin/sources/' + id + '/tester', {
+        titre: $('essai-titre').value, config: $('essai-config').value
+      }).then(function (d) {
+        var resultat, reserve = '';
+        if (d.ignoree) {
+          // Symbole + mot : aucune information portee par la couleur seule.
+          resultat = '<span class="etat neutre">— non interrogee</span>';
+          reserve = d.raison;
+        } else if (!d.ok) {
+          resultat = '<span class="etat ko">✖ echec</span>';
+          reserve = d.erreur || '';
+        } else {
+          resultat = d.candidats
+            ? '<span class="etat ok">✔ ' + d.candidats + ' candidat(s)</span>'
+            : '<span class="etat neutre">— repond, 0 candidat</span>';
+          reserve = d.reserve || '';
+        }
+        $('tab-essai').innerHTML +=
+          '<tr><td><strong>' + ech(id) + '</strong></td><td>' + resultat + '</td>' +
+          '<td class="num">' + (d.ms ? ms(d.ms) : '—') + '</td>' +
+          '<td style="color:var(--doux);font-size:.82rem">' + ech(reserve) + '</td></tr>';
+        suivante();
+      });
+    })();
+  });
+});
+
+/* Le lien d'essai porte des cles : il n'est retenu que si l'operateur le demande, et
+   seulement dans son propre navigateur. Le serveur, lui, n'en garde jamais rien — c'est
+   le principe qui tient tout le reste de ce projet. */
+var CLE_ESSAI = 'dramallyu.essai.config';
+
+(function restaurerEssai() {
+  var garde = localStorage.getItem(CLE_ESSAI);
+  if (garde === null) return;
+  $('essai-config').value = garde;
+  $('essai-retenir').checked = true;
+})();
+
+$('essai-retenir').addEventListener('change', function () {
+  if (this.checked) localStorage.setItem(CLE_ESSAI, $('essai-config').value);
+  else localStorage.removeItem(CLE_ESSAI);
+});
+
+$('essai-config').addEventListener('input', function () {
+  if ($('essai-retenir').checked) localStorage.setItem(CLE_ESSAI, this.value);
 });
 
 /* -------------------------------- Requetes ------------------------------- */
@@ -614,6 +854,166 @@ $('btn-domaines2').addEventListener('click', function () {
   });
 });
 
+
+
+/**
+ * Pose sur chaque cellule l'intitule de sa colonne, et marque la ligne d'en-tete.
+ *
+ * Sur telephone les tableaux deviennent des fiches (cf. la feuille de style) : sans
+ * intitule, une fiche n'est qu'une colonne de nombres sans signification. Plutot que
+ * de faire porter cet etiquetage a chaque fonction d'affichage — neuf endroits a ne
+ * pas oublier, dont ceux qu'on ecrira demain — on le derive des en-tetes existants.
+ */
+function etiqueter(racine) {
+  (racine || document).querySelectorAll('table').forEach(function (t) {
+    var lignes = t.rows;
+    if (lignes.length === 0) return;
+    var titres = [];
+    for (var i = 0; i < lignes.length; i++) {
+      var l = lignes[i];
+      if (l.cells.length && l.cells[0].tagName === 'TH') {
+        l.classList.add('entete');
+        titres = [].map.call(l.cells, function (c) { return c.textContent.trim(); });
+        continue;
+      }
+      for (var j = 0; j < l.cells.length; j++) {
+        var titre = titres[j];
+        // Une cellule qui s'etale sur plusieurs colonnes (un message, un total)
+        // n'appartient a aucune d'elles : pas d'intitule.
+        if (titre && l.cells[j].colSpan === 1) l.cells[j].setAttribute('data-l', titre);
+        else l.cells[j].removeAttribute('data-l');
+      }
+    }
+  });
+}
+
+// Toutes les vues remplissent leurs tableaux en ecrivant du HTML : on observe la page
+// plutot que d'appeler etiqueter() apres chaque rendu, ce qui s'oublie.
+new MutationObserver(function () { etiqueter(); })
+  .observe(document.body, { childList: true, subtree: true });
+
+/* ------------------------------ Utilisateurs ------------------------------ */
+/** Etiquette d'issue : SYMBOLE + MOT, jamais la couleur seule. */
+function issueLibelle(i) {
+  if (i === 'ok') return '<span class="etat ok">✔ servi</span>';
+  if (i === 'vide') return '<span class="etat ko">✖ rien trouve</span>';
+  if (i === 'erreur') return '<span class="etat ko">✖ erreur</span>';
+  if (i === 'inconnu') return '<span class="etat neutre">? fiche inconnue</span>';
+  return '<span class="etat neutre">— hors creneau</span>';
+}
+
+function chargerUtilisateurs() {
+  jsonGet('/api/admin/utilisateurs').then(function (d) {
+    $('u-tracertout').checked = !!d.tracerTout;
+    if (d.utilisateurs.length === 0) {
+      $('tab-utilisateurs').innerHTML =
+        '<tr><td style="color:var(--doux)">Aucune installation identifiee pour le moment. ' +
+        'Les liens generes avant la mise en place des pseudos n&rsquo;en portent pas.</td></tr>';
+    } else {
+      $('tab-utilisateurs').innerHTML =
+        '<tr><th>Installation</th><th class="num">Recherches</th><th class="num">Rien trouve</th>' +
+        '<th class="num">Erreurs</th><th class="num">Hors creneau</th><th class="num">Temps moyen</th>' +
+        '<th>Derniere fois</th><th>Derniers titres</th><th></th></tr>' +
+        d.utilisateurs.map(function (u) {
+          var part = u.requetes ? Math.round((u.vides / u.requetes) * 100) : 0;
+          var alerte = u.soucisRecents > 0
+            ? ' <span class="etat ko">⚑ ' + u.soucisRecents + ' cette semaine</span>' : '';
+          return '<tr><td><strong>' + ech(u.qui) + '</strong>' + alerte + '</td>' +
+            '<td class="num">' + u.requetes + '</td>' +
+            '<td class="num">' + u.vides + (u.vides ? ' <span style="color:var(--doux)">(' + part + ' %)</span>' : '') + '</td>' +
+            '<td class="num">' + u.erreurs + '</td>' +
+            '<td class="num">' + u.horsCreneau + '</td>' +
+            '<td class="num">' + ms(u.msMoyen) + '</td>' +
+            '<td>' + heure(u.dernierVu) + '</td>' +
+            '<td style="color:var(--doux);font-size:.82rem">' + ech((u.derniersTitres || []).join(' · ')) + '</td>' +
+            '<td><button class="sec mini" data-voir="' + ech(u.qui) + '">Ses recherches</button></td></tr>';
+        }).join('');
+    }
+    var notes = [];
+    if (d.sansIdentite) notes.push(d.sansIdentite + ' requete(s) recente(s) sans identite (liens anterieurs).');
+    if (d.satures) notes.push('Table des mesures vivantes pleine : les nouvelles installations n\'y sont plus comptees.');
+    ecrire('msg-utilisateurs', notes.join(' '), d.satures ? 'ko' : '');
+  });
+}
+
+var utilisateurOuvert = null;
+
+/* Le detail se demande a la ligne : c'est la seule partie volumineuse, et on n'en lit
+   qu'une a la fois. Charger les traces avec la liste ferait passer des centaines de
+   kilo-octets pour une seule qu'on ouvrira. */
+function voirUtilisateur(qui) {
+  utilisateurOuvert = qui;
+  $('titre-detail').textContent = 'Recherches de ' + qui;
+  $('bloc-detail-utilisateur').hidden = false;
+  ecrire('msg-detail', '');
+  $('liste-requetes-utilisateur').innerHTML = '<p class="aide">Chargement…</p>';
+  jsonGet('/api/admin/utilisateurs/requetes?qui=' + encodeURIComponent(qui)).then(function (d) {
+    if (!d.requetes || d.requetes.length === 0) {
+      $('liste-requetes-utilisateur').innerHTML =
+        '<p class="aide">Aucune recherche enregistree. L\'historique demarre a la mise ' +
+        'en place de ce suivi.</p>';
+      return;
+    }
+    $('liste-requetes-utilisateur').innerHTML = d.requetes.map(function (r) {
+      var quand = new Date(r.quand).toLocaleString('fr-FR');
+      var resume = quand + ' · ' + ech(r.titre || r.contenu || '?') +
+        ' · ' + r.flux + ' flux' + (r.ms ? ' en ' + ms(r.ms) : '');
+      return '<details class="pli" data-trace="' + r.id + '">' +
+        '<summary>' + issueLibelle(r.issue) + ' ' + resume + '</summary>' +
+        '<div><div class="journal" id="trace-' + r.id + '">…</div></div></details>';
+    }).join('');
+  });
+}
+
+/* Une trace n'est cherchee qu'a l'ouverture du repli, et une seule fois. */
+document.addEventListener('toggle', function (e) {
+  var d = e.target;
+  if (!d.dataset || !d.dataset.trace || !d.open || d.dataset.chargee) return;
+  d.dataset.chargee = '1';
+  jsonGet('/api/admin/activite/' + d.dataset.trace + '/trace').then(function (r) {
+    var boite = $('trace-' + d.dataset.trace);
+    if (r.absente) {
+      boite.innerHTML = '<div class="l"><span class="t" style="color:var(--doux)">' +
+        'Aucune trace conservee : cette recherche a abouti. Cochez « conserver la trace ' +
+        'de toutes les recherches » pour en garder une la prochaine fois.</span></div>';
+      return;
+    }
+    var lignes = (r.trace || '').split('\n');
+    boite.innerHTML = lignes.map(function (l) {
+      var cl = /erreur|echec|impossible/i.test(l) ? ' erreur' : (/refus|invalide|vide/i.test(l) ? ' alerte' : '');
+      return '<div class="l' + cl + '"><span class="t">' + ech(l) + '</span></div>';
+    }).join('');
+  });
+}, true);
+
+document.addEventListener('click', function (e) {
+  var b = e.target.closest ? e.target.closest('[data-voir]') : null;
+  if (b) voirUtilisateur(b.dataset.voir);
+});
+
+$('fermer-detail').addEventListener('click', function () {
+  $('bloc-detail-utilisateur').hidden = true;
+  utilisateurOuvert = null;
+});
+
+$('oublier-utilisateur').addEventListener('click', function () {
+  if (!utilisateurOuvert) return;
+  if (!confirm('Effacer toute l\'activite de ' + utilisateurOuvert + ' ?')) return;
+  jsonPost('/api/admin/utilisateurs/oublier', { qui: utilisateurOuvert }).then(function (r) {
+    ecrire('msg-detail', r.supprimees + ' ligne(s) effacee(s).', 'ok');
+    $('bloc-detail-utilisateur').hidden = true;
+    chargerUtilisateurs();
+  });
+});
+
+$('u-tracertout').addEventListener('change', function () {
+  jsonPost('/api/admin/reglages', { tracerTout: this.checked }).then(function () {
+    ecrire('msg-utilisateurs', this.checked
+      ? 'Toutes les recherches conservent desormais leur trace.'
+      : 'Seules les recherches qui posent probleme conservent leur trace.', 'ok');
+  }.bind(this));
+});
+
 /* --------------------------------- Journal -------------------------------- */
 function chargerJournal() {
   var q = '?limite=300';
@@ -649,6 +1049,7 @@ function chargerReglages() {
     $('r-budget').value = d.settings.fanoutBudgetMs;
     $('r-max').value = d.settings.maxStreams;
     $('r-reponse').value = d.settings.reponseMaxMs;
+    $('r-rechauffement').value = d.settings.rechauffementMs;
 
     var html = '';
     [['torznab', 'Torznab'], ['unit3d', 'UNIT3D']].forEach(function (f) {
@@ -674,6 +1075,7 @@ $('btn-reglages').addEventListener('click', function () {
   jsonPost('/api/admin/reglages', {
     fanoutBudgetMs: Number($('r-budget').value),
     reponseMaxMs: Number($('r-reponse').value),
+    rechauffementMs: Number($('r-rechauffement').value),
     maxStreams: Number($('r-max').value)
   }).then(function (d) {
     ecrire('msg-reglages', d.ok ? 'Enregistre. Applique immediatement.' : (d.erreur || 'echec'), d.ok ? 'ok' : 'ko');
@@ -802,6 +1204,7 @@ $('btn-remesurer').addEventListener('click', function () {
 function charger(vue) {
   if (vue === 'bord' || vue === 'sources') chargerBord();
   else if (vue === 'requetes') chargerRequetes();
+  else if (vue === 'utilisateurs') chargerUtilisateurs();
   else if (vue === 'sante') chargerSante(false);
   else if (vue === 'journal') chargerJournal();
   else if (vue === 'reglages') chargerReglages();

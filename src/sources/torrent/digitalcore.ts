@@ -57,15 +57,23 @@ function nombre(v: unknown): number | undefined {
  * entree « S01 », que la recherche par episode ne trouverait jamais.
  */
 function requetesPour(q: Query): string[] {
-  const titre = q.titles[0];
-  if (!titre) return [];
-  if (q.type !== 'series' || q.season === undefined) {
-    return q.year ? [`${titre} ${q.year}`, titre] : [titre];
-  }
-  const saison = `S${String(q.season).padStart(2, '0')}`;
-  const out = [`${titre} ${saison}`];
-  if (q.episode !== undefined) {
-    out.unshift(`${titre} ${saison}E${String(q.episode).padStart(2, '0')}`);
+  // Deux formes au plus : le titre de tete, puis le titre international s'il differe.
+  // Un drama asiatique est publie sous l'un ou sous l'autre, rarement sous les deux.
+  const formes = [q.titles[0], q.titreAnglais].filter(
+    (t, i, a): t is string => Boolean(t) && a.indexOf(t) === i,
+  );
+  if (formes.length === 0) return [];
+
+  const out: string[] = [];
+  for (const titre of formes) {
+    if (q.type !== 'series' || q.season === undefined) {
+      if (q.year) out.push(`${titre} ${q.year}`);
+      out.push(titre);
+      continue;
+    }
+    const saison = `S${String(q.season).padStart(2, '0')}`;
+    if (q.episode !== undefined) out.push(`${titre} ${saison}E${String(q.episode).padStart(2, '0')}`);
+    out.push(`${titre} ${saison}`);
   }
   return out;
 }
@@ -75,10 +83,12 @@ async function chercher(
   apiKey: string,
   requete: string,
   signal?: AbortSignal,
-): Promise<ItemDc[]> {
+): Promise<ItemDc[] | null> {
   // La cle N'ENTRE PAS dans la cle de cache : le resultat est partageable entre
-  // utilisateurs, le secret non.
-  return cached<ItemDc[]>(
+  // utilisateurs, le secret non. En contrepartie, `null` — l'appel a echoue — n'est
+  // JAMAIS memorise : une cle refusee ne doit pas faire passer le tracker pour vide
+  // aux yeux des autres utilisateurs.
+  return cached<ItemDc[] | null>(
     `digitalcore:${requete}`,
     TTL_MS,
     async () => {
@@ -89,9 +99,15 @@ async function chercher(
         retries: 1,
         headers: { Accept: 'application/json' },
       });
+      if (data === null) return null;
       return Array.isArray(data) ? (data.filter((x) => x && typeof x === 'object') as ItemDc[]) : [];
     },
-    { scope: 'digitalcore', shouldCache: (v) => v.length > 0, negativeTtlMs: TTL_VIDE_MS },
+    {
+      scope: 'digitalcore',
+      echec: (v) => v === null,
+      shouldCache: (v) => v !== null && v.length > 0,
+      negativeTtlMs: TTL_VIDE_MS,
+    },
   );
 }
 
@@ -119,9 +135,20 @@ export const digitalcoreSource: Source = {
     const vus = new Set<string>();
     const retenus: ItemDc[] = [];
 
+    // On distingue « le tracker n'a rien » de « le tracker ne repond pas » : la
+    // seconde doit remonter comme un echec, pas comme une liste vide.
+    let appels = 0;
+    let echecs = 0;
+
     for (const requete of requetesPour(q)) {
       if (ctx.deadline.remainingMs() < 2500) break;
-      for (const item of await chercher(base, apiKey, requete, ctx.deadline.signal)) {
+      appels++;
+      const lot = await chercher(base, apiKey, requete, ctx.deadline.signal);
+      if (lot === null) {
+        echecs++;
+        continue;
+      }
+      for (const item of lot) {
         const id = String(item.id ?? '');
         if (!id || vus.has(id) || !item.name) continue;
         vus.add(id);
@@ -134,10 +161,16 @@ export const digitalcoreSource: Source = {
         // Recherche par texte : sans ce filtre, « Signal » ramene tout ce qui contient
         // ce mot.
         if (!matchesTitle(item.name, q.titles, { year: q.year, threshold: 0.6 })) continue;
-        if (!matchesEpisode(parseRelease(item.name), q.season, q.episode)) continue;
+        if (!matchesEpisode(parseRelease(item.name), q.season, q.episode, q.episodesParSaison)) continue;
 
         retenus.push(item);
       }
+    }
+
+    // Aucun appel n'a abouti : signaler l'echec plutot que de rendre une liste vide,
+    // qui se lirait comme « ce tracker n'a rien pour vous ».
+    if (appels > 0 && echecs === appels) {
+      throw new Error('DigitalCore : aucune reponse exploitable (cle refusee ou tracker injoignable)');
     }
 
     if (retenus.length === 0 || ctx.deadline.remainingMs() < 3000) return [];

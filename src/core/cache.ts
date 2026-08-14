@@ -94,6 +94,21 @@ export interface CachedOptions<T> {
   shouldCache?: (value: T) => boolean;
   /** TTL de repli quand shouldCache est faux : evite de matraquer une source morte. */
   negativeTtlMs?: number;
+  /**
+   * Vrai quand la valeur traduit un ECHEC et ne doit etre memorisee d'AUCUNE facon,
+   * pas meme au TTL negatif.
+   *
+   * La distinction n'est pas cosmetique. « La source a repondu, rien ne correspond »
+   * est une information exacte, qu'il est utile de garder. « La requete a echoue » n'en
+   * est pas une : c'est l'absence d'information. Les memoriser pareil transforme une
+   * panne passagere en panne durable.
+   *
+   * Le cas qui a impose ce champ : les cles de tracker sont PAR UTILISATEUR, mais la
+   * cle de cache les exclut volontairement pour que tous partagent le resultat. Une
+   * cle expiree donnait donc une reponse vide, memorisee — et le tracker paraissait
+   * mort pour TOUS les autres utilisateurs, y compris ceux dont la cle est valide.
+   */
+  echec?: (value: T) => boolean;
 }
 
 export async function cached<T>(
@@ -106,6 +121,8 @@ export async function cached<T>(
   if (hit !== null) return hit;
 
   const value = await fn();
+  if (opts?.echec?.(value)) return value;
+
   const shouldCache = opts?.shouldCache ?? (() => true);
   if (shouldCache(value)) {
     set(key, value, ttlMs, opts?.scope);
