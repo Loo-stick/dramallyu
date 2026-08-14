@@ -36,8 +36,37 @@ export interface UserConfig {
   ygg?: string;
   /** Cle API DarkPeers (tracker UNIT3D). */
   dpeers?: string;
+  /**
+   * Cle d'acces a l'addon, quand l'operateur en impose une (`ACCESS_KEY`).
+   *
+   * Elle ne protege PAS le manifeste : AIOStreams doit pouvoir le lire pour agreger
+   * l'addon, et un manifeste ne contient ni secret ni travail. Elle garde les routes
+   * qui coutent — flux, sous-titres, catalogue, resolution.
+   */
+  acces?: string;
   /** Cle TMDB (optionnelle : enrichit en FR, sinon on sert Cinemeta + KissKH). */
   tmdb?: string;
+  /**
+   * Identifiant technique, genere une fois et jamais reutilise.
+   *
+   * C'est LUI qui identifie une installation dans les journaux, pas le pseudo. Un
+   * identifiant tire au sort est unique par construction : aucun registre a tenir,
+   * aucune collision a arbitrer, aucune course entre deux personnes qui generent leur
+   * lien au meme instant.
+   *
+   * LooStream ancre l'unicite sur la cle TMDB. Ici c'est impossible : TMDB est
+   * FACULTATIF — l'addon marche tres bien sans, et la majorite des gens n'en auront
+   * pas. Ancrer l'identite dessus laisserait ces gens sans identite du tout.
+   */
+  uid?: string;
+  /**
+   * Libelle choisi par l'utilisateur, pour que l'operateur le reconnaisse dans les
+   * journaux quand il signale un souci. Purement humain : on n'impose PAS son unicite.
+   * Deux « Loo » se distinguent par leur uid, et forcer l'unicite ajouterait un
+   * registre et un refus a l'installation pour un probleme que l'uid a deja resolu.
+   */
+  pseudo?: string;
+
   /** Langues de sous-titres, ISO 639-2, par ordre de preference. */
   subLangs: string[];
   /** Qualites exclues (opt-in). Vide = aucune exclusion. */
@@ -150,7 +179,7 @@ export const DEFAULT_CONFIG: UserConfig = {
  * testee avec succes, puis silencieusement absente du lien genere. C'est exactement ce
  * qui est arrive a G3mini et DigitalCore.
  */
-export const CHAMPS_CLES = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore', 'ygg', 'dpeers'] as const;
+export const CHAMPS_CLES = ['ad', 'tb', 'c411', 'tr4ker', 'tmdb', 'g3mini', 'dcore', 'ygg', 'dpeers', 'acces'] as const;
 export type ChampCle = (typeof CHAMPS_CLES)[number];
 
 const KEY_FIELDS = CHAMPS_CLES;
@@ -222,6 +251,14 @@ export function parseConfig(raw?: string | null): UserConfig {
     const v = asTrimmedString(o[field]);
     if (v) cfg[field] = v;
   }
+
+  // Un pseudo vient de l'utilisateur : on le borne et on le nettoie avant qu'il
+  // n'atteigne un journal, ou il pourrait sinon injecter des sauts de ligne et
+  // fabriquer de fausses entrees.
+  const pseudo = asTrimmedString(o.pseudo);
+  if (pseudo) cfg.pseudo = pseudo.replace(/[\r\n\t]/g, ' ').slice(0, 32);
+  const uid = asTrimmedString(o.uid);
+  if (uid && /^[a-z0-9]{4,16}$/i.test(uid)) cfg.uid = uid.toLowerCase();
 
   const subLangs = asStringArray(o.subLangs);
   if (subLangs && subLangs.length > 0) cfg.subLangs = subLangs.map(normalizeLangCode);
@@ -343,6 +380,18 @@ export function normalizeLangCode(code: string): string {
  * son acces sans avoir rien tape. Aucun service n'emet de cle faite uniquement de
  * puces, d'etoiles ou de points.
  */
+/**
+ * Identite lisible d'une installation, pour les journaux.
+ *
+ * Le pseudo aide l'operateur a relier une plainte a des traces ; l'uid tranche entre
+ * deux homonymes. Sans ni l'un ni l'autre — liens generes avant cette version —
+ * on rend une chaine vide plutot qu'un « anonyme » qui ferait croire a un choix.
+ */
+export function identite(cfg: UserConfig): string {
+  if (cfg.pseudo && cfg.uid) return `${cfg.pseudo}/${cfg.uid}`;
+  return cfg.pseudo || cfg.uid || '';
+}
+
 export function estSentinelle(valeur: unknown): boolean {
   return typeof valeur === 'string' && valeur.length > 0 && /^[•*·.\s]+$/.test(valeur);
 }

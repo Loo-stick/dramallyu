@@ -16,6 +16,7 @@ import {
   nomLangue,
   CHAMPS_CLES,
   CHAMPS_REGLAGES,
+  identite,
 } from './config';
 
 test('aller-retour encode/parse', () => {
@@ -238,4 +239,26 @@ test('l envoi du .torrent est DESACTIVE par defaut', () => {
   // Personne ne doit le decouvrir apres coup.
   assert.equal(parseConfig(encodeConfig({})).envoyerTorrent, false);
   assert.equal(parseConfig(encodeConfig({ envoyerTorrent: true })).envoyerTorrent, true);
+});
+
+test('identite : le pseudo est lisible, l uid tranche entre homonymes', () => {
+  // L'uid est tire au sort, donc unique sans registre : pas de collision a arbitrer,
+  // pas de course entre deux personnes qui generent leur lien au meme instant. Le
+  // pseudo n'a donc PAS a etre unique — deux « Loo » se distinguent par leur uid.
+  assert.equal(identite({ pseudo: 'Loo', uid: 'a1b2c3d4' } as never), 'Loo/a1b2c3d4');
+  assert.equal(identite({ uid: 'a1b2c3d4' } as never), 'a1b2c3d4');
+  assert.equal(identite({ pseudo: 'Loo' } as never), 'Loo');
+  // Ni l'un ni l'autre : chaine vide. Ecrire « anonyme » laisserait croire a un choix
+  // de l'utilisateur, alors que c'est seulement l'age de son lien.
+  assert.equal(identite({} as never), '');
+});
+
+test('un pseudo ne peut pas fabriquer de fausses lignes de journal', () => {
+  const sale = parseConfig(encodeConfig({ pseudo: 'Loo\nFAUX [Stream] pirate' }));
+  assert.doesNotMatch(sale.pseudo ?? '', /\n|\r/);
+  assert.ok((sale.pseudo ?? '').length <= 32);
+});
+
+test('la cle d acces voyage comme les autres secrets', () => {
+  assert.equal(parseConfig(encodeConfig({ acces: 'secret' })).acces, 'secret');
 });

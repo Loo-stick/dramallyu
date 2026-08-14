@@ -9,7 +9,9 @@ import rateLimit from 'express-rate-limit';
 import * as path from 'path';
 
 import { getManifest } from './routes/manifest';
+import { randomBytes } from 'node:crypto';
 import { getBaseUrl } from './core/url';
+import { exigerAcces, accesRestreint } from './core/acces';
 import { handleStream } from './routes/stream';
 import { handleSubtitles, handleServeSub } from './routes/subtitles';
 import { handleCatalog } from './routes/catalog';
@@ -138,21 +140,26 @@ for (const fichier of ['logo.png', 'marque.png', 'fond.jpg', 'favicon.png']) {
 app.get('/manifest.json', manifest);
 app.get('/:config/manifest.json', manifest);
 
-app.get('/stream/:type/:id.json', handleStream);
-app.get('/:config/stream/:type/:id.json', handleStream);
+// LE MANIFESTE RESTE OUVERT, meme sous cle d'acces. AIOStreams doit pouvoir le lire
+// pour agreger l'addon ; le proteger rendrait Dramallyu invisible a l'agregateur que
+// son propre operateur utilise. Il ne contient ni secret ni travail — les routes qui
+// coutent, elles, sont gardees.
 
-app.get('/subtitles/:type/:id.json', handleSubtitles);
-app.get('/subtitles/:type/:id/:extra.json', handleSubtitles);
-app.get('/:config/subtitles/:type/:id.json', handleSubtitles);
-app.get('/:config/subtitles/:type/:id/:extra.json', handleSubtitles);
+app.get('/stream/:type/:id.json', exigerAcces, handleStream);
+app.get('/:config/stream/:type/:id.json', exigerAcces, handleStream);
 
-app.get('/catalog/:type/:id.json', handleCatalog);
-app.get('/catalog/:type/:id/:extra.json', handleCatalog);
-app.get('/:config/catalog/:type/:id.json', handleCatalog);
-app.get('/:config/catalog/:type/:id/:extra.json', handleCatalog);
+app.get('/subtitles/:type/:id.json', exigerAcces, handleSubtitles);
+app.get('/subtitles/:type/:id/:extra.json', exigerAcces, handleSubtitles);
+app.get('/:config/subtitles/:type/:id.json', exigerAcces, handleSubtitles);
+app.get('/:config/subtitles/:type/:id/:extra.json', exigerAcces, handleSubtitles);
 
-app.get('/meta/:type/:id.json', handleMeta);
-app.get('/:config/meta/:type/:id.json', handleMeta);
+app.get('/catalog/:type/:id.json', exigerAcces, handleCatalog);
+app.get('/catalog/:type/:id/:extra.json', exigerAcces, handleCatalog);
+app.get('/:config/catalog/:type/:id.json', exigerAcces, handleCatalog);
+app.get('/:config/catalog/:type/:id/:extra.json', exigerAcces, handleCatalog);
+
+app.get('/meta/:type/:id.json', exigerAcces, handleMeta);
+app.get('/:config/meta/:type/:id.json', exigerAcces, handleMeta);
 
 // --- Lecture -----------------------------------------------------------------
 app.get('/resolve/:token', handleResolve);
@@ -247,6 +254,17 @@ app.post('/api/config/comptes', express.json({ limit: '8kb' }), async (req, res)
   res.json({ comptes: etats });
 });
 
+/** Texte non vide, borne. Les champs libres arrivent tels quels du navigateur. */
+function asTexte(v: unknown): string | undefined {
+  if (typeof v !== 'string') return undefined;
+  const t = v.trim();
+  return t.length > 0 ? t : undefined;
+}
+
+// La page doit savoir si cette instance exige une cle, pour ne montrer le champ que
+// dans ce cas. On ne revele QUE l'existence de la contrainte, jamais la cle.
+app.get('/api/acces', (_req, res) => res.json({ restreint: accesRestreint() }));
+
 app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
   const cfg = parseConfig(null);
   const body = (req.body ?? {}) as Record<string, unknown>;
@@ -282,6 +300,16 @@ app.post('/api/config/encoder', express.json({ limit: '8kb' }), (req, res) => {
   // Plus de liste a tenir ici : elle est DERIVEE des valeurs par defaut (cf.
   // CHAMPS_REGLAGES). Trois reglages avaient ete oublies a trois moments differents,
   // chacun accepte par le formulaire puis absent du lien, sans le moindre signal.
+  // IDENTITE. L'uid est tire au sort a la premiere generation puis reconduit : c'est
+  // lui qui relie des traces a une installation. Le pseudo l'accompagne, purement
+  // lisible. On ne les regenere jamais — un uid qui change a chaque enregistrement ne
+  // relierait rien du tout.
+  const pseudo = estSentinelle(body.pseudo) ? undefined : asTexte(body.pseudo);
+  if (pseudo) compact.pseudo = pseudo.replace(/[\r\n\t]/g, ' ').slice(0, 32);
+  else if (precedent.pseudo) compact.pseudo = precedent.pseudo;
+
+  compact.uid = precedent.uid || randomBytes(4).toString('hex');
+
   for (const champ of CHAMPS_REGLAGES) {
     if (aChange(champ)) compact[champ] = propre[champ];
   }

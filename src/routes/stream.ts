@@ -4,7 +4,7 @@
 // Aucun debridage ici (cf. debrid/token.ts pour le pourquoi).
 
 import type { Request, Response } from 'express';
-import { parseConfig, nomLangue } from '../core/config';
+import { parseConfig, nomLangue, identite } from '../core/config';
 import { parseStremioId } from '../core/ids';
 import { resolveWork, estAsiatique } from '../core/meta';
 import { searchAll } from '../core/registry';
@@ -62,6 +62,18 @@ function dedupe(candidates: Candidate[]): Candidate[] {
  * hash, les recherches suivantes sur le meme titre n'en paient aucune.
  */
 const MAX_MESURES = 6;
+
+/**
+ * Prefixe d'identite pour les journaux.
+ *
+ * Vide quand l'installation n'en porte pas — les liens generes avant cette version.
+ * Ecrire « anonyme » laisserait croire a un choix de l'utilisateur, alors que c'est
+ * seulement l'age de son lien.
+ */
+function qui(config: { pseudo?: string; uid?: string }): string {
+  const nom = identite(config as never);
+  return nom ? `[${nom}] ` : '';
+}
 
 function buildQuery(
   type: MediaType,
@@ -466,7 +478,7 @@ export async function handleStream(req: Request, res: Response): Promise<void> {
       .map(([k, v]) => `${k}=${v}ms`)
       .join(' ');
     console.log(
-      `[Stream] ${req.params.type}/${req.params.id} -> ${streams.length} flux en ${elapsed}ms` +
+      `[Stream] ${qui(config)}${req.params.type}/${req.params.id} -> ${streams.length} flux en ${elapsed}ms` +
         (detail ? ` (${detail})` : '') +
         (timedOut.length ? ` [abandon: ${timedOut.join(',')}]` : '') +
         ` | phases: ${Object.entries(phases).map(([k, v]) => `${k}=${v}ms`).join(' ')}`,

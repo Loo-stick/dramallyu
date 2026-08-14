@@ -343,6 +343,34 @@
   <div class="colonnes">
     <main>
       <div class="etape" data-etape="1">
+      <section class="bloc">
+        <header>
+          <h2>Vous</h2>
+          <span class="facultatif" id="acces-etat">Facultatif</span>
+        </header>
+        <p class="chapeau">
+          Le pseudo sert a vous reconnaitre dans les journaux si vous signalez un souci.
+          Il n'a pas besoin d'etre unique — chaque installation porte en plus un
+          identifiant qui la distingue.
+        </p>
+
+        <label for="pseudo">Votre pseudo</label>
+        <input type="text" id="pseudo" maxlength="32" placeholder="libre, par exemple « Loo »">
+
+        <div id="bloc-acces" style="display:none">
+          <label for="acces">Cle d'acces</label>
+          <div class="avec-test">
+            <input type="password" id="acces" class="mono" autocomplete="off"
+                   placeholder="fournie par l hebergeur de cette instance">
+          </div>
+          <p class="indice">
+            Cette instance est reservee. Sans cette cle, le manifeste reste lisible —
+            pour qu'AIOStreams puisse agreger l'addon — mais aucun flux, sous-titre ni
+            catalogue ne sera servi.
+          </p>
+        </div>
+      </section>
+
         <section class="bloc">
         <header>
           <h2>Debrideur</h2>
@@ -826,7 +854,8 @@ function configActuelle(){
   var cfg = {};
   // Un champ vide veut dire « garde ce que tu as » : le serveur reconduit la cle via
   // _precedent. Aucune valeur d'affichage ne circule.
-  ['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
+  ['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces'].forEach(function(k){ if (valeur(k)) cfg[k] = valeur(k); });
+  if (valeur('pseudo')) cfg.pseudo = valeur('pseudo');
   if (choisies.length) cfg.subLangs = choisies;
   if (formatsExclus.length) cfg.excludeFormats = formatsExclus;
   if ($('cachedOnly').checked) cfg.cachedOnly = true;
@@ -1007,7 +1036,7 @@ $('copier').addEventListener('click', function(){
 });
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
-['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','frOnly','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
+['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces','pseudo','frOnly','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
  'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);

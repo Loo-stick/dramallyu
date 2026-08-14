@@ -12,7 +12,7 @@
 //     vers l'hebergeur d'origine ne s'affiche pas (CORS, format, en-tetes).
 
 import type { Request, Response } from 'express';
-import { parseConfig } from '../core/config';
+import { parseConfig, identite } from '../core/config';
 import { parseStremioId } from '../core/ids';
 import { resolveWork, estAsiatique } from '../core/meta';
 import { subtitlesAll } from '../core/registry';
@@ -190,7 +190,7 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
     // voyait que ses echecs, jamais sa duree — impossible de savoir si une lenteur
     // ressentie venait d'ici ou du lecteur.
     console.log(
-      `[Subtitles] ${req.params.type}/${req.params.id} -> ${subtitles.length} piste(s) ` +
+      `[Subtitles] ${identite(config) ? `[${identite(config)}] ` : ''}${req.params.type}/${req.params.id} -> ${subtitles.length} piste(s) ` +
         `en ${Date.now() - debut}ms (sources=${msSources}ms externe=${msExterne}ms)`,
     );
 
