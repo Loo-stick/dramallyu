@@ -6,7 +6,7 @@
 // doit survivre aux redemarrages (il se reconstruit lentement), et un cache en
 // memoire non borne est exactement ce qui a fait tomber l'hote par le passe.
 
-import Database from 'better-sqlite3';
+import { ouvrirBase } from './sqlite';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -16,9 +16,7 @@ const CACHE_PATH =
     ? '/app/config/cache.db'
     : path.join(process.cwd(), 'config', 'cache.db'));
 
-fs.mkdirSync(path.dirname(CACHE_PATH), { recursive: true });
-
-const db = new Database(CACHE_PATH);
+const db = ouvrirBase(CACHE_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('synchronous = NORMAL');
 

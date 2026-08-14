@@ -19,7 +19,8 @@
 // centaines d'octets ; ce sont les echecs, rares, qui coutent quelques kilo-octets —
 // et ce sont les seuls qu'on relira.
 
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
+import { ouvrirBase } from './sqlite';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -52,9 +53,7 @@ let connexion: Database.Database | null = null;
 
 function db(): Database.Database {
   if (connexion) return connexion;
-  const fichier = chemin();
-  fs.mkdirSync(path.dirname(fichier), { recursive: true });
-  connexion = new Database(fichier);
+  connexion = ouvrirBase(chemin());
   connexion.pragma('journal_mode = WAL');
   connexion.exec(`
   CREATE TABLE IF NOT EXISTS activite (

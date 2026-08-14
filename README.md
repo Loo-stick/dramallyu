@@ -91,6 +91,23 @@ docker compose pull && docker compose up -d
 `build: .` reste declare dans `docker-compose.yml` : `docker compose up -d --build`
 construit localement quand on developpe.
 
+### Le dossier `config/` doit etre accessible en ecriture
+
+Le conteneur tourne sous l'utilisateur `node`, dont **l'uid vaut 1000** dans les images
+Node. Or `docker-compose.yml` monte `./config` depuis l'hote, et un montage REMPLACE le
+dossier de l'image — les permissions posees a la construction avec. Il faut donc que
+`config/` soit accessible en ecriture a l'uid 1000 :
+
+```sh
+sudo chown -R 1000:1000 config
+```
+
+Sans cela, l'addon s'arrete au demarrage sur `SQLITE_CANTOPEN`. Il vous le dira en
+clair, avec la commande a passer et l'uid constate — mais autant le savoir avant.
+
+Cela ne se voit pas quand l'utilisateur de l'hote a lui-meme l'uid 1000, ce qui est le
+cas du premier compte cree sur la plupart des distributions.
+
 ### Developpement
 
 ```bash
