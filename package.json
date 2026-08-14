@@ -1,6 +1,6 @@
 {
   "name": "stremio-addon-dramallyu",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Dramallyu — addon Stremio/Nuvio dedie aux dramas asiatiques (KissKH, VoirDrama, torrents, DDL) avec resolveur debrid unifie",
   "main": "dist/index.js",
   "scripts": {
