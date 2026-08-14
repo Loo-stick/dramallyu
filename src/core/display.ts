@@ -28,7 +28,8 @@ export interface PisteFlux {
   id: string;
   url: string;
   lang: string;
-  language: string;
+  /** Libelle lisible. Toleré ici : Stremio seul lit ce chemin, et il l'ignore. */
+  language?: string;
   default?: boolean;
 }
 

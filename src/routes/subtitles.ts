@@ -12,7 +12,7 @@
 //     vers l'hebergeur d'origine ne s'affiche pas (CORS, format, en-tetes).
 
 import type { Request, Response } from 'express';
-import { parseConfig, nomLangue } from '../core/config';
+import { parseConfig } from '../core/config';
 import { parseStremioId } from '../core/ids';
 import { resolveWork, estAsiatique } from '../core/meta';
 import { subtitlesAll } from '../core/registry';
@@ -151,8 +151,17 @@ export async function handleSubtitles(req: Request, res: Response): Promise<void
         id: `dramallyu-${i}`,
         url: subUrl(base, t),
         lang: t.lang,
-        // Meme raison que pour les pistes attachees : Nuvio lit un NOM de langue.
-        language: nomLangue(t.lang),
+        // AUCUN CHAMP DE PLUS. Le protocole Stremio definit `id`, `url` et `lang` :
+        // rien d'autre.
+        //
+        // J'avais ajoute un `language` en clair (« Français »), deduit du code des
+        // PROVIDERS de Nuvio — qui ne sont pas son client. C'etait une supposition,
+        // presentee comme sans risque. Or l'autre supposition du meme genre, le
+        // prefixe chiffre sur l'identifiant, a fini par casser la SELECTION des
+        // pistes en production.
+        //
+        // On s'en tient donc a la forme documentee. Un lecteur qui rencontre un champ
+        // qu'il n'attend pas n'a aucune obligation de l'ignorer proprement.
         // AUCUN DRAPEAU « default » ICI, et c'est un retour en arriere assume.
         //
         // Cette ressource repond pour N'IMPORTE QUEL flux, y compris ceux d'un autre
