@@ -49,6 +49,18 @@ docker compose logs -f dramallyu
 L'addon ecoute sur le port **7020**. Derriere un reverse-proxy, `trust proxy` est
 actif : les en-tetes `X-Forwarded-*` suffisent a construire les liens absolus.
 
+### Deployer depuis l'image publiee
+
+L'image est construite par GitHub Actions a chaque poussee sur `master` (`latest`) et a
+chaque etiquette `vX.Y.Z` (`X.Y.Z` et `X.Y`). Rien a compiler sur la machine cible :
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+`build: .` reste declare dans `docker-compose.yml` : `docker compose up -d --build`
+construit localement quand on developpe.
+
 ### Developpement
 
 ```bash

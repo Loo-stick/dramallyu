@@ -1,5 +1,10 @@
 services:
   dramallyu:
+    # L'image publiee est tiree par defaut ; `build: .` reste la pour construire
+    # localement avec `docker compose up -d --build`. Compiler better-sqlite3 demande
+    # python3/make/g++ et plusieurs minutes : sur une machine d'appoint, tirer l'image
+    # est le chemin normal.
+    image: ghcr.io/loo-stick/dramallyu:latest
     build: .
     container_name: dramallyu
     restart: unless-stopped
