@@ -276,21 +276,40 @@ export function noteForbidden(): void {
  * montent a plusieurs centaines de Ko sur une seule ligne.
  */
 export async function rediscoverConstants(): Promise<Partial<KkeyConstants> | null> {
+  // CHAQUE ECHEC SE NOMME. Cette fonction avait cinq sorties nulles muettes, et
+  // l'administration affichait toujours « aucune fonction exploitable trouvee » —
+  // un message faux dans quatre cas sur cinq. Un hebergeur voyait donc « echec »
+  // sans savoir que son fournisseur n'atteignait tout simplement pas le site.
   const base = constants().base;
   const html = await getText(`${base}/`, { timeoutMs: 20000 });
-  if (!html) return null;
+  if (!html) {
+    console.error(
+      `[KissKH] re-decouverte : ${base} injoignable depuis cet hebergeur. ` +
+        'Certains hebergeurs voient leurs adresses bloquees par le site.',
+    );
+    return null;
+  }
 
   const runtimeSrc = scriptSources(html).find((s) => s.includes('runtime.'));
-  if (!runtimeSrc) return null;
+  if (!runtimeSrc) {
+    console.error("[KissKH] re-decouverte : page recue, mais aucun script `runtime.` — le site a change de forme.");
+    return null;
+  }
   const runtime = await getText(absolute(base, runtimeSrc), { timeoutMs: 20000 });
-  if (!runtime) return null;
+  if (!runtime) {
+    console.error('[KissKH] re-decouverte : le script runtime n a pas pu etre telecharge.');
+    return null;
+  }
 
   // runtime.js fait ~3,7 Ko : une regex simple y est sans risque.
   const chunkNames: string[] = [];
   for (const m of runtime.matchAll(/(\d{2,4}):"([0-9a-f]{8,32})"/g)) {
     chunkNames.push(`${m[1]}.${m[2]}.js`);
   }
-  if (chunkNames.length === 0) return null;
+  if (chunkNames.length === 0) {
+    console.error("[KissKH] re-decouverte : aucun fragment de script listé dans runtime — forme inattendue.");
+    return null;
+  }
 
   for (const name of chunkNames) {
     const src = await getText(`${base}/${name}`, { timeoutMs: 25000, maxBytes: MAX_SCRIPT_BYTES });

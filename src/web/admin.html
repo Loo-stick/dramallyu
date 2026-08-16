@@ -1182,7 +1182,11 @@ document.addEventListener('click', function (e) {
 $('btn-kkey').addEventListener('click', function () {
   ecrire('msg-service', 'Re-decouverte en cours...');
   jsonPost('/api/admin/kkey/redecouvrir').then(function (d) {
-    ecrire('msg-service', d.ok ? 'Signature retrouvee.' : 'Echec : aucune fonction exploitable trouvee.',
+    // Ne PAS affirmer une cause qu'on ne connait pas : l'echec a cinq origines
+    // possibles, et le serveur vient de nommer la sienne dans le journal.
+    ecrire('msg-service', d.ok
+      ? 'Constantes KissKH re-extraites.'
+      : 'Echec de la re-decouverte — la cause est dans l onglet Journal (souvent : le site est injoignable depuis cet hebergeur).',
       d.ok ? 'ok' : 'ko');
     chargerBord();
   });

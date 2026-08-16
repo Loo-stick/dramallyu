@@ -132,7 +132,16 @@ export interface KkList {
 }
 
 /** Catalogue pagine. Endpoint OUVERT : c'est le socle du catalogue de l'addon. */
-export async function list(params: ListParams = {}, signal?: AbortSignal): Promise<KkList> {
+/**
+ * Parcours du catalogue. Rend `null` quand l'APPEL a echoue.
+ *
+ * La distinction n'est pas theorique : un ami hebergeait l'addon et voyait « empty
+ * content » sur les neuf catalogues, sans une seule ligne de journal. La cause etait
+ * ici — une reponse illisible etait convertie en liste vide, indiscernable d'un
+ * catalogue reellement vide, et memorisee quinze minutes par-dessus. Meme faute que
+ * celle corrigee sur les trackers, restee dans ce client.
+ */
+export async function list(params: ListParams = {}, signal?: AbortSignal): Promise<KkList | null> {
   const p = {
     page: params.page ?? 1,
     pageSize: params.pageSize ?? 40,
@@ -143,7 +152,7 @@ export async function list(params: ListParams = {}, signal?: AbortSignal): Promi
     order: params.order ?? 1,
   };
   const key = `kisskh:list:${Object.values(p).join(':')}`;
-  return cached<KkList>(
+  return cached<KkList | null>(
     key,
     LIST_TTL_MS,
     async () => {
@@ -155,12 +164,17 @@ export async function list(params: ListParams = {}, signal?: AbortSignal): Promi
         signal,
         timeoutMs: 15000,
       });
-      if (!data || !Array.isArray(data.data)) {
-        return { page: p.page, pageSize: p.pageSize, totalCount: 0, data: [] };
-      }
+      if (!data || !Array.isArray(data.data)) return null;
       return data;
     },
-    { scope: 'kisskh', shouldCache: (v) => v.data.length > 0, negativeTtlMs: 15 * 60 * 1000 },
+    {
+      scope: 'kisskh',
+      // Un echec n'est JAMAIS memorise : sinon une coupure passagere vide le catalogue
+      // pendant un quart d'heure, sans que rien ne le dise.
+      echec: (v) => v === null,
+      shouldCache: (v) => v !== null && v.data.length > 0,
+      negativeTtlMs: 15 * 60 * 1000,
+    },
   );
 }
 

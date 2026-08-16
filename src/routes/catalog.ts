@@ -82,6 +82,22 @@ export async function handleCatalog(req: Request, res: Response): Promise<void> 
       order: def.order ?? 1,
     });
 
+    // UN CATALOGUE VIDE DOIT DIRE POURQUOI. Stremio affiche « empty content » dans les
+    // deux cas, et sans journal l'hebergeur n'a rien pour trancher : le tenir informe
+    // est la seule facon de distinguer une source injoignable d'une source qui n'a
+    // rien. Un ami a passe une soiree sur cette question, faute de cette ligne.
+    if (result === null) {
+      console.error(
+        `[Catalog] ${req.params.id} : KissKH n'a pas repondu — catalogue vide. ` +
+          "Verifiez que l'hebergeur peut le joindre (certains bloquent les IP de centres de donnees).",
+      );
+      res.json({ metas: [] });
+      return;
+    }
+    if (result.data.length === 0) {
+      console.log(`[Catalog] ${req.params.id} : KissKH a repondu, 0 entree`);
+    }
+
     res.json({ metas: result.data.map((i) => toPreview(i, def.type)) });
   } catch (e) {
     console.error(`[Catalog] echec ${req.params.id}: ${(e as Error).message}`);
