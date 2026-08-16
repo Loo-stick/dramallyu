@@ -223,12 +223,21 @@ app.post('/api/config/decoder', express.json({ limit: '8kb' }), (req, res) => {
   const cles: Record<string, boolean> = {};
   for (const champ of CHAMPS_SECRETS) cles[champ] = Boolean(cfg[champ]);
 
-  const { ad, tb, c411, tr4ker, tmdb, ...reglages } = cfg;
-  void ad;
-  void tb;
-  void c411;
-  void tr4ker;
-  void tmdb;
+  // LES SECRETS NE SORTENT JAMAIS D'ICI. Ce point d'entree recoit un segment CHIFFRE
+  // et rend les reglages pour repeupler le formulaire. S'il rendait aussi les cles, il
+  // annulerait le chiffrement : quiconque detient un lien pourrait le lui poster et
+  // lire precisement ce que ce lien protege.
+  //
+  // La liste des champs a retirer etait ECRITE A LA MAIN — cinq nommes alors que douze
+  // portent un secret — et `g3mini`, `dcore`, `ygg`, `dpeers`, `acces` et `mfpPass`
+  // sortaient en clair. Le meme oubli avait deja frappe les reglages transportables,
+  // pour la meme raison. Elle est desormais DERIVEE de CHAMPS_CLES : une cle ajoutee
+  // demain est protegee du meme geste.
+  const reglages: Record<string, unknown> = {};
+  const secrets = new Set<string>(CHAMPS_SECRETS);
+  for (const [champ, valeur] of Object.entries(cfg)) {
+    if (!secrets.has(champ)) reglages[champ] = valeur;
+  }
 
   res.json({ trouve: true, reglages, cles });
 });

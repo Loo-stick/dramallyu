@@ -387,6 +387,10 @@
 
         <label for="pseudo">Votre pseudo</label>
         <input type="text" id="pseudo" maxlength="32" placeholder="libre, par exemple « Loo »">
+        <p class="indice" id="ligne-uid" hidden>
+          Identifiant de cette installation : <code id="uid-actuel"></code> — conserve
+          quand vous regenerez votre lien depuis cette page.
+        </p>
 
         <div id="bloc-acces" style="display:none">
           <label for="acces">Cle d'acces</label>
@@ -1199,6 +1203,12 @@ function restaurer(){
     if (!data.trouve) return;
     var r = data.reglages || {};
     clesEnregistrees = data.cles || {};
+
+    // Le pseudo et l'uid n'etaient pas repeuples : on revenait sur la page et le champ
+    // etait vide, comme si l'identite avait ete perdue. L'uid, lui, est reconduit par
+    // le serveur a la generation — mais l'afficher evite de croire qu'on en changera.
+    if (r.pseudo) $('pseudo').value = r.pseudo;
+    if (r.uid) { $('uid-actuel').textContent = r.uid; $('ligne-uid').hidden = false; }
 
     if (Array.isArray(r.subLangs) && r.subLangs.length) { choisies = r.subLangs; rendreLangues(); }
     if (Array.isArray(r.excludeFormats)) { formatsExclus = r.excludeFormats; rendreFormats(); }
