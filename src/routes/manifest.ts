@@ -50,7 +50,10 @@ export function getManifest(baseUrl?: string, config?: UserConfig): Manifest {
   // Ne pas ANNONCER de catalogue est plus honnete que d'en annoncer un vide : Stremio
   // n'affiche alors aucune rubrique, et l'addon se presente pour ce qu'il est —
   // un fournisseur de flux et de sous-titres.
-  const avecCatalogue = Boolean(config?.tmdb);
+  // DEUX conditions : l'utilisateur l'a demande, ET il a la cle qui l'alimente.
+  // Annoncer des rubriques que TMDB ne pourra pas remplir ramenerait le probleme
+  // qu'on vient de corriger.
+  const avecCatalogue = Boolean(config?.catalogue && config?.tmdb);
   const catalogs = avecCatalogue
     ? COUNTRY_CATALOGS.map((c) => ({
         type: c.type,

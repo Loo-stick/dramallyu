@@ -161,6 +161,17 @@ export interface UserConfig {
   subsSurFlux: boolean;
   /** Ce qui transite par le MediaFlow de l'utilisateur : 'ad', 'tb', 'direct'. */
   mfpPour: ('ad' | 'tb' | 'direct')[];
+  /**
+   * Proposer les rubriques de navigation dans Stremio.
+   *
+   * DESACTIVE par defaut, et volontairement. L'addon est d'abord un fournisseur de
+   * flux : la plupart des gens naviguent dans Cinemeta ou dans un autre catalogue et
+   * viennent ici pour la lecture. Ajouter huit rubriques a leur accueil sans qu'ils
+   * l'aient demande encombre plus que ça ne rend service.
+   *
+   * Sans cle TMDB, le reglage reste sans effet : c'est TMDB qui alimente ces rubriques.
+   */
+  catalogue: boolean;
 }
 
 export const DEFAULT_CONFIG: UserConfig = {
@@ -197,6 +208,7 @@ export const DEFAULT_CONFIG: UserConfig = {
    *              initiale ; MediaFlow, lui, les reinjecte sur chaque segment.
    */
   mfpPour: [],
+  catalogue: false,
 };
 
 /**
@@ -315,6 +327,7 @@ export function parseConfig(raw?: string | null): UserConfig {
 
   cfg.cachedOnly = o.cachedOnly === true;
   cfg.subsSurFlux = o.subsSurFlux === true;
+  cfg.catalogue = o.catalogue === true;
   // On ne retient que des valeurs connues : un lien fabrique a la main ne doit pas
   // pouvoir injecter n'importe quoi dans une liste qu'on relit ensuite.
   const connus = ['ad', 'tb', 'direct'] as const;

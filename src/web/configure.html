@@ -732,7 +732,22 @@
           marques « ⚡ » fonctionnent normalement ; ceux marques « ⏳ » ne demarreront
           simplement jamais.
         </p>
-<label class="pastille" data-bascule="subsSurFlux" style="margin:10px 0 0">
+<label class="pastille" data-bascule="catalogue" style="margin:10px 0 0">
+          <input type="checkbox" id="catalogue">
+          <span class="signe">+</span><span>Proposer les rubriques de navigation</span>
+        </label>
+        <p class="indice">
+          Ajoute huit rubriques a l'accueil de Stremio — dramas populaires, nouveautes,
+          Coree, Chine, Japon, Thailande, Taiwan, films. <strong>Necessite une cle
+          TMDB</strong> (etape « Vos cles »), qui les alimente. Sans elle, le reglage
+          reste sans effet.
+          <br><br>
+          Laissez decoche si vous parcourez deja votre catalogue habituel et venez ici
+          pour la lecture : l'addon fournit alors des flux et des sous-titres, sans rien
+          ajouter a votre accueil.
+        </p>
+
+        <label class="pastille" data-bascule="subsSurFlux" style="margin:10px 0 0">
           <input type="checkbox" id="subsSurFlux">
           <span class="signe">✓</span><span>Joindre nos sous-titres au flux — Stremio uniquement</span>
         </label>
@@ -977,6 +992,7 @@ function configActuelle(){
   if ($('bonusHdr').checked) cfg.bonusHdr = true;
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
   if ($('subsSurFlux').checked) cfg.subsSurFlux = true;
+  if ($('catalogue').checked) cfg.catalogue = true;
   if ($('priorite').value !== 'aucune') cfg.priorite = $('priorite').value;
   if ($('debrid').value !== 'auto') cfg.debrid = $('debrid').value;
   if (valeur('minResolution')) cfg.minResolution = valeur('minResolution');
@@ -1162,7 +1178,7 @@ $('copier').addEventListener('click', function(){
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
 ['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces','pseudo','mfpUrl','mfpPass','mfp-ad','mfp-tb','mfp-direct','frOnly','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
- 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux'].forEach(function(id){
+ 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux','catalogue'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);
 });
@@ -1199,7 +1215,9 @@ function restaurer(){
     $('excludeCam').checked = !!r.excludeCam;
     $('bonusHdr').checked = !!r.bonusHdr;
     $('subsSurFlux').checked = r.subsSurFlux !== false;
-    ['cachedOnly','excludeCam','bonusHdr','subsSurFlux'].forEach(function(id){ peindreBascule($(id)); });
+    // Desactive par defaut : on ne coche que si le lien le portait explicitement.
+    $('catalogue').checked = r.catalogue === true;
+    ['cachedOnly','excludeCam','bonusHdr','subsSurFlux','catalogue'].forEach(function(id){ peindreBascule($(id)); });
 
     marquerClesEnregistrees();
     document.getElementById('banniere-restauration').hidden = false;

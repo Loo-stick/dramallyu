@@ -90,7 +90,7 @@ export async function handleCatalog(req: Request, res: Response): Promise<void> 
   // anterieures — dont le manifeste en cache annonce encore les rubriques — cessent
   // d'interroger une source dont elles n'ont pas voulu.
   const config = parseConfig((req.params as Record<string, string>).config ?? null);
-  if (!config.tmdb) {
+  if (!config.catalogue || !config.tmdb) {
     res.json({ metas: [] });
     return;
   }

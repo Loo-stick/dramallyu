@@ -98,9 +98,21 @@ export function urlCatalogue(r: RequeteCatalogue): string {
   return `${TMDB}/discover/${chemin}?${commun}&${p.toString()}`;
 }
 
+/** Un titre qu'un lecteur francophone ne peut pas lire ni retenir. */
+function illisible(nom: string): boolean {
+  // Hangul, han, kana, thai. On ne juge pas les accents ni la ponctuation.
+  return /[\uac00-\ud7af\u4e00-\u9fff\u3040-\u30ff\u0e00-\u0e7f]/.test(nom);
+}
+
 /**
  * Une page de catalogue. Rend `null` si l'APPEL a echoue — jamais une liste vide,
  * qu'on ne saurait pas distinguer d'un catalogue reellement sans resultat.
+ *
+ * DEUX LANGUES, quand il le faut. TMDB rend le titre francais s'il existe — « Le Jeu
+ * de la dame » —, sinon le titre ORIGINAL. Sur une page de dramas coreens, la moitie
+ * revient donc en hangul : illisible, et introuvable pour qui cherche. On redemande
+ * alors la meme page en anglais et on comble les trous. Un appel de plus PAR PAGE,
+ * jamais par fiche, et seulement quand un titre l'exige.
  */
 export async function catalogueTmdb(r: RequeteCatalogue): Promise<FicheTmdb[] | null> {
   const adresse = urlCatalogue(r);
@@ -114,7 +126,24 @@ export async function catalogueTmdb(r: RequeteCatalogue): Promise<FicheTmdb[] | 
     async () => {
       const data = await getJson<{ results?: BrutTmdb[] }>(adresse, { timeoutMs: 12000 });
       if (!data || !Array.isArray(data.results)) return null;
-      return data.results.map(fiche).filter((f): f is FicheTmdb => f !== null);
+
+      const fiches = data.results.map(fiche).filter((f): f is FicheTmdb => f !== null);
+      if (!fiches.some((f) => illisible(f.nom))) return fiches;
+
+      const enAnglais = await getJson<{ results?: BrutTmdb[] }>(
+        adresse.replace('language=fr-FR', 'language=en-US'),
+        { timeoutMs: 12000 },
+      );
+      if (!enAnglais || !Array.isArray(enAnglais.results)) return fiches;
+
+      const parId = new Map(enAnglais.results.map((b) => [b.id, b.name || b.title]));
+      return fiches.map((f) => {
+        if (!illisible(f.nom)) return f;
+        const anglais = parId.get(f.id);
+        // Si l'anglais est lui aussi dans l'ecriture d'origine, on garde ce qu'on a :
+        // un titre original vaut mieux qu'un champ vide.
+        return anglais && !illisible(anglais) ? { ...f, nom: anglais } : f;
+      });
     },
     {
       scope: 'tmdbcat',
