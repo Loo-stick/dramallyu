@@ -512,6 +512,14 @@ function ecrire(cible, texte, etat) {
   el.className = 'msg' + (etat ? ' ' + etat : '');
 }
 
+/** Symbole ET mot : aucune information ne repose sur la couleur seule. */
+function libelleKkey(k) {
+  if (!k) return '— inconnue';
+  if (k.etat === 'chargee') return '✔ active';
+  if (k.etat === 'en-echec') return '✘ echec de chargement';
+  return '— au repos (se charge a la 1re lecture)';
+}
+
 function nb(v) { return (v === undefined || v === null) ? '—' : String(v); }
 function ms(v) { return v >= 1000 ? (v / 1000).toFixed(1) + ' s' : Math.round(v) + ' ms'; }
 function heure(t) { return t ? new Date(t).toLocaleTimeString('fr-FR') : '—'; }
@@ -593,8 +601,12 @@ function chargerBord() {
     $('systeme').innerHTML = [
       ['Memoire', s.memoireMo + ' Mo', 'tas : ' + s.tasMo + ' Mo'],
       ['En service', duree(s.uptimeSecondes), s.node],
-      ['Signature KissKH', d.kkey && d.kkey.pret ? '✔ active' : '✘ absente',
-        d.kkey && d.kkey.source ? d.kkey.source : ''],
+      // Le champ lu ici etait `pret`, qui n'existe pas dans la reponse — l'indicateur
+      // annonçait donc « absente » en toutes circonstances, y compris signature en
+      // main. Trois etats desormais, et « au repos » n'est PAS une anomalie : la
+      // signature ne se charge qu'a la premiere lecture KissKH.
+      ['Signature KissKH', libelleKkey(d.kkey), d.kkey && d.kkey.ageMs !== null
+        ? 'chargee il y a ' + duree(Math.round(d.kkey.ageMs / 1000)) : ''],
       ['Chiffrement des liens', s.chiffrement ? '✔ actif' : '✘ inactif',
         s.chiffrement ? '' : 'TOKEN_SECRET absent'],
       ['Cache', nb(d.cache.liveEntries) + ' entrees', octets(d.cache.fileSizeBytes)]

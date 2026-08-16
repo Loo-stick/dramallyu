@@ -78,6 +78,8 @@ const FN_TTL_MS = 12 * 60 * 60 * 1000;
 const MAX_SCRIPT_BYTES = 700 * 1024;
 
 let cachedFn: KeyFn | null = null;
+/** Horodatage du dernier chargement RATE, pour ne pas confondre echec et inactivite. */
+let dernierEchec: number | null = null;
 let cachedAt = 0;
 let discovering: Promise<KeyFn | null> | null = null;
 
@@ -194,6 +196,13 @@ async function keyFn(): Promise<KeyFn | null> {
       if (fn) {
         cachedFn = fn;
         cachedAt = Date.now();
+        dernierEchec = null;
+      } else {
+        // On distingue « pas encore demandee » de « demandee et ratee ». Sans ça,
+        // l'administration annonçait « signature absente » au demarrage — un etat
+        // parfaitement normal, puisqu'elle ne se charge qu'a la premiere signature.
+        // Une alerte qui se declenche sans motif apprend a ignorer le tableau de bord.
+        dernierEchec = Date.now();
       }
       return fn;
     })
@@ -263,6 +272,7 @@ export function noteForbidden(): void {
   forbiddenTimes = [];
   console.log('[KissKH] salve de 403 — re-decouverte de la signature');
   cachedFn = null;
+  dernierEchec = null;
   cachedAt = 0;
   void rediscoverConstants();
 }
@@ -353,10 +363,26 @@ export async function rediscoverConstants(): Promise<Partial<KkeyConstants> | nu
 }
 
 /** Etat pour la page admin. */
-export function kkeyStatus(): { fnLoaded: boolean; ageMs: number | null; constants: KkeyConstants } {
+export interface EtatKkey {
+  fnLoaded: boolean;
+  ageMs: number | null;
+  /**
+   * Etat reel, en trois temps :
+   * - `chargee`     : une signature a ete produite, tout va bien ;
+   * - `au-repos`    : jamais demandee depuis le demarrage — c'est le cas NORMAL, elle
+   *                   se charge a la premiere lecture KissKH ;
+   * - `en-echec`    : demandee, et le chargement a rate. Le seul cas qui merite une
+   *                   alerte.
+   */
+  etat: 'chargee' | 'au-repos' | 'en-echec';
+  constants: KkeyConstants;
+}
+
+export function kkeyStatus(): EtatKkey {
   return {
     fnLoaded: cachedFn !== null,
     ageMs: cachedAt ? Date.now() - cachedAt : null,
+    etat: cachedFn !== null ? 'chargee' : dernierEchec !== null ? 'en-echec' : 'au-repos',
     constants: constants(),
   };
 }
