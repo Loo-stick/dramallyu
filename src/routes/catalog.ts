@@ -10,13 +10,16 @@
 // repetee ici : une installation dont le manifeste en cache annonce encore les
 // rubriques n'ira pas interroger une source dont son proprietaire n'a pas voulu.
 //
-// La source reste `DramaList/List`, endpoint OUVERT — la cle TMDB sert d'INTERRUPTEUR,
-// pas d'authentification. La faire alimenter le catalogue est un travail distinct.
+// DEUX SOURCES, dans cet ordre. TMDB d'abord : c'est lui qui justifie l'existence du
+// catalogue, et il ne partage pas le sort de KissKH qu'un hebergeur peut se voir
+// refuser. KissKH en repli — il ne demande aucune cle, et connait des dramas absents
+// de TMDB.
 
 import type { Request, Response } from 'express';
 import { parseConfig } from '../core/config';
 import { findCatalog } from './catalog-defs';
 import { list, search, type KkSearchItem } from '../sources/direct/kisskh/client';
+import { catalogueTmdb, type FicheTmdb } from '../sources/meta/tmdb-catalogue';
 
 const PAGE_SIZE = 40;
 
@@ -27,6 +30,8 @@ export interface MetaPreview {
   poster?: string;
   posterShape?: 'poster' | 'landscape';
   description?: string;
+  /** Annee, affichee par Stremio sous le titre. */
+  releaseInfo?: string;
 }
 
 function toPreview(item: KkSearchItem, type: 'series' | 'movie'): MetaPreview {
@@ -60,6 +65,19 @@ function parseExtra(req: Request): Record<string, string> {
   return out;
 }
 
+/** Une fiche TMDB au format attendu par Stremio. */
+function apercuTmdb(f: FicheTmdb, type: 'series' | 'movie'): MetaPreview {
+  return {
+    // `parseStremioId` lit deja cette forme, et `/meta` la sert depuis ce changement.
+    id: `tmdb:${f.id}`,
+    type,
+    name: f.nom,
+    poster: f.affiche,
+    description: f.description,
+    releaseInfo: f.annee,
+  };
+}
+
 export async function handleCatalog(req: Request, res: Response): Promise<void> {
   const def = findCatalog(String(req.params.id || ''));
   if (!def) {
@@ -80,6 +98,29 @@ export async function handleCatalog(req: Request, res: Response): Promise<void> 
   try {
     const extra = parseExtra(req);
     const query = extra.search?.trim();
+    const skip = Number(extra.skip || 0) || 0;
+    const page = Math.floor(skip / PAGE_SIZE) + 1;
+
+    // TMDB D'ABORD. C'est lui qui justifie l'existence du catalogue : metadonnees
+    // soignees, affiches, synopsis francais — et surtout il ne partage pas le sort de
+    // KissKH, qu'un hebergeur peut se voir refuser. KissKH reste en repli : il ne
+    // demande aucune cle et rend des dramas absents de TMDB.
+    const parTmdb = await catalogueTmdb({
+      type: def.type,
+      pays: def.pays,
+      tri: def.tri,
+      page,
+      cle: config.tmdb,
+      recherche: query,
+    });
+
+    if (parTmdb && parTmdb.length > 0) {
+      res.json({ metas: parTmdb.map((f) => apercuTmdb(f, def.type)) });
+      return;
+    }
+    if (parTmdb === null) {
+      console.error(`[Catalog] ${req.params.id} : TMDB n'a pas repondu — on tente KissKH.`);
+    }
 
     if (query) {
       const found = await search(query);
@@ -89,9 +130,6 @@ export async function handleCatalog(req: Request, res: Response): Promise<void> 
       res.json({ metas: found.slice(0, PAGE_SIZE).map((i) => toPreview(i, def.type)) });
       return;
     }
-
-    const skip = Number(extra.skip || 0) || 0;
-    const page = Math.floor(skip / PAGE_SIZE) + 1;
 
     const result = await list({
       page,
