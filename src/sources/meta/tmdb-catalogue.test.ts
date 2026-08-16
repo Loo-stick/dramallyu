@@ -65,3 +65,23 @@ test('la recherche filtre ce qu elle peut, sans exiger la popularite', () => {
   assert.equal(u.searchParams.get('include_adult'), 'false');
   assert.equal(u.searchParams.get('vote_count.gte'), null);
 });
+
+test('une rubrique pays classe par NOTE, avec son propre plancher', () => {
+  // « Les mieux notes » plutot que « ceux dont on parle » — et le plancher suit
+  // l'abondance de la production du pays.
+  const u = new URL(urlCatalogue({ ...base, pays: 'KR', tri: 'note', votesMin: 100 }));
+  assert.equal(u.searchParams.get('sort_by'), 'vote_average.desc');
+  assert.equal(u.searchParams.get('vote_count.gte'), '100');
+});
+
+test('l animation se separe des prises de vues reelles', () => {
+  // Sans cela, « Japon » melange anime et J-drama, « Chine » noie ses dramas sous les
+  // donghua. Genre 16 = animation chez TMDB.
+  const jdrama = new URL(urlCatalogue({ ...base, pays: 'JP', animation: 'exclue' }));
+  assert.equal(jdrama.searchParams.get('without_genres'), '16');
+  assert.equal(jdrama.searchParams.get('with_genres'), null);
+
+  const donghua = new URL(urlCatalogue({ ...base, pays: 'CN', animation: 'seulement' }));
+  assert.equal(donghua.searchParams.get('with_genres'), '16');
+  assert.equal(donghua.searchParams.get('without_genres'), null);
+});

@@ -109,6 +109,8 @@ export async function handleCatalog(req: Request, res: Response): Promise<void> 
       type: def.type,
       pays: def.pays,
       tri: def.tri,
+      animation: def.animation,
+      votesMin: def.votesMin,
       page,
       cle: config.tmdb,
       recherche: query,

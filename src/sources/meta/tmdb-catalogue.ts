@@ -39,7 +39,7 @@ const LANGUES_ASIE = 'ko|zh|ja|th';
  *    ne vide aucun catalogue de series, TMDB en ayant largement assez.
  */
 const MOTS_CLES_EXCLUS = ['256466', '155691', '155477', '159551', '298666'].join('|');
-const VOTES_MINIMUM = '20';
+const VOTES_MINIMUM = 20;
 
 export interface FicheTmdb {
   id: number;
@@ -67,8 +67,23 @@ export interface RequeteCatalogue {
   type: 'series' | 'movie';
   /** Pays d'origine (`KR`, `CN`...) — plus precis que la langue pour une rubrique pays. */
   pays?: string;
-  /** Ordre : popularite par defaut, ou nouveautes. */
-  tri?: 'popularite' | 'nouveautes';
+  /**
+   * Ordre. `note` classe par moyenne des votes — « les mieux notes » plutot que
+   * « ceux dont on parle ». Sur un catalogue de dramas c'est le bon critere, et il
+   * ecarte le contenu douteux PAR CONSTRUCTION : ces titres ont peu de votes et de
+   * mauvaises notes. Repris de l'addon Cataloog, qui avait vu juste.
+   */
+  tri?: 'popularite' | 'nouveautes' | 'note';
+  /**
+   * Animation, ou tout sauf l'animation.
+   *
+   * Sans cette distinction, « Japon » melange anime et prises de vues reelles, et
+   * « Chine » noie les dramas sous les donghua. Pour un addon de dramas, ce n'est pas
+   * un detail de rangement : ce sont deux publics.
+   */
+  animation?: 'seulement' | 'exclue';
+  /** Plancher de votes. Plus la production d'un pays est abondante, plus il monte. */
+  votesMin?: number;
   page: number;
   cle: string;
   /** Recherche libre. Quand elle est fournie, le reste est ignore. */
@@ -108,9 +123,15 @@ export function urlCatalogue(r: RequeteCatalogue): string {
 
   p.set('include_adult', 'false');
   p.set('without_keywords', MOTS_CLES_EXCLUS);
-  p.set('vote_count.gte', VOTES_MINIMUM);
+  p.set('vote_count.gte', String(r.votesMin ?? VOTES_MINIMUM));
 
-  if (r.tri === 'nouveautes') {
+  // Genre 16 = animation, chez TMDB.
+  if (r.animation === 'seulement') p.set('with_genres', '16');
+  else if (r.animation === 'exclue') p.set('without_genres', '16');
+
+  if (r.tri === 'note') {
+    p.set('sort_by', 'vote_average.desc');
+  } else if (r.tri === 'nouveautes') {
     p.set('sort_by', r.type === 'series' ? 'first_air_date.desc' : 'release_date.desc');
     // Sans borne haute, TMDB remonte des fiches annoncees pour dans deux ans.
     const aujourdhui = new Date().toISOString().slice(0, 10);
