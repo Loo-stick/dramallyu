@@ -10,6 +10,8 @@
 //    liste oblige les utilisateurs de Nuvio a REINSTALLER l'addon (il met en cache
 //    la liste des ressources).
 
+import type { UserConfig } from '../core/config';
+
 import { COUNTRY_CATALOGS } from './catalog-defs';
 
 export const ADDON_ID = 'ovh.loostick.dramallyu';
@@ -37,13 +39,26 @@ export interface Manifest {
  * Il reste facultatif — un manifeste sans logo est valide, et mieux vaut un addon sans
  * illustration qu'un addon illisible.
  */
-export function getManifest(baseUrl?: string): Manifest {
-  const catalogs = COUNTRY_CATALOGS.map((c) => ({
-    type: c.type,
-    id: c.id,
-    name: c.name,
-    extra: [{ name: 'skip' }, { name: 'search' }],
-  }));
+export function getManifest(baseUrl?: string, config?: UserConfig): Manifest {
+  // LE CATALOGUE N'EXISTE QUE POUR QUI A UNE CLE TMDB.
+  //
+  // Il n'a jamais ete demande, et il coutait cher : adosse a la seule source KissKH,
+  // il se vidait entierement des que celle-ci devenait injoignable — un hebergeur dont
+  // le fournisseur est bloque voyait « empty content » sur les neuf rubriques et
+  // concluait, raisonnablement, que l'addon etait casse.
+  //
+  // Ne pas ANNONCER de catalogue est plus honnete que d'en annoncer un vide : Stremio
+  // n'affiche alors aucune rubrique, et l'addon se presente pour ce qu'il est —
+  // un fournisseur de flux et de sous-titres.
+  const avecCatalogue = Boolean(config?.tmdb);
+  const catalogs = avecCatalogue
+    ? COUNTRY_CATALOGS.map((c) => ({
+        type: c.type,
+        id: c.id,
+        name: c.name,
+        extra: [{ name: 'skip' }, { name: 'search' }],
+      }))
+    : [];
 
   return {
     id: ADDON_ID,
@@ -54,7 +69,9 @@ export function getManifest(baseUrl?: string): Manifest {
       'Dramas asiatiques (coreens, chinois, thailandais, japonais) et films : agregateur multi-sources ' +
       'avec sous-titres francais en priorite. Sources directes sans aucune cle, plus torrents et DDL ' +
       'via votre propre compte AllDebrid ou TorBox.',
-    resources: ['stream', 'subtitles', 'catalog', 'meta'],
+    // `catalog` et `meta` ne servent QUE le catalogue : les annoncer sans lui ferait
+    // interroger deux ressources qui ne repondraient rien.
+    resources: avecCatalogue ? ['stream', 'subtitles', 'catalog', 'meta'] : ['stream', 'subtitles'],
     types: ['series', 'movie'],
     // On accepte les trois provenances : Cinemeta/AIOStreams (tt), un catalogue TMDB
     // tiers (tmdb:), et notre propre catalogue (kkh:) pour les dramas absents d'IMDb.

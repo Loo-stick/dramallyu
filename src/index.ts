@@ -125,7 +125,12 @@ app.use(limiter);
 
 const manifest = (req: express.Request, res: express.Response): void => {
   // JAMAIS gate : un manifeste protege rend l'addon inagregeable par AIOStreams.
-  res.json(getManifest(getBaseUrl(req)));
+  //
+  // Il depend en revanche de la configuration : le catalogue n'est annonce qu'a qui a
+  // une cle TMDB. Sans segment de config — le manifeste nu, celui qu'on donne a lire
+  // pour decouvrir l'addon — il n'y a donc pas de catalogue, ce qui est exact.
+  const config = parseConfig((req.params as Record<string, string>).config ?? null);
+  res.json(getManifest(getBaseUrl(req), config));
 };
 
 /**

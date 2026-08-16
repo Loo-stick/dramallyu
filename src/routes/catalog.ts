@@ -1,11 +1,20 @@
 // Ressource /catalog — la navigation dans les dramas.
 //
-// Elle repose sur `DramaList/List`, endpoint OUVERT : le catalogue ne depend ni d'une
-// cle utilisateur, ni de la signature kkey. C'est deliberé — meme le jour ou KissKH
-// casse la lecture, l'addon reste un annuaire de dramas utilisable, et les flux
-// arrivent alors des piliers torrent et DDL.
+// PROPOSEE UNIQUEMENT A QUI A POSE UNE CLE TMDB. Le catalogue n'avait pas ete demande,
+// et il coutait cher : alimente par la seule `DramaList/List` de KissKH, il se vidait
+// entierement des que cette source devenait injoignable. Un hebergeur dont le
+// fournisseur est bloque voyait « empty content » sur les neuf rubriques et en
+// concluait, raisonnablement, que l'addon etait casse.
+//
+// Le manifeste ne l'annonce donc plus par defaut (cf. `manifest.ts`), et la regle est
+// repetee ici : une installation dont le manifeste en cache annonce encore les
+// rubriques n'ira pas interroger une source dont son proprietaire n'a pas voulu.
+//
+// La source reste `DramaList/List`, endpoint OUVERT — la cle TMDB sert d'INTERRUPTEUR,
+// pas d'authentification. La faire alimenter le catalogue est un travail distinct.
 
 import type { Request, Response } from 'express';
+import { parseConfig } from '../core/config';
 import { findCatalog } from './catalog-defs';
 import { list, search, type KkSearchItem } from '../sources/direct/kisskh/client';
 
@@ -54,6 +63,16 @@ function parseExtra(req: Request): Record<string, string> {
 export async function handleCatalog(req: Request, res: Response): Promise<void> {
   const def = findCatalog(String(req.params.id || ''));
   if (!def) {
+    res.json({ metas: [] });
+    return;
+  }
+
+  // Le catalogue n'est propose qu'a qui a pose une cle TMDB (cf. le manifeste, qui ne
+  // l'annonce pas autrement). La regle est repetee ici pour que les installations
+  // anterieures — dont le manifeste en cache annonce encore les rubriques — cessent
+  // d'interroger une source dont elles n'ont pas voulu.
+  const config = parseConfig((req.params as Record<string, string>).config ?? null);
+  if (!config.tmdb) {
     res.json({ metas: [] });
     return;
   }
