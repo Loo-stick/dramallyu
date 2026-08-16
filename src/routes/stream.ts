@@ -281,11 +281,14 @@ async function repondre(
 
     const [enCache, paires] = await chrono('enrichissement', () =>
       Promise.all([
+        // `verifie: false` quand la verification n'a PAS eu lieu — budget insuffisant,
+        // ou aucun debrideur n'a repondu. Ce n'est pas « rien n'est en cache », et le
+        // filtre « uniquement ce qui est pret » doit pouvoir faire la difference.
         hashes.length > 0 && budgetEnrichissement > 500
           ? cacheParService(hashes, config, AbortSignal.timeout(budgetEnrichissement)).catch(
-              () => new Map<string, NomDebrid[]>(),
+              () => ({ parHash: new Map<string, NomDebrid[]>(), verifie: false }),
             )
-          : Promise.resolve(new Map<string, NomDebrid[]>()),
+          : Promise.resolve({ parHash: new Map<string, NomDebrid[]>(), verifie: false }),
 
         config.ad && liensAVerifier.length > 0 && budgetEnrichissement > 500
           ? cached<[string, InfoLien][]>(
@@ -312,7 +315,7 @@ async function repondre(
     /** Le debrideur qui servira REELLEMENT ce flux, et s'il l'a deja. */
     const servirPar = (c: Candidate): { service?: NomDebrid; pret?: boolean } => {
       if (c.kind === 'direct') return {};
-      const detenteurs = c.infoHash ? enCache.get(c.infoHash.toLowerCase()) : undefined;
+      const detenteurs = c.infoHash ? enCache.parHash.get(c.infoHash.toLowerCase()) : undefined;
       // Le premier detenteur suit l'ordre de `servicesFor`, donc celui que la
       // resolution empruntera : l'etiquette ne peut pas mentir sur le service.
       if (detenteurs && detenteurs.length > 0) return { service: detenteurs[0], pret: true };
@@ -366,6 +369,10 @@ async function repondre(
 
     const filtres = {
       cachedOnly: config.cachedOnly,
+      // Le filtre ne s'applique QUE si la verification a eu lieu. Sinon il jugerait
+      // sur une information qu'on n'a pas — et rendrait une liste vide la ou il n'y a
+      // qu'une verification inachevee.
+      verificationFaite: enCache.verifie,
       minResolution: config.minResolution,
       maxResolution: config.maxResolution,
       minSource: config.minSource,

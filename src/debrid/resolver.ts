@@ -175,11 +175,24 @@ export type NomDebrid = 'alldebrid' | 'torbox';
  * suivi ici est celui de `servicesFor`, donc le meme que celui de la resolution —
  * l'etiquette affichee correspond bien au service qui servira le fichier.
  */
+export interface Disponibilite {
+  parHash: Map<string, NomDebrid[]>;
+  /**
+   * Vrai si AU MOINS UN debrideur a REPONDU.
+   *
+   * Sans cette distinction, un echec ou une expiration produisait une carte vide,
+   * indiscernable d'un « verifie, rien n'est en cache ». Le filtre « uniquement ce qui
+   * est pret » vidait alors la liste entiere : a froid, l'utilisateur ne voyait RIEN,
+   * puis tout apparaissait au rechargement. Constate en production.
+   */
+  verifie: boolean;
+}
+
 export async function cacheParService(
   hashes: string[],
   config: UserConfig,
   signal?: AbortSignal,
-): Promise<Map<string, NomDebrid[]>> {
+): Promise<Disponibilite> {
   const parHash = new Map<string, NomDebrid[]>();
   const services = servicesFor(config).filter((s) => s.supportsCacheCheck);
 
@@ -192,12 +205,15 @@ export async function cacheParService(
   // Collecter dans le desordre ferait mentir cette etiquette une fois sur deux.
   const reponses = await Promise.all(
     services.map((service) =>
-      service.checkCached(hashes, signal).catch(() => new Map<string, boolean>()),
+      service
+        .checkCached(hashes, signal)
+        .then((m) => ({ m, ok: true }))
+        .catch(() => ({ m: new Map<string, boolean>(), ok: false })),
     ),
   );
 
   services.forEach((service, i) => {
-    for (const [hash, cached] of reponses[i]) {
+    for (const [hash, cached] of reponses[i].m) {
       if (!cached) continue;
       const liste = parHash.get(hash) ?? [];
       liste.push(service.name);
@@ -205,5 +221,5 @@ export async function cacheParService(
     }
   });
 
-  return parHash;
+  return { parHash, verifie: reponses.some((r) => r.ok) };
 }

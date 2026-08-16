@@ -91,6 +91,19 @@ export function contientFormat(nom: string, format: string): boolean {
 export interface Filtres {
   /** Ne montrer que ce dont on a VERIFIE la presence en cache. */
   cachedOnly: boolean;
+  /**
+   * La verification a-t-elle seulement EU LIEU ?
+   *
+   * A froid, le fan-out consomme le budget et la verification de disponibilite est
+   * sautee ou expire. Elle rendait alors une carte vide, que `cachedOnly` lisait comme
+   * « rien n'est pret » : la liste entiere disparaissait, puis tout revenait au
+   * rechargement. Constate en production — deux requetes simultanees et identiques
+   * rendaient 0 et 3 flux.
+   *
+   * C'est la regle de la maison, appliquee ici aussi : ON NE COUPE JAMAIS SUR UNE
+   * INFORMATION QU'ON N'A PAS.
+   */
+  verificationFaite: boolean;
   /** Resolution plancher / plafond. Chaine vide = pas de borne. */
   minResolution: string;
   maxResolution: string;
@@ -143,7 +156,7 @@ export function passeFiltres(etat: EtatFlux, f: Filtres): boolean {
   // Pour le reste, `undefined` signifie « invérifiable » (un lien DDL n'a pas de
   // somme de controle) : l'utilisateur a demande ce qui est SUR, on ne le garde donc
   // pas — mais ce n'est pas la meme chose qu'« absent ».
-  if (f.cachedOnly && c.kind !== 'direct' && etat.cached !== true) return false;
+  if (f.cachedOnly && f.verificationFaite && c.kind !== 'direct' && etat.cached !== true) return false;
 
   const rang = rangResolution(c.quality);
   if (rang !== null) {

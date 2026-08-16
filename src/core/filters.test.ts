@@ -7,6 +7,9 @@ import type { Candidate } from '../sources/types';
 
 const NEUTRE: Filtres = {
   cachedOnly: false,
+  // Par defaut la verification a eu lieu : c'est le cas courant, et cela laisse les
+  // autres tests juger le filtre lui-meme plutot que son garde-fou.
+  verificationFaite: true,
   minResolution: '',
   maxResolution: '',
   minSource: '',
@@ -36,12 +39,26 @@ test('filtres neutres : tout passe', () => {
 });
 
 test('« seulement le cache » ne garde que ce qui est VERIFIE present', () => {
-  const f = { ...NEUTRE, cachedOnly: true };
+  const f = { ...NEUTRE, cachedOnly: true, verificationFaite: true };
   assert.equal(passeFiltres(flux({}, true), f), true);
   assert.equal(passeFiltres(flux({}, false), f), false);
   // Invérifiable (lien DDL sans hash) : ecarte aussi, mais ce n'est pas la meme
   // chose — l'utilisateur a demande « seulement ce qui est sur ».
   assert.equal(passeFiltres(flux({}, undefined), f), false);
+});
+
+test('« seulement le cache » NE S APPLIQUE PAS si la verification n a pas eu lieu', () => {
+  // A froid, le fan-out consomme le budget et la verification de disponibilite est
+  // sautee ou expire. Elle rendait une carte vide, lue comme « rien n'est pret » : la
+  // liste entiere disparaissait, puis tout revenait au rechargement. Deux requetes
+  // simultanees et identiques rendaient 0 et 3 flux — c'est ce qui a mis sur la piste.
+  //
+  // On ne coupe jamais sur une information qu'on n'a pas : mieux vaut une liste sans
+  // etiquette « pret » qu'une liste vide.
+  const f = { ...NEUTRE, cachedOnly: true, verificationFaite: false };
+  assert.equal(passeFiltres(flux({}, undefined), f), true);
+  assert.equal(passeFiltres(flux({}, false), f), true);
+  assert.equal(passeFiltres(flux({}, true), f), true);
 });
 
 test('un flux DIRECT passe toujours « seulement ce qui est pret »', () => {
