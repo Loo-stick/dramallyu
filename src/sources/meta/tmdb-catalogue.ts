@@ -23,6 +23,24 @@ const TTL_MS = 3 * 60 * 60 * 1000;
 /** Les langues du creneau. `|` vaut OU chez TMDB. */
 const LANGUES_ASIE = 'ko|zh|ja|th';
 
+/**
+ * Ce qu'on ne veut pas voir apparaitre dans un catalogue de dramas.
+ *
+ * `include_adult=false` ne suffit PAS : le drapeau `adult` de TMDB est etroit, et les
+ * films erotiques asiatiques — pink eiga japonais, softcore hongkongais — passent au
+ * travers avec `adult: false`. Constate en production, sur la premiere page.
+ *
+ * Deux garde-fous se completent :
+ *
+ *  - les MOTS-CLES, qui attrapent une oeuvre erotique meme populaire ;
+ *  - un plancher de VOTES, qui attrape le reste. Ces titres ont un a quatre votes la
+ *    ou une vraie sortie en compte des centaines. Verifie : le plancher retire dix
+ *    entrees douteuses sur vingt, les mots-cles seuls n'en retirent que deux — et il
+ *    ne vide aucun catalogue de series, TMDB en ayant largement assez.
+ */
+const MOTS_CLES_EXCLUS = ['256466', '155691', '155477', '159551', '298666'].join('|');
+const VOTES_MINIMUM = '20';
+
 export interface FicheTmdb {
   id: number;
   nom: string;
@@ -33,6 +51,8 @@ export interface FicheTmdb {
 }
 
 interface BrutTmdb {
+  adult?: boolean;
+  vote_count?: number;
   id?: number;
   name?: string;
   title?: string;
@@ -75,7 +95,9 @@ export function urlCatalogue(r: RequeteCatalogue): string {
   const commun = `api_key=${encodeURIComponent(r.cle)}&language=fr-FR&page=${r.page}`;
 
   if (r.recherche) {
-    return `${TMDB}/search/${chemin}?${commun}&query=${encodeURIComponent(r.recherche)}`;
+    // `/search` n'accepte ni plancher de votes ni exclusion de mots-cles : seul
+    // `include_adult` s'y applique. Le tri de ce qui passe se fait a la lecture.
+    return `${TMDB}/search/${chemin}?${commun}&include_adult=false&query=${encodeURIComponent(r.recherche)}`;
   }
 
   const p = new URLSearchParams();
@@ -84,13 +106,15 @@ export function urlCatalogue(r: RequeteCatalogue): string {
   if (r.pays) p.set('with_origin_country', r.pays);
   else p.set('with_original_language', LANGUES_ASIE);
 
+  p.set('include_adult', 'false');
+  p.set('without_keywords', MOTS_CLES_EXCLUS);
+  p.set('vote_count.gte', VOTES_MINIMUM);
+
   if (r.tri === 'nouveautes') {
     p.set('sort_by', r.type === 'series' ? 'first_air_date.desc' : 'release_date.desc');
     // Sans borne haute, TMDB remonte des fiches annoncees pour dans deux ans.
     const aujourdhui = new Date().toISOString().slice(0, 10);
     p.set(r.type === 'series' ? 'first_air_date.lte' : 'release_date.lte', aujourdhui);
-    // Et sans plancher de votes, on recolte des fiches vides creees la veille.
-    p.set('vote_count.gte', '5');
   } else {
     p.set('sort_by', 'popularity.desc');
   }
@@ -127,7 +151,12 @@ export async function catalogueTmdb(r: RequeteCatalogue): Promise<FicheTmdb[] | 
       const data = await getJson<{ results?: BrutTmdb[] }>(adresse, { timeoutMs: 12000 });
       if (!data || !Array.isArray(data.results)) return null;
 
-      const fiches = data.results.map(fiche).filter((f): f is FicheTmdb => f !== null);
+      // La RECHERCHE ne peut pas filtrer cote serveur : `/search` n'accepte ni
+      // plancher de votes ni exclusion de mots-cles. On ecarte donc ici ce que le
+      // drapeau signale, sans plancher de votes — chercher un drama confidentiel est
+      // legitime, et l'exiger populaire reviendrait a le rendre introuvable.
+      const utiles = data.results.filter((b) => b.adult !== true);
+      const fiches = utiles.map(fiche).filter((f): f is FicheTmdb => f !== null);
       if (!fiches.some((f) => illisible(f.nom))) return fiches;
 
       const enAnglais = await getJson<{ results?: BrutTmdb[] }>(
