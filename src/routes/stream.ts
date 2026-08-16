@@ -435,7 +435,11 @@ async function repondre(
                 pref: config.debrid,
               },
               AbortSignal.timeout(8000),
-            ),
+            )
+              // Ici seul le lien compte : cette resolution ne sert qu'a lire les
+              // pistes du fichier. Ce n'est pas une lecture de l'utilisateur, et
+              // elle n'a donc pas a etre comptee comme telle.
+              .then((r) => r?.lien ?? null),
           ).catch(() => null),
         ),
       ).then(() => {

@@ -8,6 +8,7 @@
 import type { Request, Response } from 'express';
 import { decodeToken } from '../debrid/token';
 import { resolve } from '../debrid/resolver';
+import { noterLecture } from '../core/metrics';
 
 // Le lecteur abandonne bien avant : inutile de faire patienter plus longtemps.
 const RESOLVE_TIMEOUT_MS = 45_000;
@@ -26,7 +27,7 @@ export async function handleResolve(req: Request, res: Response): Promise<void> 
   req.on('close', () => controller.abort());
 
   try {
-    const link = await resolve(
+    const resolution = await resolve(
       {
         kind: payload.k,
         value: payload.v,
@@ -41,7 +42,7 @@ export async function handleResolve(req: Request, res: Response): Promise<void> 
       },
       controller.signal,
     );
-    if (!link) {
+    if (!resolution) {
       // Cas de loin le plus frequent : le fichier n'etait pas en cache, le debrideur
       // vient de LANCER son telechargement. Dire « echec » serait faux — le flux
       // deviendra jouable, il faut juste attendre. Un message vague enverrait
@@ -56,7 +57,14 @@ export async function handleResolve(req: Request, res: Response): Promise<void> 
         );
       return;
     }
-    res.redirect(302, link);
+    // Une lecture qui aboutit doit laisser une trace : sans elle, on ne peut ni
+    // compter les lectures, ni verifier qu'un routage demande a bien eu lieu.
+    noterLecture(true, resolution.service);
+    console.log(
+      `[Resolve] ${payload.k} resolu par ${resolution.service}` +
+        `${resolution.parMediaflow ? ' -> MediaFlow' : ' (direct)'}`,
+    );
+    res.redirect(302, resolution.lien);
   } catch (e) {
     console.error(`[Resolve] ${(e as Error).message.slice(0, 120)}`);
     res.status(502).type('text/plain').send('echec de la resolution');

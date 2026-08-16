@@ -109,7 +109,21 @@ async function ordonnerPourTorrent(
  */
 const BUDGET_MS = 9000;
 
-export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promise<string | null> {
+/**
+ * Ce qu'une resolution a produit, et par quel chemin.
+ *
+ * Le lien seul ne suffisait pas : `/resolve` redirigeait sans rien journaliser, si
+ * bien qu'une lecture reussie ne laissait AUCUNE trace. Impossible de repondre a
+ * « est-ce bien passe par mon MediaFlow ? » autrement qu'en croyant l'utilisateur sur
+ * parole. On rend donc aussi le service qui a repondu et le fait d'avoir enveloppe.
+ */
+export interface Resolution {
+  lien: string;
+  service: 'alldebrid' | 'torbox';
+  parMediaflow: boolean;
+}
+
+export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promise<Resolution | null> {
   const debut = Date.now();
   let services = servicesFor({ ad: req.ad, tb: req.tb, debrid: req.pref ?? 'auto' } as UserConfig);
   if (services.length === 0) return null;
@@ -142,7 +156,8 @@ export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promis
       // toujours le meme, et router TorBox quand seul AllDebrid pose probleme ferait
       // transiter de la video pour rien.
       const mfp = { mfpUrl: req.mfpUrl, mfpPass: req.mfpPass, mfpPour: req.mfpPour } as UserConfig;
-      return throughMediaflow(link, service.name === 'alldebrid' ? 'ad' : 'tb', mfp);
+      const enveloppe = throughMediaflow(link, service.name === 'alldebrid' ? 'ad' : 'tb', mfp);
+      return { lien: enveloppe, service: service.name, parMediaflow: enveloppe !== link };
     } catch (e) {
       console.log(`[Resolveur] ${service.name}: ${(e as Error).message.slice(0, 100)}`);
     }
