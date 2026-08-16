@@ -218,7 +218,15 @@ async function repondre(
     // enrichir. Deux tiers pour chercher, un tiers pour qualifier — la repartition
     // vient de la mesure, ou l'enrichissement coutait autant que la recherche.
     const { candidates, timings, apports, timedOut } = await chrono('fanout', () =>
-      searchAll(query, config, Math.max(1500, Math.round(restant() * 0.66))),
+      // Deux budgets : les sources ordinaires ont les deux tiers, les DIRECTES un
+      // sursis pris sur la part d'enrichissement. Une etiquette en moins vaut mieux
+      // qu'une source de lecture manquante.
+      searchAll(
+        query,
+        config,
+        Math.max(1500, Math.round(restant() * 0.66)),
+        Math.max(1500, Math.round(restant() * 0.85)),
+      ),
     );
     const langOrder = langOrderFromSubs(config.subLangs);
 

@@ -91,6 +91,7 @@ export async function searchAll(
   query: Query,
   config: UserConfig,
   budgetMs?: number,
+  budgetDirectMs?: number,
 ): Promise<FanoutResult> {
   const settings = getSettings();
 
@@ -107,15 +108,31 @@ export async function searchAll(
   const budgetReponse = Math.min(budgetMs ?? settings.fanoutBudgetMs, settings.fanoutBudgetMs);
   const budgetFond = Math.max(budgetReponse, settings.rechauffementMs);
 
+  // UN SURSIS POUR LES SOURCES DIRECTES.
+  //
+  // Elles seules rendent un flux immediatement jouable, sans debrideur et sans etape
+  // supplementaire. Les perdre, c'est rendre une liste vide a qui n'a pas de compte —
+  // alors qu'un tracker abandonne ne coute qu'une ligne de plus dans une liste qui en
+  // compte dix. Vecu : un drama dont KissKH etait la SEULE source exploitable ne
+  // rendait rien a froid, puis tout au rechargement.
+  //
+  // Le sursis se prend sur la part d'ENRICHISSEMENT, jamais au-dela du plafond de
+  // reponse : l'enrichissement ne fait qu'ajouter des etiquettes, une source directe
+  // absente supprime la lecture.
+  const budgetDirect = Math.max(budgetReponse, budgetDirectMs ?? budgetReponse);
+
   const active = planSources(config).filter((p) => !p.skip);
   const timings: Record<string, number> = {};
   const apports: Record<string, number> = {};
   const timedOut: string[] = [];
 
   const debutGlobal = Date.now();
-  const echeance = new Promise<'delai'>((resolve) => {
-    setTimeout(() => resolve('delai'), budgetReponse).unref?.();
-  });
+  const minuteur = (ms: number) =>
+    new Promise<'delai'>((resolve) => {
+      setTimeout(() => resolve('delai'), ms).unref?.();
+    });
+  const echeance = minuteur(budgetReponse);
+  const echeanceDirect = budgetDirect > budgetReponse ? minuteur(budgetDirect) : echeance;
 
   const results = await Promise.all(
     active.map(async ({ source }) => {
@@ -130,7 +147,10 @@ export async function searchAll(
         (e) => ({ found: [] as Candidate[], erreur: (e as Error).message.slice(0, 120) }),
       );
 
-      const issue = await Promise.race([travail, echeance]);
+      const issue = await Promise.race([
+        travail,
+        source.kind === 'direct' ? echeanceDirect : echeance,
+      ]);
 
       if (issue === 'delai') {
         // Elle n'entrera pas dans CETTE reponse. La question est seulement de savoir si

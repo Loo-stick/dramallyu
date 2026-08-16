@@ -33,9 +33,25 @@ async function findDrama(q: Query, signal?: AbortSignal): Promise<KkDrama | null
 
   const wantedSeason = q.type === 'series' ? (q.season ?? 1) : undefined;
 
-  for (const title of q.titles) {
+  // LES TITRES SONT CHERCHES EN PARALLELE, l'ordre etant conserve pour la selection.
+  //
+  // C'etait une boucle sequentielle : un aller-retour HTTP PAR TITRE. Tant qu'on n'en
+  // portait qu'un ou deux, cela passait ; en ajoutant le titre international, la source
+  // s'est mise a depasser le budget du fan-out et disparaissait des recherches a froid.
+  // Or c'est la seule qui rende un flux immediatement jouable, sans debrideur : la
+  // perdre, c'est rendre une liste vide a qui n'a pas de compte.
+  //
+  // Un titre qui ne rend rien ne coute plus le delai des suivants. La PRIORITE, elle,
+  // ne change pas : on parcourt les titres dans l'ordre, et le premier qui donne une
+  // correspondance l'emporte — comme avant.
+  const recherches = await Promise.all(
+    q.titles.map((titre) => (titre ? search(titre, signal).catch(() => []) : Promise.resolve([]))),
+  );
+
+  for (let i = 0; i < q.titles.length; i++) {
+    const title = q.titles[i];
     if (!title) continue;
-    const results = await search(title, signal);
+    const results = recherches[i];
     if (results.length === 0) continue;
 
     const candidates =
