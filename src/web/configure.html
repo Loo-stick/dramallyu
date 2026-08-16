@@ -208,6 +208,22 @@
     border-radius:9px;padding:12px 14px;font-size:12.7px;background:var(--relief);
     margin-bottom:20px;
   }
+  /* Un avertissement qui compte se distingue par la FORME autant que par la teinte :
+     bordure epaisse, fond dense, symbole dans le texte. Loo est daltonien — une alerte
+     qui ne serait que « rouge » ne serait pas une alerte pour lui. */
+  .note.danger{
+    border-color:var(--sakura);border-left-width:5px;border-left-color:var(--sakura);
+    background:rgba(230,169,201,.09);font-size:13px;
+  }
+  .note.danger strong{display:block;margin-bottom:6px;font-size:13.5px}
+  /* Le bloc du lien genere met `code` en pave pleine largeur. Dans une note, `code`
+     designe un mot au fil du texte : sans cette remise a plat, « TOKEN_SECRET »
+     coupait la phrase en trois. */
+  .note code{
+    display:inline;background:var(--nuit);border:0;border-radius:4px;padding:1px 5px;
+    margin:0;font-family:var(--mono);font-size:12px;color:var(--glycine);
+    max-height:none;overflow:visible;word-break:normal;
+  }
   .note strong{display:block;margin-bottom:3px}
   .note.sobre{border-left-color:var(--trait);color:var(--doux)}
 
@@ -348,6 +364,15 @@
 
   <div class="colonnes">
     <main>
+      <!-- Affichee quand on arrive avec un lien existant : sans elle, les champs se
+           remplissent tout seuls et l'on se demande d'ou ça sort — ou pire, on croit
+           que ses cles ont ete perdues parce qu'elles s'affichent masquees. -->
+      <div class="note" id="banniere-restauration" hidden>
+        <strong>Vos reglages ont ete repris de votre lien actuel</strong>
+        Les cles deja enregistrees sont conservees : laissez un champ vide pour garder
+        la valeur en place, ou saisissez-en une nouvelle pour la remplacer.
+      </div>
+
       <div class="etape" data-etape="1">
       <section class="bloc">
         <header>
@@ -756,14 +781,25 @@
             l&rsquo;application, sur le telephone ou le televiseur.
           </p>
           <p class="indice" id="etat-chiffrement" style="margin-top:11px"></p>
+
+          <div class="note danger" id="alerte-clair" hidden>
+            <strong>⚠ Ce lien n'est PAS chiffre — vos cles y sont lisibles</strong>
+            Cette instance n'a pas de <code>TOKEN_SECRET</code>. N'importe qui disposant
+            du lien peut en extraire votre cle de debrideur, vos passkeys de trackers et
+            votre cle TMDB. Et les lectures ne fonctionneront pas : l'addon retire les
+            cles des liens de lecture plutot que de les exposer.
+            <br><br>
+            Signalez-le a l'hebergeur : definir <code>TOKEN_SECRET</code>, redemarrer,
+            puis regenerer ce lien. En attendant, ne le partagez pas et n'y mettez pas
+            de cle a laquelle vous tenez.
+          </div>
         </div>
       </div>
 
       <div class="note sobre">
         <strong>Ne partagez jamais ce lien</strong>
-        Vos cles y sont chiffrees, donc personne ne peut les en extraire. Mais le lien
-        reste un laissez-passer vers votre compte debrid. Pour faire connaitre l'addon,
-        donnez l'adresse de cette page.
+        Il est un laissez-passer vers vos comptes : qui l'a peut consommer votre
+        debrideur. Pour faire connaitre l'addon, donnez plutot l'adresse de cette page.
       </div>
 
       <div class="note sobre">
@@ -1096,9 +1132,17 @@ $('generer').addEventListener('click', function(){
     // dont l'hote ressemble a un domaine est repris en https et installe comme addon.)
     $('vers-stremio').href = lien.replace(/^https?:/, 'stremio:');
     $('vers-nuvio').href = lien.replace(/^https?:/, 'nuvio:');
-    $('etat-chiffrement').textContent = data.chiffre
-      ? 'Vos cles sont chiffrees dans ce lien.'
-      : 'Cette instance n a pas de secret configure : vos cles sont seulement encodees.';
+    // UN LIEN NON CHIFFRE PORTE LES CLES EN CLAIR. L'ancienne formulation — « vos cles
+    // sont seulement encodees » — etait exacte et sans effet : quelqu'un a partage un
+    // lien d'ou l'on pouvait lire sa cle de debrideur, sa passkey de tracker et sa cle
+    // TMDB. Un avertissement qui n'alarme pas n'avertit pas.
+    if (data.chiffre) {
+      $('etat-chiffrement').textContent = '🔒 Vos cles sont chiffrees dans ce lien.';
+      $('alerte-clair').hidden = true;
+    } else {
+      $('etat-chiffrement').textContent = '';
+      $('alerte-clair').hidden = false;
+    }
     $('sortie').classList.add('visible');
   })
   .catch(function(){

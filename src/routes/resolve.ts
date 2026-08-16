@@ -42,6 +42,26 @@ export async function handleResolve(req: Request, res: Response): Promise<void> 
       },
       controller.signal,
     );
+    // AVANT d'accuser le debrideur : un jeton SANS AUCUNE CLE ne vient pas d'une
+    // panne, il vient d'une instance sans TOKEN_SECRET. Le chiffrement etant alors
+    // impossible, `encodeToken` retire les cles plutot que de les diffuser en clair —
+    // le bon arbitrage, mais il rend toute lecture impossible. Dire « pas pret chez
+    // votre debrideur » envoie l'utilisateur verifier un compte qui n'y est pour rien.
+    if (!payload.ad && !payload.tb) {
+      res
+        .status(503)
+        .type('text/plain; charset=utf-8')
+        .send(
+          "Ce lien de lecture ne porte aucune cle de debrideur, et ne peut donc rien ouvrir.\n\n" +
+            "Ce n'est pas un probleme de votre compte : l'instance qui heberge cet addon n'a pas " +
+            "de TOKEN_SECRET configure. Sans lui les liens ne peuvent pas etre chiffres, et " +
+            "l'addon prefere les vider de vos cles plutot que de les exposer.\n\n" +
+            "A signaler a l'hebergeur : definir TOKEN_SECRET, redemarrer, puis regenerer le lien " +
+            "d'installation depuis /configure.",
+        );
+      return;
+    }
+
     if (!resolution) {
       // Cas de loin le plus frequent : le fichier n'etait pas en cache, le debrideur
       // vient de LANCER son telechargement. Dire « echec » serait faux — le flux

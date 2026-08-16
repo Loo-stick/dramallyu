@@ -40,6 +40,27 @@ for (const page of PAGES) {
     }
   });
 
+  test(`${page} : chaque element manipule par le script existe dans la page`, () => {
+    // CE QUI ARRIVE SANS CE TEST : le balisage d'un bouton est oublie mais son
+    // `addEventListener` reste. `$()` rend alors `null`, la ligne leve, et comme tout
+    // le script est UN SEUL BLOC, la page entiere cesse de fonctionner — affichee,
+    // muette, sans rien dans la console du serveur. Vecu deux fois dans la meme
+    // journee, sur les deux pages.
+    //
+    // On ne retient que les acces a identifiant LITTERAL : `$('trace-' + id)` est
+    // construit a l'execution et ne peut pas etre verifie ici.
+    const ids = new Set([...html.matchAll(/\sid="([A-Za-z0-9_-]+)"/g)].map((m) => m[1]));
+    const script = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
+      .map((m) => m[1])
+      .join('\n');
+
+    const manquants = new Set<string>();
+    for (const m of script.matchAll(/(?:\$|document\.getElementById)\('([A-Za-z0-9_-]+)'\)/g)) {
+      if (!ids.has(m[1])) manquants.add(m[1]);
+    }
+    assert.deepEqual([...manquants], [], `identifiants absents du balisage : ${[...manquants].join(', ')}`);
+  });
+
   test(`${page} : chaque onglet a la vue qui lui correspond`, () => {
     const onglets = [...html.matchAll(/data-vue="([a-z-]+)"/g)].map((m) => m[1]);
     for (const vue of new Set(onglets)) {

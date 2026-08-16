@@ -29,6 +29,7 @@ import {
   handleToggleSource,
   handleClearCache,
   handleRediscoverKkey,
+  handleGenererSecret,
   handleTableauDeBord,
   handleRequetes,
   handleUtilisateurs,
@@ -406,6 +407,7 @@ app.post('/api/admin/config/:name', requireAdmin, jsonBody, handleSaveConfigFile
 app.post('/api/admin/sources/:id', requireAdmin, jsonBody, handleToggleSource);
 app.post('/api/admin/cache/vider', requireAdmin, jsonBody, handleClearCache);
 app.post('/api/admin/kkey/redecouvrir', requireAdmin, handleRediscoverKkey);
+app.post('/api/admin/secret/generer', requireAdmin, handleGenererSecret);
 
 app.get('/api/admin/domaines', requireAdmin, (_req, res) => res.json({ dernier: dernierEtat() }));
 app.post('/api/admin/domaines/synchroniser', requireAdmin, async (_req, res) => {

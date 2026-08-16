@@ -217,6 +217,26 @@ export function handleClearCache(req: Request, res: Response): void {
   res.json({ ok: true, supprimees });
 }
 
+/**
+ * Fabrique un TOKEN_SECRET, et dit quoi en faire.
+ *
+ * On ne peut PAS l'installer soi-meme : il est lu dans l'environnement au demarrage,
+ * l'ecrire quelque part ne changerait rien sans redemarrage, et sur bon nombre
+ * d'hebergeurs le fichier `.env` n'existe meme pas — ce sont des variables declarees
+ * dans une interface. La valeur ajoutee est ailleurs : produire une valeur assez
+ * solide, et rappeler ce que sa mise en place implique.
+ *
+ * Sans lui, /configure rend des liens NON CHIFFRES — les cles y sont lisibles — et
+ * aucune lecture ne fonctionne. Un exploitant doit pouvoir regler ça sans aller lire
+ * la documentation.
+ */
+export function handleGenererSecret(_req: Request, res: Response): void {
+  res.json({
+    secret: crypto.randomBytes(48).toString('base64url'),
+    dejaConfigure: Boolean((process.env.TOKEN_SECRET || '').trim().length >= 16),
+  });
+}
+
 export async function handleRediscoverKkey(_req: Request, res: Response): Promise<void> {
   const found = await rediscoverConstants();
   res.json({ ok: Boolean(found), constantes: found, etat: kkeyStatus() });

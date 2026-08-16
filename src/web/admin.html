@@ -205,6 +205,23 @@
         <button class="sec" id="btn-kkey">Re-decouvrir la signature KissKH</button>
         <button class="sec" id="btn-domaines">Synchroniser les domaines</button>
         <button class="sec" id="btn-remesurer">Remettre les mesures a zero</button>
+        <button class="sec" id="btn-secret">Generer un TOKEN_SECRET</button>
+      </div>
+      <div id="bloc-secret" hidden style="margin-top:.9rem">
+        <p class="aide" id="secret-etat"></p>
+        <textarea id="secret-valeur" readonly style="min-height:3.4rem"></textarea>
+        <p class="aide">
+          Copiez-le dans la variable d'environnement <code>TOKEN_SECRET</code> de votre
+          hebergeur, puis <strong>redemarrez</strong>. Il n'est pas installe
+          automatiquement : il est lu au demarrage, et sur beaucoup d'hebergeurs le
+          fichier <code>.env</code> n'existe pas — ce sont des variables declarees dans
+          une interface.
+        </p>
+        <p class="aide">
+          <strong>Le changer invalide tous les liens d'installation existants</strong>,
+          qui devront etre regeneres depuis <code>/configure</code>. Ne le faites donc
+          qu'une fois, au debut.
+        </p>
       </div>
       <div class="msg" id="msg-service"></div>
     </div>
@@ -1179,6 +1196,20 @@ document.addEventListener('click', function (e) {
 });
 
 /* --------------------------------- Service --------------------------------- */
+$('btn-secret').addEventListener('click', function () {
+  jsonPost('/api/admin/secret/generer').then(function (d) {
+    $('bloc-secret').hidden = false;
+    $('secret-valeur').value = d.secret;
+    // Ne pas laisser croire qu'on vient d'arranger quelque chose : tant que la
+    // variable n'est pas posee ET l'addon redemarre, rien n'a change.
+    ecrire('secret-etat', d.dejaConfigure
+      ? 'Cette instance a DEJA un TOKEN_SECRET. N en changez que si vous savez pourquoi : tous les liens existants deviendraient invalides.'
+      : 'Cette instance n a PAS de TOKEN_SECRET : les liens generes ne sont pas chiffres et aucune lecture debrid ne fonctionne.',
+      d.dejaConfigure ? '' : 'ko');
+    $('secret-valeur').select();
+  });
+});
+
 $('btn-kkey').addEventListener('click', function () {
   ecrire('msg-service', 'Re-decouverte en cours...');
   jsonPost('/api/admin/kkey/redecouvrir').then(function (d) {
