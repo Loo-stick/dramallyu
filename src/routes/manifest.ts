@@ -10,12 +10,35 @@
 //    liste oblige les utilisateurs de Nuvio a REINSTALLER l'addon (il met en cache
 //    la liste des ressources).
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { UserConfig } from '../core/config';
 
 import { COUNTRY_CATALOGS } from './catalog-defs';
 
 export const ADDON_ID = 'ovh.loostick.dramallyu';
-export const ADDON_VERSION = '0.1.0';
+
+/**
+ * Version annoncee a Stremio, LUE dans package.json.
+ *
+ * Elle y etait recopiee a la main, et elle est restee a `0.1.0` pendant que le paquet
+ * passait en 1.1.0 : la seule version que voient Stremio et AIOStreams ne disait donc
+ * rien de ce qui tournait, et personne ne pouvait constater l'ecart depuis le client.
+ * Meme piege que la liste des secrets et celle des reglages a repeupler — une copie
+ * tenue de memoire a cote de sa source de verite finit toujours par diverger.
+ *
+ * Lu a l'execution plutot qu'importe : `package.json` est hors de `rootDir`, donc un
+ * `import` le ferait entrer dans la compilation et casserait l'arborescence de `dist`.
+ * `__dirname` vaut `dist/routes` dans l'image et `src/routes` sous tsx — deux crans
+ * au-dessus, on tombe sur la racine du projet dans les deux cas. Pas `import.meta` :
+ * la compilation vise CommonJS et le refuse.
+ */
+export const ADDON_VERSION: string = (
+  JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8')) as {
+    version: string;
+  }
+).version;
 
 export interface Manifest {
   id: string;
