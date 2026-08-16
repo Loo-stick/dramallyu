@@ -1225,9 +1225,21 @@ function restaurer(){
     $('excludeCam').checked = !!r.excludeCam;
     $('bonusHdr').checked = !!r.bonusHdr;
     $('subsSurFlux').checked = r.subsSurFlux !== false;
+    // CES CINQ-LA ETAIENT OUBLIES. Un lien regenere depuis cette page les perdait en
+    // silence : la preference de debrideur revenait a « automatique », le filtre
+    // francais se levait, et le routage MediaFlow se vidait — reglages qu'on avait
+    // pris la peine de poser, effaces sans un mot.
+    if (r.debrid) $('debrid').value = r.debrid;
+    $('frOnly').checked = r.frOnly === true;
+    $('envoyerTorrent').checked = r.envoyerTorrent === true;
+    var pour = Array.isArray(r.mfpPour) ? r.mfpPour : [];
+    $('mfp-ad').checked = pour.indexOf('ad') !== -1;
+    $('mfp-tb').checked = pour.indexOf('tb') !== -1;
+    $('mfp-direct').checked = pour.indexOf('direct') !== -1;
     // Desactive par defaut : on ne coche que si le lien le portait explicitement.
     $('catalogue').checked = r.catalogue === true;
-    ['cachedOnly','excludeCam','bonusHdr','subsSurFlux','catalogue'].forEach(function(id){ peindreBascule($(id)); });
+    ['cachedOnly','excludeCam','bonusHdr','subsSurFlux','catalogue','frOnly','envoyerTorrent',
+     'mfp-ad','mfp-tb','mfp-direct'].forEach(function(id){ peindreBascule($(id)); });
 
     marquerClesEnregistrees();
     document.getElementById('banniere-restauration').hidden = false;
