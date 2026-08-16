@@ -7,7 +7,29 @@
 
 import { getJson, httpGet } from '../../../core/http';
 import { cached } from '../../../core/cache';
-import { constants, videoKey, subKey, noteForbidden } from './kkey';
+import {
+  constants,
+  videoKey,
+  subKey,
+  noteForbidden,
+  signalerEchecMiroir,
+  signalerSuccesMiroir,
+} from './kkey';
+
+/**
+ * Rapporte au selecteur de miroir ce que cet appel a donne.
+ *
+ * `null` signifie que le domaine courant n'a pas repondu — trois de suite et l'on
+ * bascule sur le suivant. On enveloppe les trois points d'entree OUVERTS : ce sont les
+ * seuls dont l'echec designe le domaine, les endpoints signes pouvant echouer pour une
+ * signature perimee, ce que `noteForbidden` traite deja.
+ */
+async function marquer<T>(p: Promise<T | null>): Promise<T | null> {
+  const r = await p;
+  if (r === null || r === undefined) signalerEchecMiroir();
+  else signalerSuccesMiroir();
+  return r;
+}
 
 const SEARCH_TTL_MS = 6 * 60 * 60 * 1000;
 const DRAMA_TTL_MS = 12 * 60 * 60 * 1000;
@@ -72,18 +94,28 @@ export interface KkVideo {
 export async function search(query: string, signal?: AbortSignal): Promise<KkSearchItem[]> {
   const q = query.trim();
   if (!q) return [];
-  return cached<KkSearchItem[]>(
+  // `null` = l'appel a echoue. Le memoriser rendrait la source muette pendant trente
+  // minutes ET empecherait la bascule de miroir de se declencher, puisque plus aucun
+  // appel n'atteindrait le reseau pour constater la panne.
+  const r = await cached<KkSearchItem[] | null>(
     `kisskh:search:${q.toLowerCase()}`,
     SEARCH_TTL_MS,
     async () => {
-      const data = await getJson<KkSearchItem[]>(
+      const data = await marquer(getJson<KkSearchItem[]>(
         `${api()}/DramaList/Search?q=${encodeURIComponent(q)}&type=`,
         { headers: headers(), signal, timeoutMs: 12000 },
-      );
+      ));
+      if (data === null) return null;
       return Array.isArray(data) ? data : [];
     },
-    { scope: 'kisskh', shouldCache: (v) => v.length > 0, negativeTtlMs: 30 * 60 * 1000 },
+    {
+      scope: 'kisskh',
+      echec: (v) => v === null,
+      shouldCache: (v) => v !== null && v.length > 0,
+      negativeTtlMs: 30 * 60 * 1000,
+    },
   );
+  return r ?? [];
 }
 
 /** Fiche complete (metadonnees + liste des episodes). Endpoint ouvert. */
@@ -92,11 +124,11 @@ export async function drama(id: number | string, signal?: AbortSignal): Promise<
     `kisskh:drama:${id}`,
     DRAMA_TTL_MS,
     async () => {
-      const data = await getJson<KkDrama>(`${api()}/DramaList/Drama/${id}?isq=false`, {
+      const data = await marquer(getJson<KkDrama>(`${api()}/DramaList/Drama/${id}?isq=false`, {
         headers: headers(),
         signal,
         timeoutMs: 12000,
-      });
+      }));
       if (!data || !data.title) return null;
       // Les episodes arrivent en ordre decroissant : on remet en ordre naturel une
       // bonne fois pour toutes, sinon chaque appelant doit y penser.
@@ -107,7 +139,13 @@ export async function drama(id: number | string, signal?: AbortSignal): Promise<
       }
       return data;
     },
-    { scope: 'kisskh', shouldCache: (v) => v !== null, negativeTtlMs: 30 * 60 * 1000 },
+    {
+      scope: 'kisskh',
+      // Meme regle que partout : un appel rate n'est pas une fiche absente.
+      echec: (v) => v === null,
+      shouldCache: (v) => v !== null,
+      negativeTtlMs: 30 * 60 * 1000,
+    },
   );
 }
 
@@ -159,11 +197,11 @@ export async function list(params: ListParams = {}, signal?: AbortSignal): Promi
       const qs = new URLSearchParams(
         Object.fromEntries(Object.entries(p).map(([k, v]) => [k, String(v)])),
       ).toString();
-      const data = await getJson<KkList>(`${api()}/DramaList/List?${qs}`, {
+      const data = await marquer(getJson<KkList>(`${api()}/DramaList/List?${qs}`, {
         headers: headers(),
         signal,
         timeoutMs: 15000,
-      });
+      }));
       if (!data || !Array.isArray(data.data)) return null;
       return data;
     },

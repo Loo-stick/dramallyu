@@ -36,6 +36,7 @@ type KeyFn = (
 const KEY_FN_ARITY = 11;
 
 export interface KkeyConstants {
+  /** Miroir COURANT. Il change tout seul quand celui-ci cesse de repondre. */
   base: string;
   appVer: string;
   platformVer: number;
@@ -47,11 +48,34 @@ export interface KkeyConstants {
 // Valeurs relevees le 2026-08-12. Elles servent de point de depart : la re-decouverte
 // les remplace automatiquement en cas de 403, et l'operateur peut les forcer a chaud
 // via config/kisskh-kkey.json.
+/**
+ * MIROIRS DE KISSKH, du plus rapide au plus lent (mesure le 2026-08-16 depuis cet
+ * hote : id 382 ms, co 393, do 398, la 560, nl 742).
+ *
+ * Le domaine etait code en dur, sans repli : `kisskh.co` bloque ou en panne, et l'on
+ * perdait d'un coup le catalogue, les flux directs et les sous-titres de cette source.
+ * C'est arrive a un hebergeur dont le fournisseur ne joignait pas le site — il ne lui
+ * manquait que ça.
+ *
+ * `kisskh.ovh` est ECARTE : il repond 429 depuis cet hote, donc il nous limite deja.
+ *
+ * Verifie avant d'en faire un repli : une signature calculee depuis `kisskh.co` est
+ * acceptee par les cinq autres (HTTP 200, meme charge utile). Les constantes sont donc
+ * communes, et basculer de miroir ne demande aucune re-decouverte.
+ */
+const MIROIRS_DEFAUT = [
+  'https://kisskh.co',
+  'https://kisskh.id',
+  'https://kisskh.do',
+  'https://kisskh.la',
+  'https://kisskh.nl',
+];
+
 const endpoints = makeEndpointConfig<Record<string, unknown>>(
   'kisskh-kkey.json',
   'KISSKH_KKEY_CONFIG',
   {
-    base: 'https://kisskh.co',
+    miroirs: MIROIRS_DEFAUT,
     appVer: '2.8.10',
     platformVer: 4830201,
     appName: 'kisskh',
@@ -62,10 +86,60 @@ const endpoints = makeEndpointConfig<Record<string, unknown>>(
 
 export const reloadKkeyConfig = endpoints.reload;
 
+/**
+ * Miroirs retenus, dans l'ordre d'essai.
+ *
+ * Un `base` pose a la main dans le fichier passe EN TETE : l'operateur qui force un
+ * domaine doit etre obei, sans perdre les replis pour autant.
+ */
+function miroirs(): string[] {
+  const c = endpoints.get();
+  const liste = Array.isArray(c.miroirs) ? c.miroirs.map(String) : MIROIRS_DEFAUT;
+  const force = c.base ? String(c.base) : '';
+  const tous = force ? [force, ...liste.filter((m) => m !== force)] : liste;
+  const propres = tous.map((m) => m.trim().replace(/\/+$/, '')).filter(Boolean);
+  return propres.length > 0 ? propres : MIROIRS_DEFAUT;
+}
+
+/** Index du miroir courant, et compteur d'echecs consecutifs sur celui-ci. */
+let miroirActuel = 0;
+let echecsMiroir = 0;
+
+/**
+ * Au-dela, on change de miroir. Un echec isole est du bruit — un rate-limit, une
+ * coupure d'une seconde ; trois d'affilee disent que ce domaine ne repond plus.
+ */
+const ECHECS_AVANT_BASCULE = 3;
+
+/** Un appel a KissKH a echoue. Rend vrai si l'on vient de changer de miroir. */
+export function signalerEchecMiroir(): boolean {
+  const liste = miroirs();
+  if (liste.length < 2) return false;
+  if (++echecsMiroir < ECHECS_AVANT_BASCULE) return false;
+
+  const ancien = liste[miroirActuel % liste.length];
+  miroirActuel = (miroirActuel + 1) % liste.length;
+  echecsMiroir = 0;
+  console.log(`[KissKH] ${ancien} ne repond plus — bascule sur ${liste[miroirActuel]}`);
+  return true;
+}
+
+/** Un appel a abouti : le miroir courant est bon, on repart de zero. */
+export function signalerSuccesMiroir(): void {
+  echecsMiroir = 0;
+}
+
+/** Etat des miroirs, pour l'administration. */
+export function etatMiroirs(): { courant: string; tous: string[]; echecs: number } {
+  const liste = miroirs();
+  return { courant: liste[miroirActuel % liste.length], tous: liste, echecs: echecsMiroir };
+}
+
 export function constants(): KkeyConstants {
   const c = endpoints.get();
+  const liste = miroirs();
   return {
-    base: String(c.base || 'https://kisskh.co').replace(/\/+$/, ''),
+    base: liste[miroirActuel % liste.length],
     appVer: String(c.appVer || '2.8.10'),
     platformVer: Number(c.platformVer) || 4830201,
     appName: String(c.appName || 'kisskh'),

@@ -607,6 +607,10 @@ function chargerBord() {
       // signature ne se charge qu'a la premiere lecture KissKH.
       ['Signature KissKH', libelleKkey(d.kkey), d.kkey && d.kkey.ageMs !== null
         ? 'chargee il y a ' + duree(Math.round(d.kkey.ageMs / 1000)) : ''],
+      // Le domaine n'est plus fige : le savoir evite de chercher une panne la ou il n'y
+      // a qu'une bascule.
+      ['Miroir KissKH', d.miroirs ? d.miroirs.courant.replace(/^https?:\/\//, '') : '—',
+        d.miroirs ? d.miroirs.tous.length + ' miroirs' + (d.miroirs.echecs ? ' · ' + d.miroirs.echecs + ' echec(s) en cours' : '') : ''],
       ['Chiffrement des liens', s.chiffrement ? '✔ actif' : '✘ inactif',
         s.chiffrement ? '' : 'TOKEN_SECRET absent'],
       ['Cache', nb(d.cache.liveEntries) + ' entrees', octets(d.cache.fileSizeBytes)]

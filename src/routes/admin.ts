@@ -15,7 +15,7 @@ import { getSettings, reloadSettings, settingsPath } from '../core/settings';
 import { clearAll, clearScope, getCacheStats, clesDuPerimetre } from '../core/cache';
 import { allSources, planSources } from '../core/registry';
 import type { Source } from '../sources/types';
-import { kkeyStatus, rediscoverConstants, reloadKkeyConfig } from '../sources/direct/kisskh/kkey';
+import { kkeyStatus, rediscoverConstants, reloadKkeyConfig, etatMiroirs } from '../sources/direct/kisskh/kkey';
 import {
   statsSources,
   resumeDuJour,
@@ -190,6 +190,7 @@ export function handleAdminState(_req: Request, res: Response): void {
     })),
     cache: getCacheStats(),
     kkey: kkeyStatus(),
+    miroirs: etatMiroirs(),
     memoireMo: Math.round(process.memoryUsage().rss / 1024 / 1024),
     uptimeSecondes: Math.round(process.uptime()),
   });
