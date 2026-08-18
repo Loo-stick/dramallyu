@@ -457,11 +457,15 @@
           <a href="https://github.com/mhdzumair/mediaflow-proxy" target="_blank" rel="noopener">Installer MediaFlow Proxy</a>.
         </p>
 
-        <label for="mfpUrl" style="margin-top:16px">Adresse de votre MediaFlow</label>
-        <input type="url" id="mfpUrl" class="mono" autocomplete="off" placeholder="https://mon-mediaflow.exemple.org">
+        <div class="verdict" id="v-mfp" hidden></div>
 
-        <label for="mfpPass">Mot de passe</label>
-        <input type="password" id="mfpPass" class="mono" autocomplete="off" placeholder="laissez vide si vous n'en avez pas">
+        <div id="champs-mfp">
+          <label for="mfpUrl" style="margin-top:16px">Adresse de votre MediaFlow</label>
+          <input type="url" id="mfpUrl" class="mono" autocomplete="off" placeholder="https://mon-mediaflow.exemple.org">
+
+          <label for="mfpPass">Mot de passe</label>
+          <input type="password" id="mfpPass" class="mono" autocomplete="off" placeholder="laissez vide si vous n'en avez pas">
+        </div>
 
         <p class="indice" style="margin-top:14px">Ce qui doit y passer :</p>
         <label class="pastille" data-bascule="mfp-ad" style="margin:0 0 8px">
@@ -1256,6 +1260,50 @@ function restaurer(){
 var LIBELLES = { ad:'AllDebrid', tb:'TorBox', c411:'C411', tr4ker:'Tr4ker', tmdb:'TMDB',
                  g3mini:'G3mini', dcore:'DigitalCore', ygg:'YggReborn', dpeers:'DarkPeers' };
 
+/*
+   MediaFlow enregistre : le dire.
+
+   Son adresse et son mot de passe sont des SECRETS — le decodeur ne les rend donc pas,
+   et les deux champs revenaient vides en rouvrant la page. La valeur, elle, EST bien
+   reconduite par le serveur a la generation (verifie) : rien n'etait perdu, mais rien
+   ne le disait, et l'on retapait tout par prudence. Les autres comptes avaient deja
+   leur pastille « relie » ; MediaFlow n'y figurait pas, faute d'un bouton d'essai a
+   cote duquel se ranger.
+*/
+function marquerMfpEnregistre(){
+  var pose = clesEnregistrees.mfpUrl || clesEnregistrees.mfpPass;
+  if (!pose || clesAVider.indexOf('mfpUrl') !== -1) return;
+
+  $('champs-mfp').hidden = true;
+  var zone = $('v-mfp');
+  zone.hidden = false;
+  zone.className = 'verdict visible';
+  zone.innerHTML =
+    '<div class="relie" style="width:100%">' +
+      '<span class="coche" aria-hidden="true">\u2713</span>' +
+      '<div class="corps">' +
+        '<div class="titre">MediaFlow \u2014 enregistre</div>' +
+        '<div class="sous">Adresse et mot de passe conserves. Ils repartent dans le ' +
+          'nouveau lien sans que vous ayez a les retaper.</div>' +
+      '</div>' +
+      '<button type="button" id="vider-mfp">Modifier</button>' +
+    '</div>';
+
+  $('vider-mfp').addEventListener('click', function(){
+    // On vide les DEUX : un mot de passe sans son adresse, ou l'inverse, ne donne rien
+    // d'utilisable.
+    ['mfpUrl','mfpPass'].forEach(function(champ){
+      if (clesAVider.indexOf(champ) === -1) clesAVider.push(champ);
+      clesEnregistrees[champ] = false;
+      $(champ).value = '';
+    });
+    zone.hidden = true;
+    $('champs-mfp').hidden = false;
+    $('mfpUrl').focus();
+    rafraichirApercu();
+  });
+}
+
 function marquerClesEnregistrees(){
   Object.keys(clesEnregistrees).forEach(function(champ){
     if (!clesEnregistrees[champ] || clesAVider.indexOf(champ) !== -1) return;
@@ -1277,6 +1325,8 @@ function marquerClesEnregistrees(){
         '<button type="button" data-vider="' + champ + '">Deconnecter</button>' +
       '</div>';
   });
+
+  marquerMfpEnregistre();
 
   document.querySelectorAll('button[data-vider]').forEach(function(b){
     b.addEventListener('click', function(){
