@@ -64,12 +64,35 @@ export interface ResolveRequest {
  * dire (AllDebrid), puis en dernier ceux qui ont repondu « non » — car pour eux il
  * faudrait attendre un telechargement.
  */
+/**
+ * Temps maximal accorde a ce classement.
+ *
+ * C'est une OPTIMISATION : elle decide par qui commencer, elle ne resout rien. Une
+ * optimisation qui coute plus qu'elle ne rapporte doit etre abandonnee.
+ *
+ * Vecu le 2026-08-18 : TorBox s'est degrade — `checkcached` expirait a 25 s, `mylist` a
+ * 20 s. Ce classement consommait donc a lui seul le budget entier de la resolution
+ * (9 s), et la boucle qui suit s'arretait sur « budget epuise avant alldebrid » AVANT
+ * d'avoir essaye AllDebrid, qui repondait pourtant en 290 ms. Resultat pour
+ * l'utilisateur : 502 au clic sur Play, alors qu'un debrideur sain etait disponible.
+ *
+ * Passe ce delai on garde l'ordre par defaut : commencer peut-etre par le mauvais
+ * service coute une seconde, ne rien servir coute la lecture.
+ */
+const BUDGET_TRI_MS = 1500;
+
 async function ordonnerPourTorrent(
   services: DebridService[],
   hash: string,
   signal?: AbortSignal,
 ): Promise<DebridService[]> {
   if (services.length < 2) return services;
+
+  // Le classement a sa PROPRE echeance, plus courte que celle de la resolution : un
+  // service muet ne doit pas pouvoir manger le temps des autres.
+  const borne = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(BUDGET_TRI_MS)])
+    : AbortSignal.timeout(BUDGET_TRI_MS);
 
   const enCache: DebridService[] = [];
   const inconnu: DebridService[] = [];
@@ -81,7 +104,7 @@ async function ordonnerPourTorrent(
       continue;
     }
     try {
-      const carte = await service.checkCached([hash], signal);
+      const carte = await service.checkCached([hash], borne);
       (carte.get(hash.toLowerCase()) ? enCache : absent).push(service);
     } catch {
       // Un check-cache en echec ne disqualifie pas le service : on l'essaie quand meme.
@@ -139,18 +162,30 @@ export async function resolve(req: ResolveRequest, signal?: AbortSignal): Promis
     services = [...services].sort((a, b) => (a.name === 'alldebrid' ? -1 : b.name === 'alldebrid' ? 1 : 0));
   }
 
-  for (const service of services) {
+  for (const [index, service] of services.entries()) {
     // On n'engage pas un service qu'on n'aura pas le temps d'ecouter : le suivant
     // repondrait apres l'abandon du lecteur, et son travail serait perdu.
-    if (Date.now() - debut > BUDGET_MS) {
+    const restant = BUDGET_MS - (Date.now() - debut);
+    if (restant <= 0) {
       console.log(`[Resolveur] budget epuise avant ${service.name}`);
       break;
     }
+
+    // PART RESERVEE AU SUIVANT. Tant qu'il reste un service a essayer, celui-ci ne
+    // recoit que six dixiemes du temps restant. Sans cette reserve, un debrideur muet
+    // consomme tout et le suivant est saute au tour d'apres — c'est exactement ce qui
+    // s'est produit quand TorBox s'est degrade : AllDebrid, sain et a 290 ms, n'etait
+    // jamais essaye, et le lecteur recevait un 502.
+    const part = index < services.length - 1 ? Math.round(restant * 0.6) : restant;
+    const echeance = signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(part)])
+      : AbortSignal.timeout(part);
+
     try {
       const link =
         req.kind === 'torrent'
-          ? await service.resolveTorrent(req.value, req.fileHint, signal, req.torrentUrl)
-          : await service.resolveDdl(req.value, signal);
+          ? await service.resolveTorrent(req.value, req.fileHint, echeance, req.torrentUrl)
+          : await service.resolveDdl(req.value, echeance);
       if (!link) continue;
       // Chaque debrideur a son propre interrupteur : le compte partage n'est pas
       // toujours le meme, et router TorBox quand seul AllDebrid pose probleme ferait
