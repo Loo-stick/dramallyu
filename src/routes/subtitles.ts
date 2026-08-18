@@ -292,6 +292,47 @@ async function telechargerVtt(url: string, cleVtt: string): Promise<string | nul
  * preparation pendant que le lecteur lit notre reponse : quand il reclame le fichier,
  * il est pret. Le cout est nul pour lui, et le travail aurait ete fait de toute façon.
  */
+/**
+ * Prepare la piste EXTERNE de la langue prioritaire, des l'ouverture de la fiche.
+ *
+ * `prechauffer` ne suffisait pas pour OpenSubtitles : `/stream` ne connait que les
+ * pistes des sources directes, et le prechauffage lance depuis `/subtitles` ne peut pas
+ * gagner la course — le lecteur reclame le fichier une cinquantaine de millisecondes
+ * apres avoir reçu la liste, pour un telechargement qui dure pres d'une seconde. Le
+ * texte apparaissait donc avec ce retard, alors que la video, elle, tournait deja.
+ *
+ * Ici on part quand l'utilisateur OUVRE la fiche : il lui reste a choisir un flux et a
+ * lancer la lecture, soit plusieurs secondes d'avance. La recherche et le fichier sont
+ * mis en cache, donc l'appel de `/subtitles` qui suit ne redemande rien.
+ *
+ * Une seule langue et une seule piste : c'est un appel sortant chez un fournisseur qui
+ * limite par adresse IP, et il a lieu meme pour une fiche seulement parcourue.
+ */
+export function prechaufferExterne(
+  imdbId: string | undefined,
+  langs: string[],
+  season?: number,
+  episode?: number,
+): void {
+  if (!imdbId || langs.length === 0) return;
+  void (async () => {
+    // On parcourt les langues DANS L'ORDRE de preference, et l'on s'arrete a la
+    // premiere qui donne quelque chose. Ne prechauffer que la premiere ne servait a
+    // rien des qu'elle manquait : sur « 1 Litre of Tears » il n'existe pas de piste
+    // francaise, le lecteur recevait donc l'anglaise — celle qu'on n'avait pas
+    // preparee. Les recherches sont les memes que celles que `/subtitles` fera juste
+    // apres, et elles sont mises en cache : rien de plus ne sort d'ici.
+    for (const lang of langs) {
+      const pistes = await findSubtitles(imdbId, lang, season, episode).catch(() => []);
+      const url = pistes[0]?.url;
+      if (url) {
+        prechauffer([url]);
+        return;
+      }
+    }
+  })();
+}
+
 export function prechauffer(urls: string[]): void {
   for (const url of urls.slice(0, 2)) {
     void preparerVtt(url).catch(() => null);

@@ -19,7 +19,7 @@ import { languesDuFichier, languesDejaConnues } from '../core/pistes-fichier';
 import { noterRequete } from '../core/metrics';
 import { tracer, traceCourante } from '../core/trace';
 import { enregistrer, type Issue } from '../core/activite';
-import { prechauffer, adresseDePiste } from './subtitles';
+import { prechauffer, prechaufferExterne, adresseDePiste } from './subtitles';
 import { marquerMort } from '../debrid/deadlinks';
 import { cached } from '../core/cache';
 import { isRedirector, infosLiens, type InfoLien } from '../debrid/alldebrid';
@@ -640,6 +640,11 @@ async function repondre(
       .slice(0, 1)
       .map((t) => t.url);
     if (aPreparer.length > 0) prechauffer(aPreparer);
+
+    // Et la piste EXTERNE de sa langue prioritaire, que nos sources directes ne portent
+    // pas : c'est elle qui faisait attendre le texte pres d'une seconde, telechargee
+    // pendant que le lecteur patientait.
+    prechaufferExterne(work.imdbId, config.subLangs, parsed.season, parsed.episode);
 
     noterRequete({
       quand: Date.now(),
