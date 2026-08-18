@@ -137,7 +137,7 @@ export const nyaaSource: Source = {
 
     for (const cat of categoriesFor(q)) {
       for (const term of termsFor(q)) {
-        if (ctx.deadline.remainingMs() < 1500) return out;
+        if (ctx.restant() < 1500) return out;
         const items = await fetchRss(base, term, cat, ctx.deadline.signal);
 
         for (const item of items) {

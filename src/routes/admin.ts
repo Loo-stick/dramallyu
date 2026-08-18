@@ -587,7 +587,13 @@ export async function handleTesterSource(req: Request, res: Response): Promise<v
   const deadline = new Deadline(15000);
   const debut = Date.now();
   try {
-    const trouves = await source.search(requete, { config, deadline });
+    // Test manuel depuis l'administration : aucune reponse a tenir, la source dispose
+    // de tout son budget — c'est le but, on veut savoir ce qu'elle sait faire.
+    const trouves = await source.search(requete, {
+      config,
+      deadline,
+      restant: () => deadline.remainingMs(),
+    });
     res.json({
       ok: true,
       ms: Date.now() - debut,

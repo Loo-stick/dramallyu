@@ -106,6 +106,35 @@ function buildQuery(
   };
 }
 
+/**
+ * Plafond des sources ORDINAIRES (trackers, DDL), en absolu.
+ *
+ * Mesure en production : elles rendent toutes avant 2,2 s, sauf zone-telechargement et
+ * wawacity qui ne rendent jamais dans le budget et le consomment donc entierement — ce
+ * sont elles qui fixent le temps de reponse de CHAQUE requete. Les laisser croitre
+ * avec le budget total aurait ralenti toutes les reponses sans rien rapporter.
+ *
+ * Le budget total sert au sursis des sources DIRECTES, qui en ont un vrai besoin : a
+ * froid, KissKH a mis 4750 ms a rendre son unique flux — au-dela du plafond de 2975 ms
+ * qu'elle avait alors. Elle etait lachee a chaque essai, et il fallait recharger deux
+ * fois pour que le rechauffement ait rempli le cache. C'est ce qu'a vecu une
+ * utilisatrice sur « 1 Litre of Tears », trois essais avant d'obtenir son flux.
+ */
+const PLAFOND_ORDINAIRES_MS = 2500;
+
+/**
+ * Repartit le temps restant entre les sources ordinaires et les directes.
+ *
+ * Extrait pour etre verifiable : c'est le reglage qui decide si une source de lecture
+ * apparait ou non, et il etait calcule en ligne au milieu de la requete.
+ */
+export function budgetsFanout(restantMs: number): { ordinaires: number; directes: number } {
+  return {
+    ordinaires: Math.min(PLAFOND_ORDINAIRES_MS, Math.max(1500, Math.round(restantMs * 0.66))),
+    directes: Math.max(1500, Math.round(restantMs * 0.85)),
+  };
+}
+
 export async function handleStream(req: Request, res: Response): Promise<void> {
   const started = Date.now();
   const config = parseConfig((req.params as Record<string, string>).config);
@@ -224,8 +253,13 @@ async function repondre(
       searchAll(
         query,
         config,
-        Math.max(1500, Math.round(restant() * 0.66)),
-        Math.max(1500, Math.round(restant() * 0.85)),
+        // Les ordinaires sont plafonnees en ABSOLU, pas en fraction. Elles rendent
+        // toutes avant 2,2 s ; celles qui ne rendent jamais (zone-telechargement,
+        // wawacity) vont au bout de leur budget a chaque requete et fixent donc a
+        // elles seules le temps de reponse. Une fraction du total les aurait laissees
+        // grandir avec lui, et TOUTE reponse aurait ralenti pour rien.
+        budgetsFanout(restant()).ordinaires,
+        budgetsFanout(restant()).directes,
       ),
     );
     const langOrder = langOrderFromSubs(config.subLangs);
@@ -568,8 +602,11 @@ async function repondre(
     });
 
     const elapsed = Date.now() - started;
+    // `>=` sur une source abandonnee : le chiffre est l'instant ou on l'a lachee, pas
+    // ce qu'elle aurait mis. Ecrit sans le signe, il envoie chercher un ralentissement
+    // imaginaire — c'est arrive.
     const detail = Object.entries(timings)
-      .map(([k, v]) => `${k}=${v}ms`)
+      .map(([k, v]) => (timedOut.includes(k) ? `${k}>=${v}ms` : `${k}=${v}ms`))
       .join(' ');
     console.log(
       `[Stream] ${qui(config)}${req.params.type}/${req.params.id} -> ${streams.length} flux en ${elapsed}ms` +

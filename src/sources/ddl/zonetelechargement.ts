@@ -227,7 +227,7 @@ async function searchZt(q: Query, ctx: SearchContext): Promise<Candidate[]> {
     })
     .filter(({ readable }) => matchesTitle(readable, q.titles, { threshold: 0.6 }));
 
-  if (retenues.length === 0 || ctx.deadline.remainingMs() < 2500) return [];
+  if (retenues.length === 0 || ctx.restant() < 2500) return [];
 
   const parFiche = await Promise.all(
     retenues.map(async ({ fiche, readable }) => {
@@ -246,7 +246,7 @@ async function searchZt(q: Query, ctx: SearchContext): Promise<Candidate[]> {
         .filter((l) => !estMort(l.protectedUrl))
         .slice(0, MAX_LINKS);
 
-      if (utiles.length === 0 || ctx.deadline.remainingMs() < 2000) return [];
+      if (utiles.length === 0 || ctx.restant() < 2000) return [];
 
       const resolus = await Promise.all(
         utiles.map(async (link) => {

@@ -232,7 +232,7 @@ async function completerQualites(candidats: Candidate[], ctx: SearchContext): Pr
       const mesuree = await mesurerQualite(c.directUrl, {
         headers: c.headers,
         signal: ctx.deadline.signal,
-        restantMs: ctx.deadline.remainingMs(),
+        restantMs: ctx.restant(),
       });
       return mesuree ? { ...c, quality: mesuree } : c;
     }),
@@ -307,7 +307,7 @@ async function searchVoirDrama(q: Query, ctx: SearchContext): Promise<Candidate[
 
       // 2) Le scraping, pour les films, la VF, et les trous de l'API.
       const title = q.titles[0];
-      if (!title || ctx.deadline.remainingMs() < 2000) return [];
+      if (!title || ctx.restant() < 2000) return [];
 
       const fiches = await searchSite(title, q.type === 'series' ? q.season : undefined, signal);
       const perFiche = await Promise.all(

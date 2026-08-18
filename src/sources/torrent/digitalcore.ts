@@ -141,7 +141,7 @@ export const digitalcoreSource: Source = {
     let echecs = 0;
 
     for (const requete of requetesPour(q)) {
-      if (ctx.deadline.remainingMs() < 2500) break;
+      if (ctx.restant() < 2500) break;
       appels++;
       const lot = await chercher(base, apiKey, requete, ctx.deadline.signal);
       if (lot === null) {
@@ -173,7 +173,7 @@ export const digitalcoreSource: Source = {
       throw new Error('DigitalCore : aucune reponse exploitable (cle refusee ou tracker injoignable)');
     }
 
-    if (retenus.length === 0 || ctx.deadline.remainingMs() < 3000) return [];
+    if (retenus.length === 0 || ctx.restant() < 3000) return [];
 
     const hashes = await completerHashes(
       retenus,

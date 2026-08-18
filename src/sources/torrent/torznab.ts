@@ -182,7 +182,7 @@ function makeSource(id: string, label: string, userKey: 'c411' | 'tr4ker' | 'ygg
       let echecs = 0;
 
       for (const params of queriesFor(q)) {
-        if (ctx.deadline.remainingMs() < 1500) break;
+        if (ctx.restant() < 1500) break;
         appels++;
         const items = await fetchItems(id, indexer, apiKey, params, ctx.deadline.signal);
         if (items === null) {

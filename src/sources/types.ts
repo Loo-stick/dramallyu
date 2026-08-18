@@ -114,6 +114,22 @@ export interface Candidate {
 export interface SearchContext {
   config: UserConfig;
   deadline: Deadline;
+  /**
+   * Temps utile restant, en millisecondes — a consulter AVANT tout travail facultatif
+   * (mesure de qualite, verification de cache, page supplementaire).
+   *
+   * `deadline` porte le budget de FOND (huit secondes), qui sert au rechauffement
+   * apres la reponse. Le seul qui compte pour l'utilisateur est bien plus court. Les
+   * sources se gataient sur le budget de fond et engageaient donc du travail
+   * facultatif qu'elles n'avaient pas le temps de finir : KissKH a mis 5357 ms a
+   * rendre son flux sur « Signal » — dont pres de deux secondes de mesure de qualite —
+   * pour une reponse coupee a 5100 ms. On perdait le flux entier pour affiner une
+   * etiquette.
+   *
+   * Une fois la reponse partie, la valeur repasse au budget de fond : on est alors en
+   * rechauffement, et c'est justement le moment ou l'on a le temps de bien faire.
+   */
+  restant(): number;
 }
 
 export interface Source {

@@ -100,7 +100,7 @@ async function resolveEpisode(q: Query, signal?: AbortSignal): Promise<Resolved 
 async function probeQuality(hlsUrl: string, ctx: SearchContext): Promise<string> {
   const mesuree = await mesurerQualite(hlsUrl, {
     signal: ctx.deadline.signal,
-    restantMs: ctx.deadline.remainingMs(),
+    restantMs: ctx.restant(),
   });
   return mesuree ?? 'HD';
 }

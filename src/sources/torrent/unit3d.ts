@@ -154,7 +154,7 @@ export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 
       let appels = 0;
 
       for (const params of requetesPour(q)) {
-        if (ctx.deadline.remainingMs() < 1500) break;
+        if (ctx.restant() < 1500) break;
         appels++;
         const lot = await interroger(id, base, apiKey, params, ctx.deadline.signal);
         if (lot === null) {
@@ -178,7 +178,7 @@ export function makeUnit3dSource(id: string, label: string, userKey: 'g3mini' | 
 
       // Les entrees sans hash coutent un telechargement chacune : on ne s'y engage que
       // s'il reste du budget, et jamais au-dela du plafond.
-      if (sansHash.length > 0 && ctx.deadline.remainingMs() > 3000) {
+      if (sansHash.length > 0 && ctx.restant() > 3000) {
         const complets = await completerHashes(
           sansHash,
           MAX_TELECHARGEMENTS,

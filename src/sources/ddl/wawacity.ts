@@ -296,7 +296,7 @@ async function searchWawacity(q: Query, ctx: SearchContext): Promise<Candidate[]
     return !s || Number(s[1]) === q.season;
   });
 
-  if (pertinentes.length === 0 || ctx.deadline.remainingMs() < 2500) return [];
+  if (pertinentes.length === 0 || ctx.restant() < 2500) return [];
 
   // Les fiches retenues sont ouvertes EN PARALLELE. C'etait sequentiel, et chaque
   // fiche coute deux allers-retours : quatre fiches faisaient huit appels a la file.

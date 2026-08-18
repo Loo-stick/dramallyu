@@ -87,6 +87,22 @@ let rechauffementsEnCours = 0;
  */
 const rechauffementsLances = new Set<string>();
 
+/**
+ * Temps utile restant pour du travail FACULTATIF.
+ *
+ * Deux horloges courent en meme temps : le budget de fond (huit secondes, qui sert au
+ * rechauffement) et l'echeance de la reponse, bien plus courte. Une source qui ne
+ * regarde que la premiere engage du travail qu'elle n'a pas le temps de finir, et se
+ * fait couper avant d'avoir rien rendu.
+ *
+ * Passe l'echeance de reponse, la valeur repasse au budget de fond : la reponse est
+ * partie, on est en rechauffement, et c'est le moment ou l'on a le temps de bien faire.
+ */
+export function tempsUtile(fondRestantMs: number, avantReponseMs: number): number {
+  if (avantReponseMs <= 0) return fondRestantMs;
+  return Math.min(fondRestantMs, avantReponseMs);
+}
+
 export async function searchAll(
   query: Query,
   config: UserConfig,
@@ -125,6 +141,12 @@ export async function searchAll(
   const timings: Record<string, number> = {};
   const apports: Record<string, number> = {};
   const timedOut: string[] = [];
+  // Abandonnees mais laissees finir pour remplir le cache, et abandonnees POUR DE BON
+  // faute de creneau de rechauffement. Le journal les confondait sous « elles
+  // continuent pour le cache » : il annoncait un cache qui n'allait jamais se remplir,
+  // et l'on attendait un second essai qui ne pouvait pas mieux marcher.
+  const poursuivies: string[] = [];
+  const coupees: string[] = [];
 
   const debutGlobal = Date.now();
   const minuteur = (ms: number) =>
@@ -140,7 +162,14 @@ export async function searchAll(
       // Une echeance PAR SOURCE : le retard de l'une ne doit pas rogner le temps des
       // autres, et il faut pouvoir interrompre celle-ci sans toucher aux voisines.
       const deadline = new Deadline(budgetFond);
-      const ctx: SearchContext = { config, deadline };
+      // Budget qui s'applique VRAIMENT a cette source dans la reponse.
+      const budgetApplicable = source.kind === 'direct' ? budgetDirect : budgetReponse;
+      const ctx: SearchContext = {
+        config,
+        deadline,
+        restant: () =>
+          tempsUtile(deadline.remainingMs(), budgetApplicable - (Date.now() - debutGlobal)),
+      };
 
       const travail = source.search(query, ctx).then(
         (found) => ({ found, erreur: undefined as string | undefined }),
@@ -155,6 +184,10 @@ export async function searchAll(
       if (issue === 'delai') {
         // Elle n'entrera pas dans CETTE reponse. La question est seulement de savoir si
         // on la laisse finir pour le cache, ou si on coupe.
+        // ATTENTION : ce n'est pas la duree de la source, c'est l'instant ou on l'a
+        // lachee — donc un PLANCHER. Le journal l'ecrit `>=` pour cette raison : lu
+        // comme une mesure, il fait croire qu'une source coute exactement son budget,
+        // et l'on cherche un ralentissement la ou il n'y a qu'un plafond.
         timings[source.id] = Date.now() - started;
         apports[source.id] = 0;
         timedOut.push(source.id);
@@ -163,9 +196,11 @@ export async function searchAll(
         if (rechauffementsEnCours >= MAX_RECHAUFFEMENTS || rechauffementsLances.has(cle)) {
           deadline.arreter();
           travail.catch(() => undefined);
+          coupees.push(source.id);
           return [] as Candidate[];
         }
 
+        poursuivies.push(source.id);
         rechauffementsEnCours++;
         rechauffementsLances.add(cle);
         void travail
@@ -196,9 +231,12 @@ export async function searchAll(
   );
 
   if (timedOut.length > 0) {
+    const parties = [
+      poursuivies.length ? `${poursuivies.join(', ')} (continuent pour le cache)` : '',
+      coupees.length ? `${coupees.join(', ')} (coupees, pas de creneau)` : '',
+    ].filter(Boolean);
     console.log(
-      `[Fanout] repondu en ${Date.now() - debutGlobal} ms sans ${timedOut.join(', ')} ` +
-        '(elles continuent pour le cache)',
+      `[Fanout] repondu en ${Date.now() - debutGlobal} ms sans ${parties.join(' — ')}`,
     );
   }
 
@@ -214,7 +252,8 @@ function clefRecherche(q: Query): string {
 export async function subtitlesAll(query: Query, config: UserConfig): Promise<SubTrack[]> {
   const settings = getSettings();
   const deadline = new Deadline(settings.fanoutBudgetMs);
-  const ctx: SearchContext = { config, deadline };
+  // Les sous-titres n'ont pas de seconde echeance : le budget de fond EST le budget.
+  const ctx: SearchContext = { config, deadline, restant: () => deadline.remainingMs() };
 
   const active = planSources(config).filter((p) => !p.skip && p.source.subtitles);
   const results = await Promise.all(
