@@ -441,9 +441,21 @@ const ETAT_COMPTE_TTL_MS = 60 * 1000;
 function nettoyerEnFond(ids: number[], apiKey: string): void {
   if (ids.length === 0) return;
   void (async () => {
+    let retires = 0;
+    let echoues = 0;
     for (const id of ids) {
-      await call('/magnet/delete', apiKey, { id: String(id) }).catch(() => null);
+      const ok = await call('/magnet/delete', apiKey, { id: String(id) }).catch(() => null);
+      if (ok) retires++;
+      else echoues++;
     }
+    // ON DIT CE QUI RESTE. L'echec etait avale par un `.catch` muet : le compte de
+    // l'utilisateur pouvait se remplir de nos depots de verification sans qu'une seule
+    // ligne le signale, et l'on ne pouvait meme pas repondre a « est-ce que vous les
+    // supprimez vraiment ? » autrement que par la lecture du code.
+    console.log(
+      `[AllDebrid] verification : ${retires}/${ids.length} magnet(s) retire(s)` +
+        (echoues > 0 ? ` — ${echoues} NON RETIRE(S), ils restent dans le compte` : ''),
+    );
   })();
 }
 

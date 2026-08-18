@@ -81,6 +81,15 @@ export interface ResolveRequest {
  */
 const BUDGET_TRI_MS = 1500;
 
+/**
+ * Temps maximal accorde a la verification de cache pendant l'enrichissement.
+ *
+ * Elle ne produit aucun flux : elle indique lesquels sont deja prets. Deux secondes
+ * suffisent a un service sain sur un lot de quarante empreintes ; au-dela, le service
+ * est en peine et l'attendre penalise CHAQUE recherche.
+ */
+const BUDGET_CACHE_MS = 2000;
+
 async function ordonnerPourTorrent(
   services: DebridService[],
   hash: string,
@@ -238,10 +247,22 @@ export async function cacheParService(
   // L'ORDRE DU RESULTAT EST PRESERVE : `servicesFor` classe les services selon la
   // preference de l'utilisateur, et l'etiquette affichee nomme le PREMIER detenteur.
   // Collecter dans le desordre ferait mentir cette etiquette une fois sur deux.
+  // ECHEANCE PROPRE A CHAQUE SERVICE. La verification de cache est un CONFORT : elle
+  // pose une etiquette « pret » sur les flux, elle n'en produit aucun. Un debrideur muet
+  // ne doit donc pas retenir la reponse.
+  //
+  // Vecu le 2026-08-18, TorBox degrade : son `checkcached` n'expirait plus qu'au bout de
+  // 25 s, donc il consommait TOUT le budget d'enrichissement et chaque recherche mettait
+  // 5,6 s au lieu de 2,5 — pour finir annulee sans rien rapporter. On paie desormais au
+  // plus `BUDGET_CACHE_MS`, et les flux sortent sans etiquette plutot qu'en retard.
+  const borne = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(BUDGET_CACHE_MS)])
+    : AbortSignal.timeout(BUDGET_CACHE_MS);
+
   const reponses = await Promise.all(
     services.map((service) =>
       service
-        .checkCached(hashes, signal)
+        .checkCached(hashes, borne)
         .then((m) => ({ m, ok: true }))
         .catch(() => ({ m: new Map<string, boolean>(), ok: false })),
     ),
