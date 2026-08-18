@@ -225,7 +225,14 @@ test('« Multi Subs » n est PAS une promesse de francais', () => {
   const nom = 'Pursuit of Jade S01 1080p NF WEB-DL x264-Tsundere-Raws (Multi Subs, Multi Audio)';
   // On passe par `languageOf`, comme le fait la source : c'est lui qu'on corrige.
   assert.equal(languageOf(nom), 'VO');
-  assert.equal(porteDuFrancais(flux({ title: nom, language: languageOf(nom) }).candidate), false);
+  // SOURCE EXPLICITE : le cas vecu venait de DarkPeers et DigitalCore, deux trackers
+  // INTERNATIONAUX. Le defaut du fabricant est `c411`, dont l'origine francophone vaut
+  // desormais preuve a elle seule — laisser le defaut faisait porter ce test sur autre
+  // chose que ce qu'il decrit.
+  assert.equal(
+    porteDuFrancais(flux({ sourceId: 'dpeers', title: nom, language: languageOf(nom) }).candidate),
+    false,
+  );
 
   // Le jeton « MULTi » seul reste la convention de scene francaise.
   const scene = flux({ title: 'Squid.Game.S01.MULTi.1080p.WEBRiP.x265-R3MiX.FRENCH', language: 'MULTI' });

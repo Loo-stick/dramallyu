@@ -128,6 +128,19 @@ export interface Filtres {
   frOnly?: boolean;
 }
 
+/**
+ * Seeders en dessous desquels un torrent NON MIS EN CACHE est une impasse.
+ *
+ * Le debrideur doit trouver des pairs pour telecharger ce qu'il n'a pas deja. A zero
+ * seeder il n'en trouvera aucun : l'entree s'affiche comme jouable, on la choisit, et
+ * il ne se passe rien. Constate sur « 1 Litre of Tears », ou une release Nyaa a
+ * 0 seeder etait proposee au meme rang que les autres.
+ *
+ * Le seuil ne s'applique QU'AUX torrents a debrider : un torrent deja en cache n'a
+ * besoin de personne, et un lien direct ou DDL n'a pas de pairs du tout.
+ */
+const SEEDERS_MINIMUM = 5;
+
 export interface EtatFlux {
   candidate: Candidate;
   /** Presence en cache VERIFIEE. `undefined` = non verifiable. */
@@ -181,6 +194,18 @@ export function passeFiltres(etat: EtatFlux, f: Filtres): boolean {
   // decevoir parfois — mieux vaut un flux de trop qu'un flux manquant qu'on ne saura
   // jamais avoir perdu.
   if (f.frOnly && sansFrancaisAvere(c)) return false;
+
+  // Torrent a debrider et trop peu de pairs : il ne se telechargera pas. On ne coupe
+  // que sur un nombre CONNU — `undefined` veut dire que la source ne l'annonce pas, et
+  // l'ignorance ne doit pas faire disparaitre un flux valable.
+  if (
+    c.kind === 'torrent' &&
+    etat.cached !== true &&
+    typeof c.seeders === 'number' &&
+    c.seeders < SEEDERS_MINIMUM
+  ) {
+    return false;
+  }
 
   if (f.minSource) {
     const plancher = RANG_SOURCE[f.minSource];
@@ -239,7 +264,26 @@ export function sansFrancaisAvere(c: Candidate): boolean {
   return false;
 }
 
+/**
+ * Trackers dont l'ORIGINE vaut preuve de francais.
+ *
+ * Ce sont des trackers francophones : on n'y publie pas une release sans francais.
+ * L'information vient de l'operateur, elle ne se deduit d'aucune donnee — et c'est
+ * precisement ce qui la rend utile : elle transforme une declaration lue dans le titre
+ * (« VOSTFR » ecrit par l'uploadeur) en fait tenant a la provenance.
+ *
+ * DigitalCore et DarkPeers en sont volontairement EXCLUS : ce sont des trackers
+ * internationaux, ou l'absence de marqueur ne dit rien. Pour eux, seule la preuve
+ * compte — pistes lues ou MediaInfo publie.
+ */
+const TRACKERS_FRANCAIS = new Set(['c411', 'tr4ker', 'yggreborn', 'g3mini']);
+
 export function porteDuFrancais(c: Candidate): boolean {
+  // 0. L'ORIGINE, quand elle suffit a conclure. Placee avant l'etiquette : une release
+  //    d'un tracker francophone dont le titre ne porte aucun marqueur reste francaise,
+  //    et l'analyse du nom n'aurait rien trouve.
+  if (TRACKERS_FRANCAIS.has(c.sourceId)) return true;
+
   // 1. Les pistes enumerees par la source : on SAIT.
   if (c.subs?.some((t) => t.lang === 'fre')) return true;
 
