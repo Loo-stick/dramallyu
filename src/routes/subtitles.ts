@@ -209,10 +209,42 @@ const MAX_SUB_BYTES = 4 * 1024 * 1024;
  * Extrait du gestionnaire HTTP pour pouvoir etre appele AILLEURS : c'est ce qui permet
  * de preparer une piste avant que le lecteur ne la demande.
  */
+/**
+ * Preparations DEJA EN COURS, par adresse.
+ *
+ * Le prechauffage lance le telechargement d'une piste puis rend la liste au lecteur.
+ * Celui-ci reclame le fichier une cinquantaine de millisecondes plus tard, alors que le
+ * telechargement en cours durera pres d'une seconde : le cache est donc encore vide, et
+ * `/sub` repartait telecharger LA MEME piste une seconde fois. Deux appels sortants
+ * pour un fichier, chez un fournisseur qui limite le debit par adresse IP.
+ *
+ * On rejoint desormais le travail en cours au lieu de le doubler. Le gain n'est pas sur
+ * l'attente du lecteur — elle vaut la duree du telechargement dans les deux cas — mais
+ * sur ce qu'on demande a OpenSubtitles.
+ */
+const enPreparation = new Map<string, Promise<string | null>>();
+
 async function preparerVtt(url: string): Promise<string | null> {
   const cleVtt = `vtt:${url}`;
   const memorise = get<string>(cleVtt);
   if (memorise) return memorise;
+
+  const enCours = enPreparation.get(url);
+  if (enCours) return enCours;
+
+  const travail = telechargerVtt(url, cleVtt);
+  enPreparation.set(url, travail);
+  try {
+    return await travail;
+  } finally {
+    // Retire dans TOUS les cas : une entree laissee derriere ferait resservir
+    // indefiniment un echec, et la table grossirait sans borne.
+    enPreparation.delete(url);
+  }
+}
+
+/** Telechargement, conversion et dechiffrement effectifs. */
+async function telechargerVtt(url: string, cleVtt: string): Promise<string | null> {
 
   // En binaire : OpenSubtitles sert des .srt.gz, qu'un decodage texte detruirait
   // avant meme qu'on puisse les decompresser.
@@ -266,8 +298,21 @@ export function prechauffer(urls: string[]): void {
   }
 }
 
+/**
+ * Au-dela de ce delai, servir une piste est journalise.
+ *
+ * En deça, le prechauffage a fait son travail et il n'y a rien a dire ; le journal
+ * ecarte volontairement `/sub/` (cf. `index.ts`) pour ne pas noyer le reste sous une
+ * ligne par piste. Mais l'angle mort etait total : « les sous-titres mettent parfois
+ * quelques secondes » n'etait ni verifiable, ni refutable, et un 502 « injoignable »
+ * partait sans une trace. On ne peut pas conclure qu'on n'y peut rien sur ce qu'on ne
+ * voit pas.
+ */
+const SEUIL_PISTE_LENTE_MS = 400;
+
 /** Sert une piste convertie en VTT. Le jeton signe evite le proxy ouvert. */
 export async function handleServeSub(req: Request, res: Response): Promise<void> {
+  const debut = Date.now();
   const raw = String(req.params.token || '').replace(/\.vtt$/i, '');
 
   // Adresse stable (forme actuelle), ou ancien jeton chiffre — des liens en circulation
@@ -275,17 +320,45 @@ export async function handleServeSub(req: Request, res: Response): Promise<void>
   // serait un mauvais echange.
   const url = get<string>(`subid:${raw}`) ?? decodeToken(raw)?.v;
   if (!url) {
+    console.log(`[Sub] jeton inconnu ou expire (${raw.slice(0, 12)}…)`);
     res.status(404).type('text/plain').send('piste inconnue ou expiree');
     return;
   }
 
+  // Releve AVANT la preparation : c'est ce qui distingue « le prechauffage a servi » de
+  // « on est alle la chercher pendant que le lecteur attendait ».
+  // `get` rend `null` sur absence, jamais `undefined` : compare a `null`, sinon
+  // l'indicateur est vrai en permanence et annonce un prechauffage qui n'a pas eu lieu.
+  const dejaPrete = get<string>(`vtt:${url}`) !== null;
+  const ou = hote(url);
+
   const corps = await preparerVtt(url);
+  const ms = Date.now() - debut;
   if (!corps) {
+    // TOUJOURS journalise : une piste annoncee dans la liste puis refusee au service
+    // est invisible cote lecteur, qui affiche simplement... rien.
+    console.log(`[Sub] ECHEC ${ou} en ${ms}ms — injoignable ou illisible`);
     res.status(502).type('text/plain').send('sous-titre injoignable ou illisible');
     return;
   }
 
+  if (ms >= SEUIL_PISTE_LENTE_MS) {
+    console.log(
+      `[Sub] ${ou} en ${ms}ms, ${Math.round(corps.length / 1024)} Ko` +
+        (dejaPrete ? ' (deja prete — la lenteur est ailleurs)' : ' (NON prechauffee : allee la chercher pendant que le lecteur attendait)'),
+    );
+  }
+
   servirVtt(res, corps);
+}
+
+/** Hote d'une adresse, pour dire d'ou vient une piste sans recopier ses parametres. */
+function hote(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return 'adresse illisible';
+  }
 }
 
 /** En-tetes communs aux deux chemins, pour qu'ils ne divergent jamais. */
