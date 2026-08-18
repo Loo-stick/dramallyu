@@ -621,15 +621,25 @@
           <option value="size">Leger (le plus petit fichier d'abord)</option>
         </select>
 
-        <label class="pastille" data-bascule="frOnly" style="margin:10px 0">
-          <input type="checkbox" id="frOnly">
-          <span class="signe">+</span><span>Ecarter ce qui n'a pas de francais</span>
-        </label>
+        <label for="francais" style="margin-top:14px">Francais</label>
+        <select id="francais">
+          <option value="tout">Tout afficher</option>
+          <option value="ecarter">Ecarter ce qui est prouve sans francais</option>
+          <option value="garanti">Uniquement le francais garanti</option>
+        </select>
         <p class="indice">
-          N'ecarte que ce dont l'ABSENCE de francais est etablie : pistes lues dans le
-          fichier, MediaInfo publie par le tracker, ou sous-titres enumeres par la
-          source. Une release sur laquelle on ne sait rien est conservee — mieux vaut un
-          flux de trop qu'un flux francais perdu sans qu'on puisse le savoir.
+          <strong>Ecarter</strong> ne retire que ce dont l'ABSENCE est etablie — pistes
+          lues dans le fichier, MediaInfo publie, sous-titres enumeres par la source.
+          Ce qu'on ignore est conserve : mieux vaut un flux de trop qu'un flux francais
+          perdu sans qu'on puisse le savoir.
+        </p>
+        <p class="indice">
+          <strong>Uniquement le francais garanti</strong> fait l'inverse : seul ce dont
+          la PRESENCE est etablie reste. Y compris ce qui vient de C411, Tr4ker,
+          YggReborn ou G3mini — des trackers francophones, ou l'origine suffit a
+          conclure. Sur un titre sans francais nulle part, la liste sera VIDE, et c'est
+          voulu : a installer pour quelqu'un a qui l'on ne veut proposer que ce qu'il
+          pourra suivre.
         </p>
 
         <label class="pastille" data-bascule="bonusHdr" style="margin:14px 0 0">
@@ -994,7 +1004,12 @@ function configActuelle(){
   if (formatsExclus.length) cfg.excludeFormats = formatsExclus;
   if ($('cachedOnly').checked) cfg.cachedOnly = true;
   if ($('excludeCam').checked) cfg.excludeCam = true;
-  if ($('frOnly').checked) cfg.frOnly = true;
+  // Un seul choix pour l'utilisateur, deux drapeaux transportes : « garanti » implique
+  // « ecarter », et le lien reste lisible par une version qui ne connaitrait que
+  // `frOnly`.
+  var niveauFr = $('francais').value;
+  if (niveauFr === 'ecarter') cfg.frOnly = true;
+  if (niveauFr === 'garanti') { cfg.frOnly = true; cfg.frStrict = true; }
   // Actif par defaut : on ne transporte le champ que pour le DESACTIVER.
   if ($('envoyerTorrent').checked) cfg.envoyerTorrent = true;
   if ($('bonusHdr').checked) cfg.bonusHdr = true;
@@ -1185,8 +1200,8 @@ $('copier').addEventListener('click', function(){
 });
 
 /* Toute saisie de cle change ce qui tournera : l'apercu suit. */
-['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces','pseudo','mfpUrl','mfpPass','mfp-ad','mfp-tb','mfp-direct','frOnly','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
- 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','frOnly','bonusHdr','subsSurFlux','catalogue'].forEach(function(id){
+['ad','tb','c411','tr4ker','tmdb','g3mini','dcore','ygg','dpeers','acces','pseudo','mfpUrl','mfpPass','mfp-ad','mfp-tb','mfp-direct','francais','envoyerTorrent','debrid','sortBy','maxResults','cachedOnly','priorite',
+ 'minResolution','maxResolution','minSource','maxSizeGb','excludeCam','bonusHdr','subsSurFlux','catalogue'].forEach(function(id){
   $(id).addEventListener('input', rafraichirApercu);
   $(id).addEventListener('change', rafraichirApercu);
 });
@@ -1234,7 +1249,8 @@ function restaurer(){
     // francais se levait, et le routage MediaFlow se vidait — reglages qu'on avait
     // pris la peine de poser, effaces sans un mot.
     if (r.debrid) $('debrid').value = r.debrid;
-    $('frOnly').checked = r.frOnly === true;
+    // frStrict prime : c'est le niveau le plus severe, et il implique frOnly.
+    $('francais').value = r.frStrict === true ? 'garanti' : r.frOnly === true ? 'ecarter' : 'tout';
     $('envoyerTorrent').checked = r.envoyerTorrent === true;
     var pour = Array.isArray(r.mfpPour) ? r.mfpPour : [];
     $('mfp-ad').checked = pour.indexOf('ad') !== -1;
@@ -1242,7 +1258,7 @@ function restaurer(){
     $('mfp-direct').checked = pour.indexOf('direct') !== -1;
     // Desactive par defaut : on ne coche que si le lien le portait explicitement.
     $('catalogue').checked = r.catalogue === true;
-    ['cachedOnly','excludeCam','bonusHdr','subsSurFlux','catalogue','frOnly','envoyerTorrent',
+    ['cachedOnly','excludeCam','bonusHdr','subsSurFlux','catalogue','envoyerTorrent',
      'mfp-ad','mfp-tb','mfp-direct'].forEach(function(id){ peindreBascule($(id)); });
 
     marquerClesEnregistrees();

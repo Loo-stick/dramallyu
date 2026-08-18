@@ -423,6 +423,8 @@ async function repondre(
       excludeFormats: config.excludeFormats,
       excludeCam: config.excludeCam,
       frOnly: config.frOnly,
+      frStrict: config.frStrict,
+      envoyerTorrent: config.envoyerTorrent,
     };
 
     // 0 = « pas de limite de mon cote » : le plafond de l'operateur s'applique quand meme.

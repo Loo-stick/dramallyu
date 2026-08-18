@@ -144,6 +144,15 @@ export interface UserConfig {
    * sous-titres passe des qu'elle porte le francais.
    */
   frOnly: boolean;
+  /**
+   * Ne garder que ce dont la presence de francais est ETABLIE.
+   *
+   * Beaucoup plus severe que `frOnly`, et c'est le but : `frOnly` ecarte ce qu'on sait
+   * sans francais et conserve l'inconnu ; celui-ci ne garde que le connu. Demande pour
+   * un proche a qui l'on ne veut proposer que ce qu'il pourra suivre — une liste vide
+   * vaut mieux qu'un flux qu'il ne comprendra pas.
+   */
+  frStrict: boolean;
   /** Remonter les flux HDR a qualite comparable. */
   bonusHdr: boolean;
   /**
@@ -192,6 +201,7 @@ export const DEFAULT_CONFIG: UserConfig = {
   excludeFormats: [],
   excludeCam: false,
   frOnly: false,
+  frStrict: false,
   envoyerTorrent: false,
   bonusHdr: false,
   subsSurFlux: false,
@@ -336,6 +346,7 @@ export function parseConfig(raw?: string | null): UserConfig {
     : [];
   cfg.excludeCam = o.excludeCam === true;
   cfg.frOnly = o.frOnly === true;
+  cfg.frStrict = o.frStrict === true;
   cfg.envoyerTorrent = o.envoyerTorrent === true;
   cfg.bonusHdr = o.bonusHdr === true;
 

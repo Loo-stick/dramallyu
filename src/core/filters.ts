@@ -126,6 +126,10 @@ export interface Filtres {
   excludeCam: boolean;
   /** Ne garder que ce qui annonce du francais. */
   frOnly?: boolean;
+  /** L'utilisateur accepte d'envoyer le `.torrent` (donc sa passkey) au debrideur. */
+  envoyerTorrent?: boolean;
+  /** Ne garder que ce dont la PRESENCE de francais est etablie. */
+  frStrict?: boolean;
 }
 
 /**
@@ -194,6 +198,29 @@ export function passeFiltres(etat: EtatFlux, f: Filtres): boolean {
   // decevoir parfois — mieux vaut un flux de trop qu'un flux manquant qu'on ne saura
   // jamais avoir perdu.
   if (f.frOnly && sansFrancaisAvere(c)) return false;
+
+  // Version severe : on ne garde que ce dont la PRESENCE de francais est etablie.
+  // L'inconnu tombe, ce qui est exactement l'inverse de la regle precedente — et c'est
+  // assume : sur un titre sans piste francaise nulle part, une liste vide vaut mieux
+  // qu'un flux que la personne a qui on l'installe ne pourra pas suivre.
+  if (f.frStrict && !porteDuFrancais(c)) return false;
+
+  // Tracker prive, pas encore en cache, et l'utilisateur refuse d'envoyer le
+  // `.torrent` : le debrideur n'aura qu'un hash nu, donc aucun annonceur, donc aucun
+  // pair. Cette entree ne peut pas aboutir — on ne la propose pas.
+  //
+  // Comme pour « uniquement ce qui est pret », on n'applique la regle que si la
+  // verification a REELLEMENT eu lieu : sans elle `cached` vaut `undefined` pour tout
+  // le monde, et l'on ferait disparaitre l'ensemble des trackers prives.
+  if (
+    f.envoyerTorrent === false &&
+    f.verificationFaite &&
+    c.kind === 'torrent' &&
+    TRACKERS_PRIVES.has(c.sourceId) &&
+    etat.cached !== true
+  ) {
+    return false;
+  }
 
   // Torrent a debrider et trop peu de pairs : il ne se telechargera pas. On ne coupe
   // que sur un nombre CONNU — `undefined` veut dire que la source ne l'annonce pas, et
@@ -277,6 +304,19 @@ export function sansFrancaisAvere(c: Candidate): boolean {
  * compte — pistes lues ou MediaInfo publie.
  */
 const TRACKERS_FRANCAIS = new Set(['c411', 'tr4ker', 'yggreborn', 'g3mini']);
+
+/**
+ * Trackers PRIVES : leurs torrents n'ont d'annonceur que dans le fichier `.torrent`.
+ *
+ * Un hash nu n'en porte aucun. Depose seul chez un debrideur, il ne trouvera jamais de
+ * pair et ne se telechargera pas — c'est le « ghost leech » : rien ne bouge, et le
+ * tracker ne voit rien passer, donc le ratio n'est pas entame non plus.
+ *
+ * Consequence pratique : quand l'utilisateur refuse d'envoyer le `.torrent` (qui
+ * contient sa passkey), une entree privee PAS DEJA EN CACHE est une impasse. La lui
+ * proposer, c'est lui promettre une lecture que ses propres reglages interdisent.
+ */
+const TRACKERS_PRIVES = new Set(['c411', 'tr4ker', 'yggreborn', 'g3mini', 'dpeers', 'dcore']);
 
 export function porteDuFrancais(c: Candidate): boolean {
   // 0. L'ORIGINE, quand elle suffit a conclure. Placee avant l'etiquette : une release
