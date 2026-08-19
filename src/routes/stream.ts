@@ -571,10 +571,20 @@ async function repondre(
         // transiter de la video pour rien. Et si l'utilisateur n'a pas de MediaFlow,
         // ou ne l'a pas demande ici, `throughMediaflow` rend l'URL telle quelle —
         // l'addon reste fonctionnel, avec les proxyHeaders pour seul recours.
-        const needsHeaders = c.headers && Object.keys(c.headers).length > 0;
-        const playUrl = needsHeaders
-          ? throughMediaflow(c.directUrl, 'direct', config, c.headers)
-          : c.directUrl;
+        // L'EN-TETE N'EST PAS LA SEULE RAISON DE PASSER PAR LE PROXY, et se limiter a
+        // ce cas rendait le reglage inoperant la ou il servait le plus.
+        //
+        // Vecu sur VoirDrama : son lien HLS ne demande aucun en-tete, mais son jeton est
+        // LIE AU RESEAU qui l'a obtenu — l'adresse porte l'ASN du demandeur (`asn=3215`,
+        // Orange). Lu depuis la maison il fonctionne ; ouvert sur un telephone en
+        // donnees mobiles, il est refuse. Deux telephones en echec, la meme fiche
+        // parfaite sur Nuvio Windows — et la case « flux directs » etait cochee, mais on
+        // l'ignorait faute d'en-tete.
+        //
+        // On respecte donc le choix de l'utilisateur tel quel. `throughMediaflow` rend
+        // l'URL INCHANGEE quand le reglage n'est pas actif ou qu'aucun MediaFlow n'est
+        // configure : ne rien cocher ne change rien.
+        const playUrl = throughMediaflow(c.directUrl, 'direct', config, c.headers);
         return toStremioStream(c, { playUrl, sousTitres: pistesDe(c), ...identite });
       }
       // Torrent ou DDL : on differe la resolution au moment du Play.
