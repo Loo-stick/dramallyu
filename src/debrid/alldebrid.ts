@@ -438,15 +438,41 @@ const ETAT_COMPTE_TTL_MS = 60 * 1000;
  * Supprimer un magnet PRET ne coute rien : il reste dans le cache partage d'AllDebrid,
  * et le redeposer plus tard est instantane. C'est aussi ce que fait stream-fusion.
  */
-function nettoyerEnFond(ids: number[], apiKey: string): void {
+/**
+ * Empreintes que NOUS avons deposees pour verifier, et pas encore retirees.
+ *
+ * La garde `!dejaLa.has(hash)` protege les magnets de l'utilisateur — mais elle se
+ * retourne : des qu'un de nos depots survit a un passage (suppression ratee, ou
+ * photographie prise pendant que la suppression precedente courait encore), il figure
+ * dans TOUTES les photographies suivantes, donc il passe pour un magnet de
+ * l'utilisateur et n'est PLUS JAMAIS supprime. La fuite s'entretient toute seule.
+ *
+ * Constate le 2026-08-20 : 377 magnets dans le compte, dont cinq portant un simple
+ * hash pour nom — signature de la verification — bloques sur « No peer after 30
+ * minutes », et un « Head Over Heels » en cours de telechargement alors que
+ * l'utilisatrice n'avait rien lance : toutes ses lectures partaient chez TorBox.
+ *
+ * On retient donc CE QUI EST A NOUS. Une empreinte sort de l'ensemble des qu'elle est
+ * effectivement supprimee : si l'utilisateur la redepose ensuite en lisant un flux,
+ * elle redevient protegee par la photographie, comme il se doit.
+ */
+const deposesParVerification = new Set<string>();
+
+function nettoyerEnFond(ids: { id: number; hash: string }[], apiKey: string): void {
   if (ids.length === 0) return;
   void (async () => {
     let retires = 0;
     let echoues = 0;
-    for (const id of ids) {
+    for (const { id, hash } of ids) {
       const ok = await call('/magnet/delete', apiKey, { id: String(id) }).catch(() => null);
-      if (ok) retires++;
-      else echoues++;
+      if (ok) {
+        retires++;
+        // Retiree de nos depots SEULEMENT une fois partie : tant qu'elle est la, elle
+        // reste a nous, et le passage suivant retentera.
+        deposesParVerification.delete(hash);
+      } else {
+        echoues++;
+      }
     }
     // ON DIT CE QUI RESTE. L'echec etait avale par un `.catch` muet : le compte de
     // l'utilisateur pouvait se remplir de nos depots de verification sans qu'une seule
@@ -502,7 +528,7 @@ export function allDebrid(apiKey: string): DebridService {
         const magnets = await uploadLot(lot, apiKey, signal);
         if (magnets.length === 0) continue;
 
-        const aRetirer: number[] = [];
+        const aRetirer: { id: number; hash: string }[] = [];
         for (const m of magnets) {
           const hash = (m.hash || '').toLowerCase();
           if (!hash) continue;
@@ -512,7 +538,21 @@ export function allDebrid(apiKey: string): DebridService {
           // On ne retire QUE ce qu'on vient d'ajouter. Ce qui etait deja la appartient
           // a l'utilisateur — telechargement lance depuis l'addon, ou magnet ajoute a
           // la main — et n'a pas a disparaitre parce qu'on a regarde s'il etait pret.
-          if (typeof m.id === 'number' && !dejaLa.has(hash)) aRetirer.push(m.id);
+          // A NOUS dans deux cas : l'empreinte n'etait pas dans le compte avant ce
+          // lot, ou bien nous l'avons deja deposee sans reussir a la retirer — et dans
+          // ce second cas la photographie la montre, ce qui la faisait passer pour un
+          // magnet de l'utilisateur A TOUT JAMAIS.
+          //
+          // La photographie reste la protection de reference : un fichier que
+          // l'utilisateur a lance en lisant un flux, ou ajoute a la main, n'est pas dans
+          // notre ensemble et ne sera pas touche. C'est un defaut deja vecu — des
+          // telechargements disparaissaient a la recherche suivante — et il ne doit pas
+          // revenir par la correction d'un autre.
+          const aNous = !dejaLa.has(hash) || deposesParVerification.has(hash);
+          if (aNous && typeof m.id === 'number') {
+            deposesParVerification.add(hash);
+            aRetirer.push({ id: m.id, hash });
+          }
         }
         nettoyerEnFond(aRetirer, apiKey);
       }
