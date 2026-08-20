@@ -489,6 +489,8 @@ export function allDebrid(apiKey: string): DebridService {
   return {
     name: 'alldebrid',
     supportsCacheCheck: true,
+    // Repondre lui coute un depot, et un telechargement quand il n'a pas le fichier.
+    verificationDepose: true,
 
     async checkCached(hashes, signal) {
       const out = new Map<string, boolean>();

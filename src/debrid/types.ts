@@ -22,6 +22,15 @@ export interface DebridService {
   name: 'alldebrid' | 'torbox';
   /** Vrai si le service sait repondre honnetement sur la mise en cache. */
   supportsCacheCheck: boolean;
+  /**
+   * Vrai si REPONDRE lui coute un depot sur le compte de l'utilisateur.
+   *
+   * AllDebrid n'a plus d'endpoint de disponibilite : la seule maniere de demander
+   * « l'avez-vous ? » est de lui confier le magnet, et il se met alors a telecharger ce
+   * qu'il n'a pas. La question a donc un prix, contrairement a celle qu'on pose a
+   * TorBox — d'ou l'ordre dans lequel on interroge.
+   */
+  verificationDepose?: boolean;
   /** hash minuscule -> present en cache. Carte vide = « on ne sait pas ». */
   checkCached(hashes: string[], signal?: AbortSignal): Promise<Map<string, boolean>>;
   /** Magnet ou hash -> lien HTTP jouable. */

@@ -247,6 +247,37 @@ export async function cacheParService(
   // L'ORDRE DU RESULTAT EST PRESERVE : `servicesFor` classe les services selon la
   // preference de l'utilisateur, et l'etiquette affichee nomme le PREMIER detenteur.
   // Collecter dans le desordre ferait mentir cette etiquette une fois sur deux.
+  // ON DEMANDE D'ABORD A CEUX QUE LA QUESTION NE COUTE RIEN.
+  //
+  // TorBox repond par un appel groupe, sans rien deposer. AllDebrid n'a plus
+  // d'endpoint de disponibilite : pour repondre, il doit accepter le magnet — et il se
+  // met alors a telecharger ce qu'il n'a pas.
+  //
+  // Vecu le 2026-08-20 : un pack Nyaa de 44,6 Go DEJA EN CACHE CHEZ TORBOX. L'entree
+  // s'est affichee `[TB ⚡]`, jouable immediatement — et pendant ce temps AllDebrid,
+  // interroge en parallele sur la meme empreinte, avait commence a tirer les 44,6 Go
+  // pour repondre « non ». On payait un telechargement pour une information qu'on
+  // avait deja, et dont la reponse ne changeait rien a ce qui etait servi.
+  //
+  // Le prix : les deux appels ne se superposent plus. C'est un aller-retour de plus sur
+  // une recherche a froid, contre des dizaines de gigaoctets qui ne partent pas.
+  const sansCout = services.filter((s) => !s.verificationDepose);
+  const aCout = services.filter((s) => s.verificationDepose);
+
+  const reponsesPar = new Map<string, { m: Map<string, boolean>; ok: boolean }>();
+  const interroger = async (liste: typeof services, quoi: string[]) => {
+    if (liste.length === 0 || quoi.length === 0) return;
+    const rs = await Promise.all(
+      liste.map((service) =>
+        service
+          .checkCached(quoi, borne)
+          .then((m) => ({ m, ok: true }))
+          .catch(() => ({ m: new Map<string, boolean>(), ok: false })),
+      ),
+    );
+    liste.forEach((service, i) => reponsesPar.set(service.name, rs[i]));
+  };
+
   // ECHEANCE PROPRE A CHAQUE SERVICE. La verification de cache est un CONFORT : elle
   // pose une etiquette « pret » sur les flux, elle n'en produit aucun. Un debrideur muet
   // ne doit donc pas retenir la reponse.
@@ -259,23 +290,37 @@ export async function cacheParService(
     ? AbortSignal.any([signal, AbortSignal.timeout(BUDGET_CACHE_MS)])
     : AbortSignal.timeout(BUDGET_CACHE_MS);
 
-  const reponses = await Promise.all(
-    services.map((service) =>
-      service
-        .checkCached(hashes, borne)
-        .then((m) => ({ m, ok: true }))
-        .catch(() => ({ m: new Map<string, boolean>(), ok: false })),
-    ),
-  );
+  await interroger(sansCout, hashes);
 
-  services.forEach((service, i) => {
-    for (const [hash, cached] of reponses[i].m) {
+  // Ce qu'un service gratuit annonce deja en cache n'a pas a etre demande a celui qui
+  // fait payer la question : l'etiquette est acquise, et la reponse d'AllDebrid ne
+  // changerait ni l'affichage ni la lecture.
+  const dejaTrouves = new Set<string>();
+  for (const r of reponsesPar.values()) {
+    for (const [hash, cached] of r.m) if (cached) dejaTrouves.add(hash);
+  }
+  const restants = hashes.filter((h) => !dejaTrouves.has(h.toLowerCase()));
+  if (dejaTrouves.size > 0) {
+    console.log(
+      `[Cache] ${dejaTrouves.size} empreinte(s) deja connue(s) sans depot — ` +
+        `${restants.length} restant(s) a demander a AllDebrid`,
+    );
+  }
+  await interroger(aCout, restants);
+
+  // ORDRE PRESERVE : `servicesFor` classe selon la preference de l'utilisateur, et
+  // l'etiquette affichee nomme le PREMIER detenteur. On parcourt donc `services`, pas
+  // l'ordre dans lequel les reponses sont arrivees.
+  for (const service of services) {
+    const r = reponsesPar.get(service.name);
+    if (!r) continue;
+    for (const [hash, cached] of r.m) {
       if (!cached) continue;
       const liste = parHash.get(hash) ?? [];
       liste.push(service.name);
       parHash.set(hash, liste);
     }
-  });
+  }
 
-  return { parHash, verifie: reponses.some((r) => r.ok) };
+  return { parHash, verifie: [...reponsesPar.values()].some((r) => r.ok) };
 }
