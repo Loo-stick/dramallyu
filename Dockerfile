@@ -34,6 +34,9 @@ RUN mkdir -p /app/config /app/data && chown -R node:node /app
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json ./
+# Outils d'exploitation (purge du compte AllDebrid). Ils lisent la configuration
+# chiffree, donc ils ont besoin de `TOKEN_SECRET` — qui ne vit que dans le conteneur.
+COPY --chown=node:node scripts ./scripts
 
 USER node
 EXPOSE 7020
