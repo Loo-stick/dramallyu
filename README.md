@@ -65,6 +65,60 @@ donc la page ne peut pas promettre une source qui ne s'executerait pas.
   Si une version precedente est deja installee, la **desinstaller d'abord** : Nuvio met
   en cache la liste des ressources d'un addon et ne verrait pas les sous-titres autrement.
 
+## Quelle machine ? (avant de choisir un hebergeur)
+
+Mesure sur l'instance de reference — quelques utilisateurs, catalogue complet, onze
+sources actives :
+
+| | |
+|---|---|
+| RAM au repos | **78 Mo** |
+| RAM sous trois recherches a froid simultanees | **80 Mo** |
+| CPU au repos | ~0 % |
+| Etat sur disque (cache + 30 jours d'activite) | ~8 Mo |
+| Image | 361 Mo |
+| Demarrage a froid | 449 ms |
+
+L'addon ne calcule presque rien : il interroge des sources, agrege, et **differe tout le
+travail lourd au moment du Play**. La video ne transite jamais par lui — elle va du
+debrideur au lecteur. C'est pourquoi la memoire ne bouge pas sous charge.
+
+**Il faut donc : 512 Mo de RAM, un vCPU partage, 2 Go de disque.** N'importe quel VPS a
+3-4 euros par mois convient, un Raspberry Pi 4 aussi, et une connexion domestique
+modeste suffit puisque le flux video ne passe pas par la. Le seul vrai besoin est
+d'etre **allume en permanence**.
+
+### Les hebergeurs gratuits qui mettent en veille ne conviennent pas
+
+Ce n'est pas une question de ressources — elles passent largement. Trois obstacles, dans
+l'ordre d'importance :
+
+**La mise en veille.** Ces offres endorment le service apres quelques minutes
+d'inactivite. Notre demarrage prend moins d'une seconde, mais le REVEIL de la
+plateforme en demande trente a soixante — le temps de replanifier le conteneur. Stremio
+abandonne une requete `/stream` bien avant : la premiere fiche ouverte apres une pause
+rend une liste vide, systematiquement. Un usage familial est par nature intermittent,
+donc toujours dans ce cas.
+
+**Le disque ephemere.** Sans volume persistant, `cache.db` et `activite.db` disparaissent
+a chaque redemarrage. Toutes les recherches repartent a froid, l'historique par
+utilisateur est perdu — et le cache des verdicts de disponibilite AllDebrid aussi, donc
+**on redepose chez lui des empreintes deja verifiees**. Un compte AllDebrid se remplit
+de magnets qu'on croyait avoir la reponse.
+
+**L'adresse IP de datacenter.** Les sources directes et les trackers la reconnaissent :
+blocages ou limitation de debit. Et certaines sources signent leurs liens pour le
+RESEAU qui les demande — un flux obtenu depuis un datacenter est alors injouable sur un
+telephone, sauf a router les flux directs par MediaFlow (case prevue dans `/configure`).
+
+Une offre payante avec disque persistant et sans veille fonctionne ; a prix egal, un VPS
+ordinaire donne plus, et une machine chez soi evite en prime l'IP de datacenter.
+
+### Quel que soit l'hebergeur
+
+Poser `TOKEN_SECRET` et **ne plus jamais le changer** : il chiffre les configurations,
+donc le modifier invalide TOUS les liens d'installation deja distribues.
+
 ## Deploiement par l'operateur
 
 ```bash
